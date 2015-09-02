@@ -1,5 +1,5 @@
 
-module JQL
+module BQL
 
 import Base: show, showerror, >>, !, +, -, <, <=, >, >=, ==, !=, &, |, *, /
 

@@ -7,7 +7,7 @@ We start with importing the sample dataset and the combinators library::
     >>> sys.path.append('./py')
 
     >>> from citydb_json import citydb
-    >>> from jql import *
+    >>> from bql import *
     >>> from pprint import pprint
 
 A JSON combinator is a function that maps JSON values to JSON values.  The

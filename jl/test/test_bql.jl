@@ -2,7 +2,7 @@
 push!(LOAD_PATH, "./jl")
 
 using Base.Test
-using JQL
+using BQL
 
 include("../citydb_json.jl")
 
