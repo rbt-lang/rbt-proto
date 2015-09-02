@@ -155,6 +155,11 @@ class Combinator(object):
             other = Const(other)
         return Div(self, other)
 
+    def __floordiv__(self, other):
+        if not isinstance(other, Combinator):
+            other = Const(other)
+        return FloorDiv(self, other)
+
     def __mod__(self, other):
         if not isinstance(other, Combinator):
             other = Const(other)
@@ -554,6 +559,12 @@ class Div(BinaryOp):
 
     op = operator.truediv
     types = [(int, long, float)]
+
+
+class FloorDiv(BinaryOp):
+
+    op = operator.floordiv
+    types = [(int, long)]
 
 
 class Mod(BinaryOp):
