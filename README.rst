@@ -15,7 +15,6 @@ Discussion
     https://gitter.im/rbt-lang/rbt-proto
 
 Demos
-
     * Querying JSON databases
       (`Python <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/py/demo/bql-demo.ipynb>`__,
       `Julia <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/jl/demo/bql-demo.ipynb>`__)
