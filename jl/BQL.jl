@@ -1,7 +1,7 @@
 
 module BQL
 
-import Base: show, showerror, >>, !, +, -, <, <=, >, >=, ==, !=, &, |, *, /
+import Base: show, showerror, >>, !, +, -, <, <=, >, >=, ==, !=, &, |, *, /, //
 
 export
     Combinator,
@@ -227,6 +227,10 @@ for op in [:(<), :(<=), :(>), :(>=), :(==), :(!=), :(&), :(|), :(+), :(-), :(*),
     end
 end
 
+//(F::Combinator, G::Combinator) = BinaryOp(div, F, G)
+//(F::Combinator, g::Scalar) = BinaryOp(div, F, Const(g))
+//(f::Scalar, G::Combinator) = BinaryOp(div, Const(f), G)
+
 
 immutable Sieve <: Combinator
     P::Combinator
@@ -248,7 +252,7 @@ immutable Count <: Combinator
 end
 
 function call(C::Count, x, ctx)
-    y = C.F(x)
+    y = C.F(x, ctx)
     return isa(y, Array) ? length(y) : throw(IllegalOperandsError(C, y))
 end
 
@@ -260,7 +264,7 @@ immutable Min <: Combinator
 end
 
 function call(C::Min, x, ctx)
-    y = C.F(x)
+    y = C.F(x, ctx)
     return (
         isa(y, Array) && length(y) > 0 ? minimum(y) :
         isa(y, Array) ? nothing :
@@ -275,7 +279,7 @@ immutable Max <: Combinator
 end
 
 function call(C::Max, x, ctx)
-    y = C.F(x)
+    y = C.F(x, ctx)
     return (
         isa(y, Array) && length(y) > 0 ? maximum(y) :
         isa(y, Array) ? nothing :
@@ -293,8 +297,8 @@ end
 First(F) = First(F, nothing)
 
 function call(C::First, x, ctx)
-    y = C.F(x)
-    if C.N == nothing
+    y = C.F(x, ctx)
+    if isa(C.N, Void)
         return (
             isa(y, Array) && length(y) > 0 ? y[1] :
             isa(y, Array) ? nothing :
