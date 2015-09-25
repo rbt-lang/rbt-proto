@@ -1,5 +1,6 @@
 .*.sw?
 .ipynb_checkpoints
 *.py[cod]
+_build
 py/data
 jl/data

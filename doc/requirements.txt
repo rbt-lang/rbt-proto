@@ -1,0 +1,2 @@
+# Extra dependencies for building documentation on readthedocs.org.
+hieroglyph==0.7.1
