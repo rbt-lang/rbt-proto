@@ -14,6 +14,11 @@ Source code
 Discussion
     https://gitter.im/rbt-lang/rbt-proto
 
+Design Documents
+    `HTML <http://rbt-proto.readthedocs.org/>`__,
+    `Slides <http://rbt-proto.readthedocs.org/_slides/>`__,
+    `PDF <https://media.readthedocs.org/pdf/rbt-proto/latest/rbt-proto.pdf>`__
+
 Demos
     * Sketching a query language for hierarchical databases
       (`Julia <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/jl/demo/querying-hierarchical-data.ipynb>`__)
