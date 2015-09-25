@@ -46,7 +46,7 @@ def _build_slides(app):
     slides_dir = os.path.join(app.outdir, '_slides')
     slides_app = Sphinx(
             app.srcdir, app.confdir, slides_dir, app.doctreedir,
-            'slides', { 'slides_in_html': False },
+            'slides', { 'slides_in_html': False, 'html_theme': 'slides2' },
             status=None, warning=app._warning,
             warningiserror=app.warningiserror)
     slides_app.build()
