@@ -23,7 +23,8 @@ templates_path = ['_templates']
 exclude_patterns = ['_build']
 pygments_style = 'sphinx'
 latex_elements = {
-    'preamble': '',
+#    'preamble': '\\usepackage[doublespacing]{setspace}\n',
+    'pointsize': '12pt',
 }
 latex_documents = [
     (master_doc, 'rbt-proto.tex', html_title, author, 'howto', True),
