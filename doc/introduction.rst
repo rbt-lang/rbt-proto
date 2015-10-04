@@ -16,6 +16,7 @@ Introduction
 
     .. graphviz:: citydb-functional-data-model.dot
 
+
 .. slide:: Schema and Instance
    :level: 2
 
@@ -47,6 +48,7 @@ Introduction
 
     *Database instance* is like a value of the data type.
 
+
 .. slide:: Asking Questions
    :level: 2
 
@@ -66,6 +68,7 @@ Introduction
     Need to traverse, transform, filter, summarize the data.
 
     How to ask questions about the data?
+
 
 .. slide:: Query Syntax and Semantics
    :level: 2
@@ -99,6 +102,7 @@ Introduction
     **Query syntax:** How to form a question?
 
     **Query semantics:** How to interpret a question against some instance?
+
 
 .. slide:: Query Syntax and Semantics: Trivial Database
    :level: 3
@@ -135,6 +139,7 @@ Introduction
 
     Math notation is the query syntax.  Algebra is the query semantics.
 
+
 .. slide:: The Objective
    :level: 2
 
@@ -168,7 +173,7 @@ bullet list of features and highlights.
 
 By contrast, the design space of query languages is largely uncharted.  New
 query languages are quite rare and don't attract much interest either from
-database researchers or wider programming community.  It appears this subject is
+database experts or wider programming community.  It appears this subject is
 regarded as a solved problem, with SQL and relational algebra being the optimal
 solution.  We disagree, but before we can present our case, we need to mark the
 playing field.
@@ -196,12 +201,17 @@ functions on sets. [#spivak]_
    :class: note
 
     Our running example is based on the dataset of employees of the City of
-    Chicago (source_).  In functional data model, it can be modeled as follows:
+    Chicago (source_).  In functional data model, it can be presented as
+    follows:
 
     .. graphviz:: citydb-functional-data-model.dot
 
     Here, :math:`\operatorname{Dept}` is a set of all departments,
-    :math:`\operatorname{Empl}` is a set of all employees.  Function
+    :math:`\operatorname{Empl}` is a set of all employees,
+    :math:`\operatorname{Text}` is a set of all text strings,
+    :math:`\operatorname{Int}` is a set of integer numbers.
+
+    Function
     :math:`\operatorname{name}:\operatorname{Dept}\to\operatorname{Text}` maps
     department entities to their names,
     :math:`\operatorname{salary}:\operatorname{Empl}\to\operatorname{Int}` sets
@@ -218,20 +228,34 @@ functions on sets. [#spivak]_
         \mathit{dept}_1,\, \mathit{dept}_2,\, \mathit{dept}_3,\, \ldots, \qquad
         \mathit{empl}_1,\, \mathit{empl}_2,\, \mathit{empl}_3,\, \ldots
 
-    Functions modeled by the schema let us examine individual entities.  To
-    learn the name of a particular department, we apply the
-    :math:`\operatorname{name}` function to the entity value:
+    Individual entities can be examined by use of functions defined by the
+    schema.  To learn the name of a particular department, we apply the
+    :math:`\operatorname{name}:\operatorname{Dept}\to\operatorname{Text}`
+    function to the entity value:
 
     .. math::
 
         \operatorname{name}: \mathit{dept}_1 \mapsto \texttt{"WATER MGMNT"}
 
-    To find the department to which an employee is assigned, we apply the
-    :math:`\operatorname{department}` function:
+    To relay an employee to their department, we apply the
+    :math:`\operatorname{department}:\operatorname{Empl}\to\operatorname{Dept}`
+    function:
 
     .. math::
 
         \operatorname{department}: \mathit{empl}_1 \mapsto \mathit{dept}_1
+
+    If we compose :math:`\operatorname{department}` and
+    :math:`\operatorname{name}`, we get a function that maps each employee to
+    the name of their department:
+
+    .. math::
+
+        & \operatorname{department}{.}\operatorname{name}: \operatorname{Empl} \to \operatorname{Text} \\
+        & \operatorname{department}{.}\operatorname{name}: \mathit{empl}_1 \mapsto \texttt{"WATER MGMNT"}
+
+    Operator :math:`.` (period) denotes composition of functions:
+    :math:`(f{.}g)(x) = g(f(x))`.
 
 .. _source: https://data.cityofchicago.org/Administration-Finance/Current-Employee-Names-Salaries-and-Position-Title/xzkq-xp2w
 
@@ -244,9 +268,8 @@ type of entitites to the other.  As long as we can identify classes of entities
 with a fixed set of attributes and relationships, we can use functional data
 model to structure the data.
 
-While a database schema establishes how the data is organized, *a database
-instance* is a snapshot of data stored in the database at some particular
-moment.  Any instance must obey the structure imposed by the schema.
+*A database instance* is a snapshot of data stored in the database at some
+particular moment.  Any instance must obey the structure imposed by the schema.
 
 In our example, the schema defines types of entities (*Departments*,
 *Employees*), their attributes (*name*, *position*, *salary*) and relationships
@@ -269,7 +292,7 @@ values (*position* of *Rahm Emanuel* is *Mayor*).
     \end{matrix}
 
 The relation between a schema and its instance is much the same as between a
-data type and a value of the type.  Indeed, we can think of a data type as a
+data type and a value of the type.  Indeed, we can think of a data type as of a
 trivial "database schema".  Then any value of this type becomes a "database
 instance". (And a variable a "database storage"?  Then what is a "database
 query"?)
@@ -290,8 +313,8 @@ query"?)
 
 A database is useful as long as we can retrieve the data from it.  But what
 exactly does it mean to retrieve the data?  As a rule, we ask not for the
-entire content of the database, but rather for some facts that could be deduced
-from the data.
+entire content of the database, but rather for some information that could be
+deduced from the data.
 
 Going back to our sample dataset, one may ask:
 
@@ -309,7 +332,7 @@ all departments, so we may expect to be able to retrieve its content, which
 should answer the first question.  On the other hand, the schema does not
 define any attributes called *the number of employees* or *the top salary*.
 And yet this knowledge can be inferred from the database as long as the
-database system is willing to transform, filter and summarize the data.
+database system is willing to transform, filter and summarize its content.
 
 To have a meaningful conversation about data retrieval, we need another
 dimension of the data model.  *A database query* is any question about the data
@@ -390,6 +413,81 @@ We interpret this "query" on a given "instance" using the rules of algebra:
 .. math::
 
     \operatorname{odd} : 42 \mapsto (42 \bmod 2 = 1) = (0 = 1) = \operatorname{false}.
+
+The database technologies currently dominating the industry are based on *the
+relational data model*.  Let us review how querying is solved there.
+
+Relational data model structures data as a collection of interrelated tables.
+E.g., our sample dataset can be stored in two tables:
+
+*Departments*
+
++-----------+-------------------+
+| dept_id   | name              |
++===========+===================+
+| dept1     | WATER MGMNT       |
++-----------+-------------------+
+| dept2     | POLICE            |
++-----------+-------------------+
+| dept3     | GENERAL SERVICES  |
++-----------+-------------------+
+| ...       | ...               |
++-----------+-------------------+
+
+*Employees*
+
++-----------+-------------------+-------------------+-------------------+-----------+-----------+
+| emp_id    | name              | surname           | position          | salary    | dept_id   |
++===========+===================+===================+===================+===========+===========+
+| emp1      | ALVA              | A                 | WATER RATE TAKER  | $87228.00 | dept1     |
++-----------+-------------------+-------------------+-------------------+-----------+-----------+
+| emp2      | GEOFFREY          | A                 | POLICE OFFICER    | $75372.00 | dept2     |
++-----------+-------------------+-------------------+-------------------+-----------+-----------+
+| emp3      | KAREN             | A                 | POLICE OFFICER    | $75372.00 | dept2     |
++-----------+-------------------+-------------------+-------------------+-----------+-----------+
+| ...       | ...               | ...               | ...               | ...       | ...       |
++-----------+-------------------+-------------------+-------------------+-----------+-----------+
+
+Relational model provides a framework for query construction called *relational
+algebra*.
+
+Operands in relational algebra are sets of homogenous tuples called
+*relations*.  Any table can be seen as a relation composed of the table rows.
+
+Operators of relational algrebra are set operations such as union,
+intersection, and, most importantly, set product.  Any database query is an
+expression in relational algrebra and can be written using ``SELECT`` statement
+in SQL query language.
+
+In practice, however, SQL deviates from relational algrebra quite a lot.  That
+is because relational algrebra is vague on some concepts (duplicate and missing
+values, aggregates) and completely ignores others (ordering of elements,
+paginating).  It forced designers of SQL to introduce ad-hoc constructs for
+dealing with such issues.  It is customary to blame SQL for violating sacred
+rules of relational algebra, but, in fact, it must a sign that relational
+algebra is not powerful enough to express transformations needed for
+constructing practical queries.  Despite its real or imaginary shortcomings,
+SQL continues to be *the* database query language while relational model is
+seen as the only practical way to design databases.
+
+We seek to change this balance.  We believe the functional data model, rather
+than relational algebra, is a proper foundation for a database query language.
+Instead of constructing queries by joining tuple sets, we should do it by
+composing functions.  To justify our opinion, we design the *Rabbit* query
+language.
+
+Now is the time for bullet lists:
+
+* *Rabbit* is as powerful as SQL; that is, it can express any query that
+  can be expressed with SQL.
+
+* *Rabbit* is significantly easier to write and comprehend than SQL, which
+  makes it an ideal tool for semi-technical domain experts and other
+  *accidental programmers*.
+ 
+* Syntax and semantics of *Rabbit* are complete and unambiguous.  Every query
+  and query fragment in *Rabbit* is a function, operators in *Rabbit* are
+  function combinators.
 
 
 .. rubric:: Footnotes
