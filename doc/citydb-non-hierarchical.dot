@@ -1,0 +1,24 @@
+
+digraph {
+    graph [ranksep=.5, nodesep=.5, pad=.1, bgcolor=transparent]
+    node [fontname="DejaVu Sans", fontsize=12]
+    edge [fontname="DejaVu Sans", fontsize=10]
+    department [label=Departments, shape=rectangle]
+    department_name [label=name]
+    employee [label=Employees, shape=rectangle]
+    position [label=Positions, shape=rectangle]
+    position_title [label=title]
+    department -> department_name
+    department -> employee
+    position -> employee
+    position -> position_title
+    department_2 [label=Departments, shape=rectangle]
+    employee_2 [label=Employees, shape=rectangle]
+    employee_3 [label=Employees, shape=rectangle]
+    department_2 -> employee_2 [label=N, constraint=false]
+    employee_2 -> department_2 [label=1, constraint=false]
+    employee_3 -> employee_3 [label=manager]
+    { rank=same; department; position; department_2; employee_2 }
+    { rank=same; employee; employee_3 }
+}
+

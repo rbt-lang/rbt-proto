@@ -1,25 +1,28 @@
 Query Language for Functional Data Model
 ========================================
 
-We design syntax and semantics of a query language for functional data model.
 
 .. slide:: Table of Contents
    :level: 2
 
    * :doc:`introduction`
-   * *Querying Hierarchical Data*
+   * :doc:`hierarchical-data`
    * *Infinite Hierarchy and Monadic Structures*
    * *Query Syntax*
    * *Aggregates*
-   * *Quotient*
+   * *Quotients*
    * *Transitive Closure*
    * *Sorting*
    * *Running Aggregates and Comonads*
    * *Prototype Implementation*
 
+
+We design syntax and semantics of a query language for functional data model.
+
 .. toctree::
    :maxdepth: 2
 
    introduction
+   hierarchical-data
 
 

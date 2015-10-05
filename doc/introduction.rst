@@ -237,7 +237,7 @@ functions on sets. [#spivak]_
 
         \operatorname{name}: \mathit{dept}_1 \mapsto \texttt{"WATER MGMNT"}
 
-    To relay an employee to their department, we apply the
+    To relate an employee to their department, we apply the
     :math:`\operatorname{department}:\operatorname{Empl}\to\operatorname{Dept}`
     function:
 

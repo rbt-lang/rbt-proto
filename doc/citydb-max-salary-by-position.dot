@@ -1,0 +1,19 @@
+
+digraph {
+    graph [ranksep=0.5, nodesep=0.5, pad=.1, bgcolor=transparent]
+    node [fontname="DejaVu Sans", fontsize=12]
+    department [label=Departments, shape=rectangle]
+    department_name [label=name]
+    employee [label=Employees, shape=rectangle, color=red, penwidth=3]
+    employee_name [label=name]
+    employee_surname [label=surname]
+    employee_position [label=position, color=red, penwidth=3]
+    employee_salary [label=salary, color=red, penwidth=3]
+    department -> department_name
+    department -> employee
+    employee -> employee_name
+    employee -> employee_surname
+    employee -> employee_position [dir=back, color=red, penwidth=3]
+    employee -> employee_salary [color=red, penwidth=3]
+}
+
