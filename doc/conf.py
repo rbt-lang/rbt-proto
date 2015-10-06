@@ -23,7 +23,10 @@ templates_path = ['_templates']
 exclude_patterns = ['_build']
 pygments_style = 'sphinx'
 latex_elements = {
-#    'preamble': '\\usepackage[doublespacing]{setspace}\n',
+    'preamble': r'''
+%\usepackage[doublespacing]{setspace}
+\DeclareUnicodeCharacter{22EE}{$\vdots$}
+''',
     'pointsize': '12pt',
 }
 latex_documents = [

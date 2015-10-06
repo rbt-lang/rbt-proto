@@ -17,7 +17,7 @@ digraph {
     employee_3 [label=Employees, shape=rectangle]
     department_2 -> employee_2 [label=N, constraint=false]
     employee_2 -> department_2 [label=1, constraint=false]
-    employee_3 -> employee_3 [label=manager]
+    employee_3 -> employee_3 [label="reports to"]
     { rank=same; department; position; department_2; employee_2 }
     { rank=same; employee; employee_3 }
 }

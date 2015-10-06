@@ -27,7 +27,7 @@ Hierarchical data model
                     "name": "WATER MGMNT",
                     "employees": [
                         {
-                            "name": "ALVA",
+                            "name": "ELVIA",
                             "surname": "A",
                             "position": "WATER RATE TAKER",
                             "salary": 87228
@@ -96,6 +96,128 @@ Hierarchical data model
     * *Filter data.*
 
     Will help to motivate semantics of **Rabbit**.
+
+
+Before we proceed with designing a query language for functional data model,
+let us review a much simpler data model called *hierarchical*.
+
+In hierarchical data model, data is organized in a tree-like structure.
+Continuing with our running example, a collection of city employees (source_)
+can be structured in a 2-level hierarchy:
+
+- list of departments;
+- for each department, a list of employees.
+
+.. _source: https://data.cityofchicago.org/Administration-Finance/Current-Employee-Names-Salaries-and-Position-Title/xzkq-xp2w
+
+We can visualize this hierarchy as a diagram.
+
+.. graphviz:: citydb-hierarchical-model.dot
+
+To represent hierarchical data, it will be convenient for us to use JSON
+format.  That lets us load and manipulate data directly using any programming
+language.
+
+Here is a fragment of data in JSON format.
+
+.. code-block:: json
+
+    {
+        "departments": [
+            {
+                "name": "WATER MGMNT",
+                "employees": [
+                    {
+                        "name": "ELVIA",
+                        "surname": "A",
+                        "position": "WATER RATE TAKER",
+                        "salary": 87228
+                    },
+                    {
+                        "name": "VICENTE",
+                        "surname": "A",
+                        "position": "CIVIL ENGINEER IV",
+                        "salary": 99648
+                    },
+                    ...
+                ]
+            },
+            {
+                "name": "POLICE",
+                "employees": [
+                    {
+                        "name": "JEFFERY",
+                        "surname": "A",
+                        "position": "POLICE OFFICER",
+                        "salary": 75372
+                    },
+                    {
+                        "name": "KARINA",
+                        "surname": "A",
+                        "position": "POLICE OFFICER",
+                        "salary": 75372
+                    },
+                    ...
+                ]
+            },
+            ...
+        ]
+    }
+
+How does one answer questions about hierarchical data?  Consider a problem:
+
+    *For each department, find the number of employees with the annual salary
+    higher that 100k.*
+
+We can answer this question by writing some code in a programming language of
+our choice (we use Julia_ here).  We will write it in functional style, using
+high-order functions ``map`` and ``filter`` to process the data:
+
+.. code-block:: julia
+
+    Depts_With_Num_Well_Paid_Empls(data) =
+        map(d -> Dict(
+                "name" => d["name"],
+                "N100k" =>
+                    length(filter(e -> e["salary"] > 100000, d["employees"]))),
+            data["departments"])
+
+Alternatively, this code could be written using a nested loop.  Either way, we
+get an answer to the question:
+
+.. code-block:: jlcon
+
+    julia> Depts_With_Num_Well_Paid_Empls(citydb)
+    35-element Array{Any,1}:
+     Dict("name"=>"WATER MGMNT","N100k"=>179)
+     Dict("name"=>"POLICE","N100k"=>1493)
+     Dict("name"=>"GENERAL SERVICES","N100k"=>79)
+     ⋮
+
+Is there a way to make this code more query-like?  Let us review what we need
+to do in order to answer the question stated by the query.  We could classify
+the operations as follows.
+
+Traversing data
+    In this query, we process two levels of the database hierarchy: departments
+    and their respective employees.
+
+Filtering data
+    We refine the set of employees by keeping those that satisfy a certain
+    condition.
+
+Summarizing data
+    We transform an array (of employees) to a scalar value (the number of
+    employees).
+
+Constructing data
+    We present the output as an array of objects with two fields: "department
+    name" and "number of employees".
+
+Let us use this insight to build a "query language" for hierarchical data
+model.
+
+.. _Julia: http://julialang.org/
 
 
 Combinators
@@ -177,6 +299,130 @@ Combinators
 
         julia> Salary(Dict("name" => "RAHM", "surname" => "E", "salary" => 216210))
         216210
+
+
+We need to introduce some new primitives and operations.  We start with the notion
+of *JSON combinators*.
+
+A JSON combinator is any function that maps JSON input to JSON output.  Two trivial
+examples of JSON combinators are:
+
+* ``Const(val)``, which maps each input to the constant value ``val``.
+* ``This()``, which copies the input to the output.
+
+In Julia, they could be defined as follows:
+
+.. code-block:: julia
+
+    Const(val) = x -> val
+
+.. code-block:: julia
+
+    This() = x -> x
+
+We need to distinguish between combinators and combinator constructors.
+``Const`` is a combinator constructor, a function that returns a combinator.
+``Const(42)`` is a combinator, a function that for any JSON input returns a
+fixed JSON output, the number ``42``.
+
+.. code-block:: jlcon
+
+    julia> C = Const(42)
+
+    julia> C(true)
+    42
+
+    julia> C(42)
+    42
+
+    julia> C([1, 2, 3])
+    42
+
+Similarly, function ``This`` constructs a combinator that returns its input
+unchanged.
+
+.. code-block:: jlcon
+
+    julia> I = This()
+
+    julia> I(true)
+    true
+
+    julia> I(42)
+    42
+
+    julia> I([1, 2, 3])
+    [1, 2, 3]
+
+Let us define a more interesting combinator.  ``Field(name)`` extracts a field
+value from a JSON object.
+
+.. code-block:: julia
+
+    Field(name) = x -> x[name]
+
+Let us define some field extractors:
+
+.. code-block:: jlcon
+
+    julia> Name = Field("name")
+    julia> Salary = Field("salary")
+
+Then expressions ``Name(data)`` and ``Salary(data)`` yield values
+``data["name"]`` and ``data["salary"]``:
+
+.. code-block:: jlcon
+
+    julia> Name(Dict("name" => "RAHM", "surname" => "E", "salary" => 216210))
+    "RAHM"
+    julia> Salary(Dict("name" => "RAHM", "surname" => "E", "salary" => 216210))
+    216210
+
+Field extractors will become basic building blocks in our query language.
+
+Notice a common pattern in our examples:
+
+* First, we create a combinator using combinator constructors.
+* Then, we apply the combinator against the data.
+
+We interpret a combinator as a database query.  Then creating a combinator is
+the same as *constructing a query*, and and applying the combinator is
+*executing a query*.
+
+For comparison, here is an equivalent implementation in Python:
+
+.. code-block:: python
+
+    def Const(val):
+        def f(x):
+            return val
+        return f
+
+    def This():
+        def f(x):
+            return x
+        return f
+
+    def Field(name):
+        def f(x):
+            return x[name]
+        return f
+
+and in Javascript:
+
+.. code-block:: javascript
+
+    function Const(val) {
+        return function (x) { return val; };
+    }
+
+    function This() {
+        return function (x) { return x; };
+    }
+
+    function Field(name) {
+        return function (x) { return x[name]; };
+    }
 
 
 Traversing the hierarchy
@@ -373,6 +619,241 @@ Traversing the hierarchy
             isa(y, Array) ? map(_expand, map(G, y)) : G(y)
         _expand(z_i) =
             isa(z_i, Array) ? z_i : z_i != nothing ? [z_i] : []
+
+
+Consider the following problem:
+
+    *Find the names of all departments.*
+
+To build a query producing department names, we need to construct a path in the
+hierarchical structure of the database.
+
+.. graphviz:: citydb-department-names.dot
+
+Let us highlight the data we need to fetch from the database:
+
+.. code-block:: json
+   :emphasize-lines: 2,4,15
+
+    {
+        "departments": [
+            {
+                "name": "WATER MGMNT",
+                "employees": [
+                    {
+                        "name": "ELVIA",
+                        "surname": "A",
+                        "position": "WATER RATE TAKER",
+                        "salary": 87228
+                    },
+                    ... ]
+            },
+            {
+                "name": "POLICE",
+                "employees": [
+                    {
+                        "name": "JEFFERY",
+                        "surname": "A",
+                        "position": "POLICE OFFICER",
+                        "salary": 75372
+                    },
+                    ... ]
+            },
+            ... ]
+    }
+
+Definitely, we will need extractors for fields ``"departments"`` and
+``"name"``:
+
+.. code-block:: julia
+
+    Departments = Field("departments")
+    Name = Field("name")
+
+The query must somehow chain combinators ``Departments`` and ``Name`` to
+produce the desired result.  *The traversal operator* (:math:`\gg`) does that:
+
+.. code-block:: julia
+
+    Dept_Names = Departments >> Name
+
+Here is the output of the query:
+
+.. code-block:: jlcon
+
+    julia> Dept_Names(citydb)
+    35-element Array{Any,1}:
+     "WATER MGMNT"
+     "POLICE"
+     "GENERAL SERVICES"
+     ⋮
+
+We got the result we expected, but how exactly the traversal operator works?
+
+Traversal operator ``(F >> G)`` sends the output of ``F`` to the input of
+``G``.  In other words, it is a variant of *a composition operator*.  However
+it can't be implemented naively as:
+
+.. code-block:: julia
+
+    (F >> G) = x -> G(F(x))
+
+Indeed, If ``(F >> G)`` is defined this way, the query ``(Departments >>
+Name)(citydb)`` yields ``citydb["departments"]["name"]``, which fails
+because ``citydb["departments"]`` is an array and so it doesn't have a field
+``"name"``.
+
+It appears, in expression ``(Departments >> Name)``, the traversal operator has
+to apply its second operand ``Name`` to each element of the array produced by
+its first operand ``Departments``.  Here is the idea.  The traversal operator
+must treat arrays not as a single JSON value, but as a sequence of values.
+
+When :math:`F` produces a sequence of values:
+
+.. math::
+
+    x \overset{F}{\longmapsto} y_1,\, y_2,\, y_3,\, \ldots
+
+the traversal operator :math:`(F \gg G)` also generates a sequence of values:
+
+.. math::
+
+    x \overset{F \gg G}{\longmapsto} G(y_1),\, G(y_2),\, G(y_3),\, \ldots
+
+Moreover, :math:`G(y_k)` could also be an array:
+
+.. math::
+
+    y_k \overset{G}{\longmapsto} z_{k1},\, z_{k2},\, z_{k3},\, \ldots
+
+In this case, we again interpret :math:`G(y_k)` as a sequence of values and
+merge it into the output sequence:
+
+.. math::
+
+    x \overset{F \gg G}{\longmapsto} z_{11},\, z_{12},\, \ldots,\, z_{21},\, z_{22},\, \ldots
+
+Finally, if :math:`G(y_k)` produces a JSON :math:`\operatorname{null}` value,
+we regard is as *no-value* and remove it from the output.  We will use this
+feature later to implement filtering.
+
+Let us demonstrate traversal on another example:
+
+    *Find the names of all employees.*
+
+To implement this query, we need to traverse the following path:
+
+.. graphviz:: citydb-employee-names.dot
+
+Again, we highlight the data we need to fetch from the database.
+
+.. code-block:: json
+   :emphasize-lines: 2,5,7,13
+
+    {
+        "departments": [
+            {
+                "name": "WATER MGMNT",
+                "employees": [
+                    {
+                        "name": "ELVIA",
+                        "surname": "A",
+                        "position": "WATER RATE TAKER",
+                        "salary": 87228
+                    },
+                    {
+                        "name": "VICENTE",
+                        "surname": "A",
+                        "position": "CIVIL ENGINEER IV",
+                        "salary": 99648
+                    },
+                    ... ]
+            },
+            ... ]
+    }
+
+We construct the query by chaining respective field extractors with the
+traversal operator:
+
+.. code-block:: julia
+
+    Departments = Field("departments")
+    Employees = Field("epmployees")
+    Name = Field("name")
+
+    Empl_Names = Departments >> Employees >> Name
+
+.. code-block:: jlcon
+
+    julia> Empl_Names(citydb)
+    32181-element Array{Any,1}:
+     "ELVIA"
+     "VICENTE"
+     "MUHAMMAD"
+     ⋮
+
+Let us review how this query processes the data.  Query ``(Departments >>
+Employees >> Name)`` starts with sending its input to the ``Department``
+combinator, which produces a sequence of department objects:
+
+.. code-block:: json
+
+    [
+        {
+            "name": "WATER MGMNT",
+            "employees": [
+                { "name": "ELVIA", "surname": "A", ... },
+                { "name": "VICENTE", "surname": "A", ... },
+                ... ]
+        },
+        {
+            "name": "POLICE",
+            "employees": [
+                { "name": "JEFFERY", "surname": "A", ... },
+                { "name": "KARINA", "surname": "A", ... },
+                ... ]
+        },
+        ...
+    ]
+
+Then, after a subsequent application of ``Employees`` combinator, we get:
+
+.. code-block:: json
+
+    [
+        { "name": "ELVIA", "surname": "A", ... },
+        { "name": "VICENTE", "surname": "A", ... },
+        ...
+        { "name": "JEFFERY", "surname": "A", ... },
+        { "name": "KARINA", "surname": "A", ... },
+        ...
+    ]
+
+Finally, applying ``Name`` gives us the output:
+
+.. code-block:: json
+
+    [
+        "ELVIA",
+        "VICENTE",
+        ...
+        "JEFFERY",
+        "KARINA",
+        ...
+    ]
+
+We conclude this section by implementing the traversal operator in Julia:
+
+.. code-block:: julia
+
+    (F >> G) = x -> _flat(_map(G, F(x)))
+
+    _flat(z) =
+        isa(z, Array) ? foldr(vcat, [], z) : z
+    _map(G, y) =
+        isa(y, Array) ? map(_expand, map(G, y)) : G(y)
+    _expand(z_i) =
+        isa(z_i, Array) ? z_i : z_i != nothing ? [z_i] : []
 
 
 Summarizing data
@@ -1145,7 +1626,7 @@ Limitations
     2. Note that relationship between *department* and *employee* is
        bi-directional.
 
-    3. Add a relationship *manager* between *employees*, which cannot be
+    3. Add a relationship *reports to* between *employees*, which cannot be
        represented in a finite hierarchy.
 
 
@@ -1160,4 +1641,5 @@ Limitations
    Otherwise, we are out of luck...
 
    *... Or are we?*
+
 
