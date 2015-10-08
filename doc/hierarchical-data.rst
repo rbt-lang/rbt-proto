@@ -1057,6 +1057,163 @@ Summarizing data
         13570
 
 
+We learned how to extract data from the branches of the database hierarchy
+tree.  Let us now show how to summarize data.
+
+Consider a problem:
+
+    *Find the number of departments.*
+
+To solve it, we need a combinator that can count the number of elements in an
+array.
+
+In Julia, function ``length()`` returns the length of the array.  We may try to
+define ``Count()`` combinator as follows:
+
+.. code-block:: julia
+
+    Count() = length
+
+Then send it an array of department objects:
+
+.. code-block:: julia
+
+    Num_Depts =
+        Departments >> Count()
+
+However, this is not going to work.  The traversal operator will not let
+``Count()`` see the whole array.  Instead, it will submit individual department
+objects to the ``Count()`` combinator, which is not what we need.
+
+Clearly, we cannot use the traversal operator to feed ``Count()`` with an array
+value.  Instead, we will add an array-producing combinator as a parameter to
+``Count`` constructor:
+
+.. code-block:: julia
+
+    Count(F) = x -> length(F(x))
+
+To find the number of departments, we write:
+
+.. code-block:: julia
+
+    Num_Depts =
+        Count(Departments)
+
+.. code-block:: jlcon
+
+    julia> Num_Depts(citydb)
+    35
+
+Although we solved the problem, the question remains: what is a proper way to
+combine traversal and ``Count()``?
+
+Consider the following two problems:
+
+    * *Find the number of employees for each department.*
+    * *Find the total number of employees.*
+
+To solve them, we need to combine traversal from departments to employees with
+application of ``Count()`` combinator.
+
+To find the number of employees for each department, we write:
+
+.. code-block:: julia
+
+    Num_Empls_Per_Dept =
+        Departments >> Count(Employees)
+
+.. code-block:: jlcon
+
+    julia> Num_Empls_Per_Dept(citydb)
+    35-element Array{Any,1}:
+      1848
+     13570
+       924
+         ⋮
+
+Let us examine how this query is executed:
+
+1. ``Departments`` produces an array of department objects.
+2. The traversal operator submits each department to ``Count(Employees)``
+   combinator.
+3. ``Count(Employees)`` sends its input to ``Employees`` combinator, which
+   returns an array of employees associated with the input department;
+   ``Count(Employees)`` returns the length of the array.
+4. The traversal operator collects and returns an array of values
+   produced by ``Count(Employees)``.
+
+In general, the traversal operator follows the pattern:
+
+.. math:: \textit{entity} \gg \textit{property}
+
+In this example, "number of employees" is a property of each "department",
+which dictates the placement of the ``>>`` operator relative to ``Count()``.
+
+To find the total number of employees, we write:
+
+.. code-block:: julia
+
+    Num_Empls = Count(Departments >> Employees)
+
+.. code-block:: jlcon
+
+    julia> Num_Empls(citydb)
+    32181
+
+Here, ``Count()`` wraps the traversal expression.  Indeed, "total number of
+employees" is a global property of the database and we calculate it at the root
+of the database hierarchy.
+
+Consider another problem:
+
+    *Find the top salary among all the employees.*
+
+We need a combinator that finds the maximum value in an array, which we can
+define in the same way as ``Count()``:
+
+.. code-block:: julia
+
+    Max(F) = x -> maximum(F(x))
+
+With ``Max``, the query is easy to write:
+
+.. code-block:: julia
+
+    Max_Salary = Max(Departments >> Employees >> Salary)
+
+.. code-block:: jlcon
+
+    julia> Max_Salary(citydb)
+    260004
+
+A combinator that summarizes the content of an array is called *an aggregate
+combinator*.
+
+We conclude this section with the following problem:
+
+    *Find the maximum number of employees per department.*
+
+To solve it, we will need to use both ``Max`` and ``Count`` aggregates.  We
+already know how to find the number of employees per department:
+
+.. code-block:: julia
+
+    Num_Empls_Per_Dept = Departments >> Count(Employees)
+
+Applying ``Max``, we get:
+
+.. code-block:: julia
+
+    Max_Empls_Per_Dept =
+        Max(Departments >> Count(Employees))
+
+.. code-block:: jlcon
+
+    julia> Max_Empls_Per_Dept(citydb)
+    13570
+
+
 Constructing objects
 --------------------
 
@@ -1158,6 +1315,124 @@ Constructing objects
          Dict("name"=>"WATER MGMNT","max_salary"=>169512,"size"=>1848)
          Dict("name"=>"POLICE","max_salary"=>260004,"size"=>13570)
          ⋮
+
+
+In the previous section, we built a query to find the number of employees
+per department:
+
+.. code-block:: julia
+
+    Num_Empls_Per_Dept =
+        Departments >> Count(Employees)
+
+.. code-block:: jlcon
+
+    julia> Num_Empls_Per_Dept(citydb)
+    35-element Array{Any,1}:
+      1848
+     13570
+       924
+         ⋮
+
+Unfortunately, this query produces a raw array of numbers disconnected from the
+respective departments.  We'd like to get the output in a tabular form, that
+is, as an array of objects with two fields: the department name and the number
+of employees.  To implement this, we need a combinator that can construct new
+JSON objects.
+
+Combinator
+
+.. math:: \operatorname{Select}(\textit{name}_1 \Rightarrow F_1,\, \textit{name}_2 \Rightarrow F_2,\, \ldots)
+
+is parameterized with a list of field names and field constructors.  For any
+input, it produces a new JSON object with fields
+
+.. math:: \textit{name}_1,\, \textit{name}_2,\, \ldots
+
+and values are generated from the input by field constructors
+
+.. math:: F_1,\,F_2,\,\ldots.
+
+Here is a definition of ``Select()`` in Julia:
+
+.. code-block:: julia
+
+    Select(fields...) =
+        x -> Dict(map(f -> f.first => f.second(x), fields))
+
+Let us demonstrate ``Select()`` on a simple example.  Define combinators
+that determine the size and the maximum element of the input array:
+
+.. code-block:: jlcon
+
+    julia> L = Count(This())
+    julia> L([10, 20, 30])
+    3
+
+.. code-block:: jlcon
+
+    julia> M = Max(This())
+    julia> M([10, 20, 30])
+    30
+
+Now use ``Select`` to combine the output of ``L`` and ``M`` in a single JSON
+object:
+
+.. code-block:: jlcon
+
+    julia> S = Select("len" => Count(This()), "max" => Max(This()))
+    julia> S([10, 20, 30])
+    Dict{ASCIIString,Int64} with 2 entries:
+      "len" => 3
+      "max" => 30
+
+Let us get back to the problem we stated at the beginning of the section:
+
+    *For each department, find the number of employees.*
+
+Using ``Select()`` we can generate a "table" with two "columns": ``name``, the
+name of the department, and ``size``, the number of employees in the
+department:
+
+.. code-block:: julia
+
+    Depts_With_Size =
+        Departments >> Select("name" => Name, "size" => Count(Employees))
+
+.. code-block:: jlcon
+
+    julia> Depts_With_Size(citydb)
+    35-element Array{Any,1}:
+     Dict("name"=>"WATER MGMNT","size"=>1848)
+     Dict("name"=>"POLICE","size"=>13570)
+     Dict("name"=>"GENERAL SERVICES","size"=>924)
+     ⋮
+
+To add or rearrange table columns, we add or rearrange field constructors in
+the ``Select()`` clause.  For example, to add a column ``max_salary``, the top
+salary per department, we write:
+
+.. code-block:: julia
+
+    Depts_With_Size_And_Max_Salary =
+        Departments >> Select(
+            "name" => Name,
+            "size" => Count(Employees),
+            "max_salary" => Max(Employees >> Salary))
+
+.. code-block:: jlcon
+
+    julia> Depts_With_Size_And_Max_Salary(citydb)
+    35-element Array{Any,1}:
+     Dict("name"=>"WATER MGMNT","max_salary"=>169512,"size"=>1848)
+     Dict("name"=>"POLICE","max_salary"=>260004,"size"=>13570)
+     Dict("name"=>"GENERAL SERVICES","max_salary"=>157092,"size"=>924)
+     ⋮
+
+Notably, we didn't need to change the other fields or the rest of the query.
+At the same time, adding a new field to ``Select()`` cannot affect the other
+fields in any way.   This property is an instance of so called *principle of
+compositionality*.
 
 
 Filtering data
@@ -1333,7 +1608,7 @@ Filtering data
 
     .. code-block:: jlcon
 
-        julia> Depts_With_100k(citydb)
+        julia> Depts_With_Num_Well_Paid_Empls(citydb)
         35-element Array{Any,1}:
          Dict("name"=>"WATER MGMNT","N100k"=>179)
          Dict("name"=>"POLICE","N100k"=>1493)
@@ -1367,6 +1642,191 @@ Filtering data
                 "name" => Name,
                 "N100k" => Count(Employees >> Sieve(Salary > 100000)))
 
+
+Consider a problem:
+
+    *Find the employees with salary greater than $200k.*
+
+To solve it, we need a way to refine data.  Specifically, we need a JSON
+combinator that, given a set of values and a predicate, produces the values
+that satisfy the predicate condition.
+
+Let us define combinator ``Sieve()`` by:
+
+.. code-block:: julia
+
+    Sieve(P) = x -> P(x) ? x : nothing
+
+That is, if the input satisfies the predicate condition, pass it through;
+otherwise, return ``nothing``.
+
+*A predicate* is a combinator that for any input returns either ``true`` or
+``false``.  Here is the implementation of the ``>`` operator in Julia:
+
+.. code-block:: julia
+
+    (>)(F::Function, G::Function) = x -> F(x) > G(x)
+    (>)(F::Function, n::Number) = F > Const(n)
+
+Other comparison (``>``, ``>=``, ``<``, ``<=``, ``==``, ``!=``), logical
+(``&``, ``|``, ``!``) and arithmetic (``+``, ``-``, ``*``, ``/``) operators are
+defined in the same way.
+
+Let us demonstrate how ``Sieve()`` and predicate operators work on a simple
+example:
+
+1. Combinator ``Field("salary")`` extracts the value of field ``"salary"``
+   from the input object:
+
+   .. code-block:: jlcon
+
+        julia> Salary = Field("salary")
+        julia> Salary(Dict("name" => "RAHM", "surname" => "E", "salary" => 216210))
+        216210
+        julia> Salary(Dict("name" => "STEVEN", "surname" => "K", "salary" => 1))
+        1
+
+2. Combinator ``Const(200000)`` returns value ``200000`` on any input:
+
+   .. code-block:: jlcon
+
+        julia> _200000 = Const(200000)
+        julia> _200000(Dict("name" => "RAHM", "surname" => "E", "salary" => 216210))
+        200000
+        julia> _200000(Dict("name" => "STEVEN", "surname" => "K", "salary" => 1))
+        200000
+
+3. Like ``Count``, predicate operator ``(F > G)`` does not directly operate on
+   the input value.  Instead it processes its input through ``F`` and ``G`` and
+   then compares their outputs:
+
+   .. code-block:: jlcon
+
+        julia> P = Salary > 200000
+        julia> P(Dict("name" => "RAHM", "surname" => "E", "salary" => 216210))
+        true
+        julia> P(Dict("name" => "STEVEN", "surname" => "K", "salary" => 1))
+        false
+
+4. ``Sieve`` passes its input through if it satisfies the predicate condition:
+
+   .. code-block:: jlcon
+
+        julia> F = Sieve(P)
+        julia> F(Dict("name" => "RAHM", "surname" => "E", "salary" => 216210))
+        Dict("name"=>"RAHM","surname"=>"E","salary"=>216210)
+        julia> F(Dict("name" => "STEVEN", "surname" => "K", "salary" => 1))
+        nothing
+
+The traversal operator drops value ``nothing`` from the output.  That allows us
+to insert ``Sieve`` into the traversal chain to filter it.  To find the
+employees with salary greater than $200k, we write:
+
+.. code-block:: julia
+
+    Very_Well_Paid_Empls =
+        Departments >> Employees >> Sieve(Salary > 200000)
+
+.. code-block:: jlcon
+
+    julia> Very_Well_Paid_Empls(citydb)
+    3-element Array{Any,1}:
+     Dict("name"=>"GARRY","surname"=>"M","position"=>"SUPERINTENDENT OF POLICE","salary"=>260004)
+     Dict("name"=>"JOSE","surname"=>"S","position"=>"FIRE COMMISSIONER","salary"=>202728)
+     Dict("name"=>"RAHM","surname"=>"E","position"=>"MAYOR","salary"=>216210)
+
+``Sieve()`` doesn't need to be the last item in the traversal chain.  For example,
+consider a problem:
+
+    *Find the departments with more than 1000 employees.*
+
+To get the names of departments that satisfy this condition, we write:
+
+.. code-block:: julia
+
+    Large_Depts =
+        Departments >> Sieve(Count(Employees) > 1000) >> Name
+
+.. code-block:: jlcon
+
+    julia> Large_Depts(citydb)
+    7-element Array{Any,1}:
+     "WATER MGMNT"
+     "POLICE"
+     "STREETS & SAN"
+     ⋮
+
+Similarly, ``Sieve()`` can also be chained with ``Select()``.  For example, to
+get the previous query in tabular form, we write:
+
+.. code-block:: julia
+
+    Size = Field("size")
+
+    Large_Depts =
+        Departments >> Select(
+            "name" => Name,
+            "size" => Count(Employees)) >> Sieve(Size > 1000)
+
+.. code-block:: jlcon
+
+    julia> Large_Depts(citydb)
+    7-element Array{Any,1}:
+     Dict("name"=>"WATER MGMNT","size"=>1848)
+     Dict("name"=>"POLICE","size"=>13570)
+     Dict("name"=>"STREETS & SAN","size"=>2090)
+     ⋮
+
+In the previous example we used an aggregate in a predicate condition.  Sometimes
+it is also necessary to use ``Sieve`` in an aggregate expression.  For example:
+
+    *Find the number of departments with more than 1000 employees.*
+
+Here is the query:
+
+.. code-block:: julia
+
+    Num_Large_Depts =
+        Count(Departments >> Sieve(Count(Employees) > 1000))
+
+.. code-block:: jlcon
+
+    julia> Num_Large_Depts(citydb)
+    7
+
+Recall the problem with which we started this chapter:
+
+    *For each department, find the number of employees with salary higher than
+    $100k.*
+
+We now have all the tools to solve it:
+
+.. code-block:: julia
+
+    Depts_With_Num_Well_Paid_Empls =
+        Departments >> Select(
+            "name" => Name,
+            "N100k" => Count(Employees >> Sieve(Salary > 100000)))
+
+.. code-block:: jlcon
+
+    julia> Depts_With_100k(citydb)
+    35-element Array{Any,1}:
+     Dict("name"=>"WATER MGMNT","N100k"=>179)
+     Dict("name"=>"POLICE","N100k"=>1493)
+     Dict("name"=>"GENERAL SERVICES","N100k"=>79)
+     ⋮
+
+This is a significant improvement over the original solution:
+
+.. code-block:: julia
+
+    Depts_With_Num_Well_Paid_Empls(data) =
+        map(d -> Dict(
+                "name" => d["name"],
+                "N100k" =>
+                    length(filter(e -> e["salary"] > 100000, d["employees"]))),
+            data["departments"])
 
 Queries with parameters
 -----------------------
@@ -1641,5 +2101,4 @@ Limitations
    Otherwise, we are out of luck...
 
    *... Or are we?*
-
 
