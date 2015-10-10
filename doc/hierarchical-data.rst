@@ -1828,6 +1828,7 @@ This is a significant improvement over the original solution:
                     length(filter(e -> e["salary"] > 100000, d["employees"]))),
             data["departments"])
 
+
 Queries with parameters
 -----------------------
 
@@ -1989,6 +1990,165 @@ Queries with parameters
     Cannot be done without query context.
 
 
+We sketched a prototype of a query language for hierarchical databases.  Let us
+explore how it could be further improved.
+
+Consider a problem:
+
+    *Find the number of employees whose annual salary exceeds $200k.*
+
+We know how to write this query:
+
+.. code-block:: julia
+
+    Num_Well_Paid_Empls =
+        Count(Departments >> Employees >> Sieve(Salary >= 200000))
+
+.. code-block:: jlcon
+
+    julia> Num_Well_Paid_Empls(citydb)
+    3
+
+Now let us alter this problem:
+
+    *Find the number of employees with salary in a certain range.*
+
+Imagine that we don't know the salary range in advance, when we construct the
+query.  Instead, we'd like to submit the range when we execute the query.
+
+We use combinator ``Var`` to mark a value that is to be specified when the
+query is executed.  The combinator constructor takes the name of the parameter:
+
+.. code-block:: julia
+
+    Min_Salary = Var("min_salary")
+    Max_Salary = Var("max_salary")
+
+    Num_Empls_By_Salary =
+        Count(
+            Departments >>
+            Employees >>
+            Sieve((Salary >= Min_Salary) & (Salary < Max_Salary)))
+
+When the query is executed, we specify values for all parameters used in the
+query:
+
+.. code-block:: jlcon
+
+    julia> Num_Empls_By_Salary(citydb, "min_salary" => 100000, "max_salary" => 200000)
+    3916
+
+How does it work?  We need to introduce *a query context:* a dictionary of
+query parameters that is passed with input to all combinators.
+
+Existing combinators needs to be updated to support query context:
+
+.. code-block:: julia
+
+    Const(val) = (x, ctx...) -> val
+    Field(name) = (x, ctx...) -> x[name]
+    Count(F) = (x, ctx...) -> length(F(x, ctx...))
+    ⋮
+
+Combinator ``Var`` extracts value of a context variable:
+
+.. code-block:: julia
+
+    Var(name) = (x, ctx...) -> Dict(ctx)[name]
+
+Parameter values could also be calculated by the query itself.  Consider a
+problem:
+
+    *Find the employee with the highest salary.*
+
+We know how to get the answer using two queries.  First, we find the highest
+salary:
+
+.. code-block:: julia
+
+    Max_Salary = Max(Departments >> Employees >> Salary)
+
+.. code-block:: jlcon
+
+    julia> Max_Salary(citydb)
+    260004
+
+Second, we find the employee with the given salary:
+
+.. code-block:: julia
+
+    The_Salary = Var("salary")
+
+    Empl_With_Salary = Departments >> Employees >> Sieve(Salary == The_Salary)
+
+.. code-block:: jlcon
+
+    julia> Empl_With_Salary(citydb, salary => 260004)
+    1-element Array{Any,1}:
+     Dict("name"=>"GARRY","surname"=>"M","position"=>"SUPERINTENDENT OF POLICE",
+    "salary"=>260004)
+
+Let us review what we did here:
+
+1. We find the highest salary and assign the value to the ``salary`` variable.
+2. We find the employee with the given salary.
+
+We use combinator ``Given()`` to combine these operations:
+
+.. code-block:: julia
+
+    Empl_With_Max_Salary =
+        Given(Empl_With_Salary, "salary" => Max_Salary)
+
+.. code-block:: jlcon
+
+    julia> Empl_With_Max_Salary(citydb)
+    1-element Array{Any,1}:
+     Dict("name"=>"GARRY","surname"=>"M","position"=>"SUPERINTENDENT OF POLICE",
+    "salary"=>260004)
+
+Combinator ``Given()`` adds a variable to the query context.  Here is how
+``Given()`` could be implemented in Julia:
+
+.. code-block:: julia
+
+    Given(F, vars...) =
+        (x, ctx...) ->
+            let ctx = (ctx..., map(v -> v.first => v.second(x, ctx...), vars)...)
+                F(x, ctx...)
+            end
+
+Let us write the query again:
+
+.. code-block:: julia
+
+    Empl_With_Max_Salary =
+        Given(
+            Departments >> Employees >> Sieve(Salary == The_Salary),
+            "salary" => Max(Departments >> Employees >> Salary))
+
+If we pull ``Departments`` out of ``Given()`` clause, we will get a query for
+the problem:
+
+    *Find the employee with the highest salary at each department.*
+
+.. code-block:: julia
+
+    Top_Empl_By_Dept =
+        Departments >> Given(
+            Employees >> Sieve(Salary == The_Salary),
+            "salary" => Max(Employees >> Salary))
+
+.. code-block:: jlcon
+
+    julia> Top_Empl_By_Dept(citydb)
+    35-element Array{Any,1}:
+     Dict("name"=>"THOMAS","surname"=>"P","position"=>"COMMISSIONER OF WATER MGMT","salary"=>169512)
+     Dict("name"=>"GARRY","surname"=>"M","position"=>"SUPERINTENDENT OF POLICE","salary"=>260004)
+     Dict("name"=>"DAVID","surname"=>"R","position"=>"COMMISSIONER OF FLEET & FACILITY MANAGEMENT","salary"=>157092)
+     ⋮
+
+
 Limitations
 -----------
 
@@ -2101,4 +2261,99 @@ Limitations
    Otherwise, we are out of luck...
 
    *... Or are we?*
+
+
+In approximately 50 lines of Julia code, we sketched a prototype of a query language
+for hierarchical databases.  In all our examples so far, we were able to solve the
+problem elegantly.  One may wonder: is there any problems that are difficult to
+solve using our approach?
+
+Consider two problems:
+
+    *Find the top salary for each department.*
+
+    *Find the top salary for each position.*
+
+The first one is easy:
+
+.. code-block:: julia
+
+    Max_Salary_By_Dept =
+        Departments >> Select(
+            "name" => Name,
+            "max_salary" => Max(Employees >> Salary))
+
+On the other hand, it appears we cannot construct a query to solve the second
+problem.  Why is that?
+
+Let's look at the traversal diagram for both problems.
+
+*Find the top salary for each department.*
+
+.. graphviz:: citydb-max-salary-by-department.dot
+
+*Find the top salary for each position.*
+
+.. graphviz:: citydb-max-salary-by-position.dot
+
+As you can see, in the second example, the structure of the query does not
+respect the structure of the database.  This is the root of our problem.
+
+Is there a way to solve this problem?  Suppose we could reshape the structure
+of the database and place the "Positions" dimension at the root of the
+hierarchy.  Then the query traversal becomes compatible with the structure of
+the database:
+
+.. graphviz:: citydb-max-salary-by-position-reshaped.dot
+
+Now it is easy to write a query:
+
+.. code-block:: julia
+
+    Max_Salary_By_Posn =
+        Positions >> Select(
+            "title" => Title,
+            "max_salary" => Max(Employees >> Salary))
+
+Unfortunately, hierarchical data model does not provide a way to change the
+structure dynamically.
+
+Which should remind us of a bigger issue.  Real databases are decidedly
+non-hierarchical!
+
+Here is a typical mid-size database schema:
+
+.. image:: RexStudy_Data_Model.png
+
+There is no hierarchy in sight!  Or, perhaps, there are many hierarchies lumped
+together?
+
+Still we do not need a large number of entities to make a database
+non-hierarchical.  If we look closely at our sample dataset, it is not
+necessarily hierarchical:
+
+.. graphviz:: citydb-non-hierarchical.dot
+
+1. When we designed a schema for the dataset, we made "department" a dimension
+   of the "employee" class and "position" its attribute.  However it is
+   entirely reasonable that both "department" and "position" are separate
+   dimensions of "employee".  With two or more explicit dimension classes, the
+   database cannot be expressed as a tree.
+
+2. Even if we take a single relationship such as between *department* and
+   *employee* classes, we can notice that it is, in fact, two functional
+   relationships: from each department to the respective set of employees and
+   from an employee to their department.  These relationships form a loop,
+   which makes them non-hierarchical.
+
+3. Sometimes a single relationship is, by itself, non-hierarchical.  Imagine
+   that we add a relationship *reports to* between *employees*.  This
+   relationship cannot be represented in a finite hierarchy.
+
+To summarize, JSON combinators work great for querying as long as:
+
+1. The data is hierarchical.
+2. The structure of the query is compatible with the structure of the data.
+
+In the next chapter, we will show how to lift these restrictions.
 
