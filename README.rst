@@ -25,4 +25,6 @@ Demos
     * Using *baby rabbit* query language to query JSON datasets
       (`Python <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/py/demo/bql-demo.ipynb>`__,
       `Julia <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/jl/demo/bql-demo.ipynb>`__)
+    * Querying ``citydb`` with Rabbit
+      (`Julia <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/jl/demo/citydb-with-rabbit.ipynb`__)
 
