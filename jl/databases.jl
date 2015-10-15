@@ -10,14 +10,14 @@ export
     Schema,
     Instance,
     Database,
-    class
+    classname
 
 
 immutable Entity{name}
     id::Int
 end
 
-class{name}(::Type{Entity{name}}) = name
+classname{name}(::Type{Entity{name}}) = name
 convert{name}(::Type{Entity{name}}, id::Int) = Entity{name}(id)
 show{name}(io::IO, e::Entity{name}) = print(io, "<", name, ":", e.id, ">")
 
@@ -38,7 +38,7 @@ Arrow(name::Symbol; partial=false, plural=false, unique=false) =
     Arrow(name, Entity{name}, partial, plural, unique)
 
 function show(io::IO, a::Arrow)
-    print(io, a.name, ": ", a.T <: Entity ? ucfirst(string(class(a.T))) : a.T)
+    print(io, a.name, ": ", a.T <: Entity ? ucfirst(string(classname(a.T))) : a.T)
     features = []
     for feature in [:partial, :plural, :unique]
         if getfield(a, feature)

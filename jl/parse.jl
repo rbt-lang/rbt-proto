@@ -2,9 +2,8 @@
 module Parse
 
 export
-    @q_str,
     query,
-    Syntax,
+    AbstractSyntax,
     LiteralType,
     LiteralSyntax,
     ApplySyntax,
@@ -13,12 +12,12 @@ export
 import Base: show
 
 
-abstract Syntax
+abstract AbstractSyntax
 
 
 const LiteralType = Union{Void,Int,Float64,AbstractString}
 
-immutable LiteralSyntax{T<:LiteralType} <: Syntax
+immutable LiteralSyntax{T<:LiteralType} <: AbstractSyntax
     val::T
 end
 
@@ -26,9 +25,9 @@ show(io::IO, ::LiteralSyntax{Void}) = print(io, "null")
 show(io::IO, syn::LiteralSyntax) = show(io, syn.val)
 
 
-immutable ApplySyntax <: Syntax
+immutable ApplySyntax <: AbstractSyntax
     fn::Symbol
-    args::Vector{Syntax}
+    args::Vector{AbstractSyntax}
 end
 
 show(io::IO, syn::ApplySyntax) =
@@ -39,17 +38,12 @@ show(io::IO, syn::ApplySyntax) =
     end
 
 
-immutable ComposeSyntax <: Syntax
-    f::Syntax
-    g::Syntax
+immutable ComposeSyntax <: AbstractSyntax
+    f::AbstractSyntax
+    g::AbstractSyntax
 end
 
 show(io::IO, syn::ComposeSyntax) = print(io, syn.f, ".", syn.g)
-
-
-macro q_str(str)
-    query(str)
-end
 
 
 query(str::AbstractString) =
@@ -74,7 +68,7 @@ function ex2syn(ex::Expr)
             if isa(ex, Symbol)
                 syn = ApplySyntax(ex, [syn])
             elseif isa(ex, Expr) && ex.head == :call && isa(ex.args[1], Symbol)
-                args = Syntax[syn]
+                args = AbstractSyntax[syn]
                 append!(args, map(ex2syn, ex.args[2:end]))
                 syn = ApplySyntax(ex.args[1], args)
             else
@@ -90,7 +84,7 @@ function ex2syn(ex::Expr)
     elseif ex.head == :call
         return ex2syn(pushcall(ex.args[1], ex.args[2:end]))
     elseif ex.head == :comparison && length(ex.args) == 3 && isa(ex.args[2], Symbol)
-        return ApplySyntax(ex.args[2], Syntax[ex2syn(ex.args[1]), ex2syn(ex.args[3])])
+        return ApplySyntax(ex.args[2], AbstractSyntax[ex2syn(ex.args[1]), ex2syn(ex.args[3])])
     else
         error("not a query expression: $ex")
     end
