@@ -8,7 +8,36 @@ using RBT.Parse
 using RBT.Databases
 using RBT.Pipes
 
+import Base: isless, show
 import RBT.Pipes: domain, codomain
+
+
+abstract Mode{T}
+abstract Iso{T} <: Mode{T}
+abstract Opt{T} <: Mode{T}
+abstract Seq{T} <: Mode{T}
+
+domain{T}(::Type{Iso{T}}) = T
+domain{T}(::Type{Opt{T}}) = T
+domain{T}(::Type{Seq{T}}) = T
+
+mode{T}(::Type{Iso{T}}) = Iso
+mode{T}(::Type{Opt{T}}) = Opt
+mode{T}(::Type{Seq{T}}) = Seq
+
+datatype{T}(::Type{Iso{T}}) = T
+datatype{T}(::Type{Opt{T}}) = Nullable{T}
+datatype{T}(::Type{Seq{T}}) = Vector{T}
+
+isless(::Type{Iso}, ::Type{Iso}) = false
+isless(::Type{Iso}, ::Type{Opt}) = true
+isless(::Type{Iso}, ::Type{Seq}) = true
+isless(::Type{Opt}, ::Type{Iso}) = false
+isless(::Type{Opt}, ::Type{Opt}) = false
+isless(::Type{Opt}, ::Type{Seq}) = true
+isless(::Type{Seq}, ::Type{Iso}) = false
+isless(::Type{Seq}, ::Type{Opt}) = false
+isless(::Type{Seq}, ::Type{Seq}) = false
 
 
 abstract AbstractScope
@@ -18,6 +47,8 @@ immutable RootScope <: AbstractScope
     db::Database
 end
 
+show(io::IO, ::RootScope) = print(io, "ROOT")
+
 domain(::RootScope) = Tuple{}
 
 
@@ -26,49 +57,39 @@ immutable ClassScope <: AbstractScope
     name::Symbol
 end
 
+show(io::IO, s::ClassScope) = print(io, "Class(<", s.name, ">)")
+
 domain(s::ClassScope) = Entity{s.name}
 
 
 immutable ScalarScope <: AbstractScope
     db::Database
-    T::DataType
+    dom::DataType
 end
 
-domain(s::ScalarScope) = s.T
+show(io::IO, s::ScalarScope) = print(io, "Scalar(", s.dom, ")")
 
-
-immutable Input{comode}
-    T::DataType
-end
-
-
-immutable Output{mode}
-    T::DataType
-end
-
-mode{mode}(::Output{mode}) = mode
-
-maxmode(::Output{:reg}, ::Output{:reg}) = :reg
-maxmode(::Output{:reg}, ::Output{:opt}) = :opt
-maxmode(::Output{:reg}, ::Output{:seq}) = :seq
-maxmode(::Output{:opt}, ::Output{:reg}) = :opt
-maxmode(::Output{:opt}, ::Output{:opt}) = :opt
-maxmode(::Output{:opt}, ::Output{:seq}) = :seq
-maxmode(::Output{:seq}, ::Output{:reg}) = :seq
-maxmode(::Output{:seq}, ::Output{:opt}) = :seq
-maxmode(::Output{:seq}, ::Output{:seq}) = :seq
+domain(s::ScalarScope) = s.dom
 
 
 immutable Flow
-    input::Input
-    output::Output
+    input::DataType
+    output::DataType
     scope::AbstractScope
     pipe::AbstractPipe
 end
 
-mode(f::Flow) = mode(f.output)
+call(f::Flow, args...) = f.pipe(args...)
 
-maxmode(f::Flow, g::Flow) = maxmode(f.output, g.output)
+show(io::IO, f::Flow) =
+    f.input == Iso{Tuple{}} ?
+        print(io, f.pipe, " : ", datatype(f.output)) :
+        print(io, f.pipe, " : ", datatype(f.input), " -> ", datatype(f.output))
+
+domain(f::Flow) = domain(f.input)
+mode(f::Flow) = mode(f.input)
+codomain(f::Flow) = domain(f.output)
+comode(f::Flow) = mode(f.output)
 
 
 immutable Fn{name}
@@ -78,22 +99,27 @@ end
 compile(db::Database, str::AbstractString) = compile(RootScope(db), query(str))
 compile(db::Database, syn::AbstractSyntax) = compile(RootScope(db), syn)
 compile(s::AbstractScope, str::AbstractString) = compile(s, query(str))
+compile(f::Flow, str::AbstractString) = compile(f.scope, query(str))
+compile(f::Flow, syn::AbstractSyntax) = compile(f.scope, syn)
 
 
 function compile(s::AbstractScope, ::LiteralSyntax{Void})
-    input = Input{:reg}(domain(s))
-    output = Output{:opt}(Void)
+    I = domain(s)
+    input = Iso{I}
+    output = Opt{Void}
     scope = ScalarScope(s.db, Void)
-    pipe = NullPipe{domain(s), Void}()
+    pipe = NullPipe{I, Void}()
     return Flow(input, output, scope, pipe)
 end
 
 
 function compile{T}(s::AbstractScope, syn::LiteralSyntax{T})
-    input = Input{:reg}(domain(s))
-    output = Output{:reg}(T)
-    scope = ScalarScope(s.db, T)
-    pipe = ConstPipe{domain(s), T}(syn.val)
+    I = domain(s)
+    O = T
+    input = Iso{I}
+    output = Iso{O}
+    scope = ScalarScope(s.db, O)
+    pipe = ConstPipe{domain(s), O}(syn.val)
     return Flow(input, output, scope, pipe)
 end
 
@@ -101,10 +127,8 @@ end
 function compile(s::AbstractScope, syn::ApplySyntax)
     if isempty(syn.args)
         maybe_flow = lookup(s, syn.fn)
-        try
+        if !isnull(maybe_flow)
             return get(maybe_flow)
-        catch err
-            isa(err, NullException) || rethrow()
         end
     end
     return compile(s, Fn{syn.fn}, syn.args...)
@@ -113,10 +137,13 @@ end
 
 function compile(s::AbstractScope, syn::ComposeSyntax)
     f = compile(s, syn.f)
-    g = compile(f.scope, syn.g)
-    input = f.input
-    mode = maxmode(f, g)
-    output = Output{mode}(g.output.T)
+    g = compile(f, syn.g)
+    codomain(f) == domain(g) || error("incompatible operands: $syn")
+    I = domain(f)
+    O = codomain(g)
+    M = max(comode(f), comode(g))
+    input = Iso{I}
+    output = M{O}
     scope = g.scope
     pipe = f.pipe >> g.pipe
     return Flow(input, output, scope, pipe)
@@ -128,47 +155,53 @@ compile{name}(s::AbstractScope, fn::Type{Fn{name}}, syn0::AbstractSyntax, syns::
 
 
 function compile(s::AbstractScope, ::Type{Fn{:count}}, op::Flow)
-    mode(op) == :seq || error("expected a plural expression: $op")
-    input = op.input
-    output = Output{:reg}(Int)
+    comode(op) == Seq || error("expected a plural expression: $op")
+    I = domain(op)
+    T = codomain(op)
+    input = Iso{I}
+    output = Iso{Int}
     scope = ScalarScope(s.db, Int)
-    pipe = CountPipe{domain(op.pipe), eltype(codomain(op.pipe))}(op.pipe)
+    pipe = CountPipe{I, T}(op.pipe)
     return Flow(input, output, scope, pipe)
 end
 
 function compile(s::AbstractScope, ::Type{Fn{:max}}, op::Flow)
-    mode(op) == :seq || error("expected a plural expression: $op")
-    op.output.T == Int || error("expected an integer expression: $op")
-    input = op.input
-    output = Output{:opt}(Int)
+    comode(op) == Seq || error("expected a plural expression: $op")
+    codomain(op) == Int || error("expected an integer expression: $op")
+    I = domain(op)
+    input = Iso{I}
+    output = Opt{Int}
     scope = ScalarScope(s.db, Int)
-    pipe = MaxPipe{domain(op.pipe)}(op.pipe)
+    pipe = MaxPipe{I}(op.pipe)
     return Flow(input, output, scope, pipe)
 end
 
 compile(s::AbstractScope, fn::Type{Fn{:select}}, base::AbstractSyntax, ops::AbstractSyntax...) =
-    let base_flow = compile(s, base)
-        compile(s, fn, base_flow, map(op -> compile(base_flow.scope, op), ops)...)
+    let base = compile(s, base)
+        compile(s, fn, base, map(op -> compile(base, op), ops)...)
     end
 
 
 function compile(s::AbstractScope, ::Type{Fn{:select}}, base::Flow, ops::Flow...)
-    T = Tuple{map(op -> codomain(op.pipe), ops)...}
-    input = base.input
-    output = Output{mode(base)}(T)
-    scope = ScalarScope(s.db, T)
-    pipe = base.pipe >> TuplePipe{base.output.T,T}([op.pipe for op in ops])
+    I = domain(base)
+    T = codomain(base)
+    O = Tuple{map(op -> datatype(op.output), ops)...}
+    input = Iso{I}
+    output = comode(base){O}
+    scope = ScalarScope(s.db, O)
+    pipe = base.pipe >> TuplePipe{T,O}([op.pipe for op in ops])
     return Flow(input, output, scope, pipe)
 end
 
 
 function lookup(s::RootScope, n::Symbol)
     if n in keys(s.db.schema.classes)
-        input = Input{:reg}(domain(s))
-        T = Entity{n}
-        output = Output{:seq}(T)
+        I = domain(s)
+        O = Entity{n}
+        input = Iso{I}
+        output = Seq{O}
         scope = ClassScope(s.db, n)
-        pipe = SetPipe{Tuple{}, T}(n, s.db.instance.sets[n])
+        pipe = SetPipe{I, O}(n, s.db.instance.sets[n])
         return Nullable{Flow}(Flow(input, output, scope, pipe))
     else
         return Nullable{Flow}()
@@ -181,24 +214,24 @@ function lookup(s::ClassScope, n::Symbol)
     if n in keys(e.arrows)
         a = e.arrows[n]
         map = s.db.instance.maps[(s.name, a.name)]
-        T = a.T
-        if T <: Entity
-            scope = ClassScope(s.db, classname(T))
+        I = domain(s)
+        O = a.T
+        input = Iso{I}
+        if O <: Entity
+            scope = ClassScope(s.db, classname(O))
         else
-            scope = ScalarScope(s.db, T)
+            scope = ScalarScope(s.db, O)
         end
         if !a.plural && !a.partial
-            mode = :reg
-            pipe = RegMapPipe{domain(s), T}(n, map)
+            output = Iso{O}
+            pipe = IsoMapPipe{I, O}(n, map)
         elseif !a.plural
-            mode = :opt
-            pipe = OptMapPipe{domain(s), T}(n, map)
+            output = Opt{O}
+            pipe = OptMapPipe{I, O}(n, map)
         else
-            mode = :seq
-            pipe = SeqMapPipe{domain(s), T}(n, map)
+            output = Seq{O}
+            pipe = SeqMapPipe{I, O}(n, map)
         end
-        input = Input{:reg}(domain(s))
-        output = Output{mode}(T)
         return Nullable{Flow}(Flow(input, output, scope, pipe))
     else
         return Nullable{Flow}()

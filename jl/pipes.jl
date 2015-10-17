@@ -3,46 +3,49 @@ module Pipes
 
 export
     AbstractPipe,
-    domain,
-    codomain,
-    RegPipe,
+    IsoPipe,
     OptPipe,
     SeqPipe,
     ConstPipe,
     NullPipe,
     SetPipe,
-    RegMapPipe,
+    IsoMapPipe,
     OptMapPipe,
     SeqMapPipe,
     LiftToOptPipe,
     LiftToSeqPipe,
     LiftOptToSeqPipe,
-    RegComposePipe,
+    IsoComposePipe,
     OptComposePipe,
     SeqComposePipe,
     CountPipe,
     MaxPipe,
     TuplePipe
 
-import Base: >>, show
+import Base: >>, show, call
 
 
 abstract AbstractPipe{I,O}
-
-domain{I,O}(::AbstractPipe{I,O}) = I
-codomain{I,O}(::AbstractPipe{I,O}) = O
-
-
-abstract RegPipe{I,O} <: AbstractPipe{I,O}
+abstract IsoPipe{I,O} <: AbstractPipe{I,O}
 abstract OptPipe{I,O} <: AbstractPipe{I,Nullable{O}}
 abstract SeqPipe{I,O} <: AbstractPipe{I,Vector{O}}
 
+call(p::AbstractPipe{Tuple{}}) = p(())
 
-immutable ConstPipe{I,O} <: RegPipe{I,O}
+domain{I,O}(::IsoPipe{I,O}) = I
+domain{I,O}(::OptPipe{I,O}) = I
+domain{I,O}(::SeqPipe{I,O}) = I
+
+codomain{I,O}(::IsoPipe{I,O}) = O
+codomain{I,O}(::OptPipe{I,O}) = O
+codomain{I,O}(::SeqPipe{I,O}) = O
+
+
+immutable ConstPipe{I,O} <: IsoPipe{I,O}
     val::O
 end
 
-show(io::IO, p::ConstPipe) = print(io, "ConstPipe(", repr(p.val), ")")
+show(io::IO, p::ConstPipe) = print(io, "Const(", repr(p.val), ")")
 
 call{I,O}(p::ConstPipe{I,O}, ::I) = p.val
 
@@ -50,7 +53,7 @@ call{I,O}(p::ConstPipe{I,O}, ::I) = p.val
 immutable NullPipe{I,O} <: OptPipe{I,O}
 end
 
-show(io::IO, ::NullPipe) = print(io, "NullPipe()")
+show(io::IO, ::NullPipe) = print(io, "NULL")
 
 
 immutable SetPipe{I,O} <: SeqPipe{I,O}
@@ -58,19 +61,19 @@ immutable SetPipe{I,O} <: SeqPipe{I,O}
     set::Vector{O}
 end
 
-show(io::IO, p::SetPipe) = print(io, "SetPipe(<", p.name, ">)")
+show(io::IO, p::SetPipe) = print(io, "Set(<", p.name, ">)")
 
 call{I,O}(p::SetPipe{I,O}, ::I) = p.set
 
 
-immutable RegMapPipe{I,O} <: RegPipe{I,O}
+immutable IsoMapPipe{I,O} <: IsoPipe{I,O}
     name::Symbol
     map::Dict{I,O}
 end
 
-show(io::IO, p::RegMapPipe) = print(io, "RegMapPipe(<", p.name, ">)")
+show(io::IO, p::IsoMapPipe) = print(io, "IsoMap(<", p.name, ">)")
 
-call{I,O}(p::RegMapPipe{I,O}, x::I) = p.map[x]
+call{I,O}(p::IsoMapPipe{I,O}, x::I) = p.map[x]
 
 
 immutable OptMapPipe{I,O} <: OptPipe{I,O}
@@ -78,7 +81,7 @@ immutable OptMapPipe{I,O} <: OptPipe{I,O}
     map::Dict{I,O}
 end
 
-show(io::IO, p::OptMapPipe) = print(io, "OptMapPipe(<", p.name, ">)")
+show(io::IO, p::OptMapPipe) = print(io, "OptMap(<", p.name, ">)")
 
 call{I,O}(p::OptMapPipe{I,O}, x::I) =
     x in keys(p.map) ? Nullable{O}(p.map[x]) : Nullable{O}()
@@ -89,14 +92,14 @@ immutable SeqMapPipe{I,O} <: SeqPipe{I,O}
     map::Dict{I,Vector{O}}
 end
 
-show(io::IO, p::SeqMapPipe) = print(io, "SeqMapPipe(<", p.name, ">)")
+show(io::IO, p::SeqMapPipe) = print(io, "SeqMap(<", p.name, ">)")
 
 call{I,O}(p::SeqMapPipe{I,O}, x::I) =
     x in keys(p.map) ? p.map[x] : O[]
 
 
 immutable LiftToOptPipe{I,O} <: OptPipe{I,O}
-    P::RegPipe{I,O}
+    P::IsoPipe{I,O}
 end
 
 show(io::IO, p::LiftToOptPipe) = show(io, p.P)
@@ -105,7 +108,7 @@ call{I,O}(p::LiftToOptPipe{I,O}, x::I) = Nullable{O}(p.P(x))
 
 
 immutable LiftToSeqPipe{I,O} <: SeqPipe{I,O}
-    P::RegPipe{I,O}
+    P::IsoPipe{I,O}
 end
 
 show(io::IO, p::LiftToSeqPipe) = show(io, p.P)
@@ -125,14 +128,14 @@ call{I,O}(p::LiftOptToSeqPipe{I,O}, x::I) =
     end
 
 
-immutable RegComposePipe{I,T,O} <: RegPipe{I,O}
-    P::RegPipe{I,T}
-    Q::RegPipe{T,O}
+immutable IsoComposePipe{I,T,O} <: IsoPipe{I,O}
+    P::IsoPipe{I,T}
+    Q::IsoPipe{T,O}
 end
 
-show(io::IO, p::RegComposePipe) = print(io, p.P, " >> ", p.Q)
+show(io::IO, p::IsoComposePipe) = print(io, p.P, " >> ", p.Q)
 
-call{I,T,O}(p::RegComposePipe{I,T,O}, x::I) = p.Q(p.P(x)::T)::O
+call{I,T,O}(p::IsoComposePipe{I,T,O}, x::I) = p.Q(p.P(x)::T)::O
 
 
 immutable OptComposePipe{I,T,O} <: OptPipe{I,O}
@@ -164,19 +167,19 @@ call{I,T,O}(p::SeqComposePipe{I,T,O}, x::I) =
     end
 
 
->>{I,T,O}(P::RegPipe{I,T}, Q::RegPipe{T,O}) =
-    RegComposePipe{I,T,O}(P, Q)
->>{I,T,O}(P::RegPipe{I,T}, Q::OptPipe{T,O}) =
+>>{I,T,O}(P::IsoPipe{I,T}, Q::IsoPipe{T,O}) =
+    IsoComposePipe{I,T,O}(P, Q)
+>>{I,T,O}(P::IsoPipe{I,T}, Q::OptPipe{T,O}) =
     OptComposePipe{I,T,O}(LiftToOptPipe{I,T}(P), Q)
->>{I,T,O}(P::RegPipe{I,T}, Q::SeqPipe{T,O}) =
+>>{I,T,O}(P::IsoPipe{I,T}, Q::SeqPipe{T,O}) =
     SeqComposePipe{I,T,O}(LiftToSeqPipe{I,T}(P), Q)
->>{I,T,O}(P::OptPipe{I,T}, Q::RegPipe{T,O}) =
+>>{I,T,O}(P::OptPipe{I,T}, Q::IsoPipe{T,O}) =
     OptComposePipe{I,T,O}(P, LiftToOptPipe{T,O}(Q))
 >>{I,T,O}(P::OptPipe{I,T}, Q::OptPipe{T,O}) =
     OptComposePipe{I,T,O}(P, Q)
 >>{I,T,O}(P::OptPipe{I,T}, Q::SeqPipe{T,O}) =
     SeqComposePipe{I,T,O}(LiftOptToSeqPipe{I,T}(P), Q)
->>{I,T,O}(P::SeqPipe{I,T}, Q::RegPipe{T,O}) =
+>>{I,T,O}(P::SeqPipe{I,T}, Q::IsoPipe{T,O}) =
     SeqComposePipe{I,T,O}(P, LiftToSeqPipe{T,O}(Q))
 >>{I,T,O}(P::SeqPipe{I,T}, Q::OptPipe{T,O}) =
     SeqComposePipe{I,T,O}(P, LiftOptToSeqPipe{T,O}(Q))
@@ -184,11 +187,11 @@ call{I,T,O}(p::SeqComposePipe{I,T,O}, x::I) =
     SeqComposePipe{I,T,O}(P, Q)
 
 
-immutable CountPipe{I,O} <: RegPipe{I,Int}
+immutable CountPipe{I,O} <: IsoPipe{I,Int}
     P::SeqPipe{I,O}
 end
 
-show(io::IO, p::CountPipe) = print(io, "CountPipe(", p.P, ")")
+show(io::IO, p::CountPipe) = print(io, "Count(", p.P, ")")
 
 call{I,O}(p::CountPipe{I,O}, x::I) = length(p.P(x)::Vector{O})
 
@@ -197,7 +200,7 @@ immutable MaxPipe{I} <: OptPipe{I,Int}
     P::SeqPipe{I,Int}
 end
 
-show(io::IO, p::MaxPipe) = print(io, "MaxPipe(", p.P, ")")
+show(io::IO, p::MaxPipe) = print(io, "Max(", p.P, ")")
 
 call{I}(p::MaxPipe{I}, x::I) =
     let y = p.P(x)::Vector{Int}
@@ -205,11 +208,11 @@ call{I}(p::MaxPipe{I}, x::I) =
     end
 
 
-immutable TuplePipe{I,O} <: RegPipe{I,O}
+immutable TuplePipe{I,O} <: IsoPipe{I,O}
     fields::Vector{AbstractPipe{I}}
 end
 
-show(io::IO, p::TuplePipe) = print(io, "TuplePipe(", join(p.fields, ", "), ")")
+show(io::IO, p::TuplePipe) = print(io, "Tuple(", join(p.fields, ", "), ")")
 
 call{I,O}(p::TuplePipe{I,O}, x::I) =
     tuple(map(field -> field(x), p.fields)...)::O
