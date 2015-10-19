@@ -20,7 +20,23 @@ export
     SeqComposePipe,
     CountPipe,
     MaxPipe,
-    TuplePipe
+    TuplePipe,
+    SievePipe,
+    LTPipe,
+    LEPipe,
+    EQPipe,
+    NEPipe,
+    GEPipe,
+    GTPipe,
+    AndPipe,
+    OrPipe,
+    NotPipe,
+    AddPipe,
+    SubPipe,
+    MulPipe,
+    DivPipe,
+    PosPipe,
+    NegPipe
 
 import Base: >>, show, call
 
@@ -216,6 +232,57 @@ show(io::IO, p::TuplePipe) = print(io, "Tuple(", join(p.fields, ", "), ")")
 
 call{I,O}(p::TuplePipe{I,O}, x::I) =
     tuple(map(field -> field(x), p.fields)...)::O
+
+
+immutable SievePipe{I} <: OptPipe{I,I}
+    P::IsoPipe{I,Bool}
+end
+
+show(io::IO, p::SievePipe) = print(io, "Sieve(", p.P, ")")
+
+call{I}(p::SievePipe{I}, x::I) =
+    p.P(x)::Bool ? Nullable{I}(x) : Nullable{I}()
+
+
+macro defunaryop(name, op, T1, T2)
+    return esc(quote
+        export $name
+        immutable $name{I} <: IsoPipe{I,$T2}
+            P::IsoPipe{I,$T1}
+        end
+        show(io::IO, p::$name) = print(io, "(", $op, " ", p.P, ")")
+        call{I}(p::$name, x::I) = $op(p.P(x)::$T1)::$T2
+    end)
+end
+
+macro defbinaryop(name, op, T1, T2, T3)
+    return esc(quote
+        export $name
+        immutable $name{I} <: IsoPipe{I,$T3}
+            P::IsoPipe{I,$T1}
+            Q::IsoPipe{I,$T2}
+        end
+        show(io::IO, p::$name) = print(io, "(", p.P, " ", $op, " ", p.Q, ")")
+        call{I}(p::$name, x::I) = $op(p.P(x)::$T1, p.Q(x)::$T2)::$T3
+    end)
+end
+
+@defunaryop(NotPipe, (!), Bool, Bool)
+@defunaryop(PosPipe, (+), Int, Int)
+@defunaryop(NegPipe, (-), Int, Int)
+
+@defbinaryop(LTPipe, (<), Int, Int, Bool)
+@defbinaryop(LEPipe, (<=), Int, Int, Bool)
+@defbinaryop(EQPipe, (==), Int, Int, Bool)
+@defbinaryop(NEPipe, (!=), Int, Int, Bool)
+@defbinaryop(GEPipe, (>=), Int, Int, Bool)
+@defbinaryop(GTPipe, (>), Int, Int, Bool)
+@defbinaryop(AndPipe, (&), Bool, Bool, Bool)
+@defbinaryop(OrPipe, (|), Bool, Bool, Bool)
+@defbinaryop(AddPipe, (+), Int, Int, Int)
+@defbinaryop(SubPipe, (-), Int, Int, Int)
+@defbinaryop(MulPipe, (*), Int, Int, Int)
+@defbinaryop(DivPipe, div, Int, Int, Int)
 
 end
 

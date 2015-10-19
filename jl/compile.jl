@@ -181,7 +181,6 @@ compile(s::AbstractScope, fn::Type{Fn{:select}}, base::AbstractSyntax, ops::Abst
         compile(s, fn, base, map(op -> compile(base, op), ops)...)
     end
 
-
 function compile(s::AbstractScope, ::Type{Fn{:select}}, base::Flow, ops::Flow...)
     I = domain(base)
     T = codomain(base)
@@ -192,6 +191,76 @@ function compile(s::AbstractScope, ::Type{Fn{:select}}, base::Flow, ops::Flow...
     pipe = base.pipe >> TuplePipe{T,O}([op.pipe for op in ops])
     return Flow(input, output, scope, pipe)
 end
+
+
+compile(s::AbstractScope, fn::Type{Fn{:filter}}, base::AbstractSyntax, op::AbstractSyntax) =
+    let base = compile(s, base)
+        compile(s, fn, base, compile(base, op))
+    end
+
+function compile(s::AbstractScope, ::Type{Fn{:filter}}, base::Flow, op::Flow)
+    comode(base) == Seq || error("expected a plural expression: $base")
+    comode(op) == Iso || error("expected a singular expresssion: $op")
+    codomain(op) == Bool || error("expected a boolean expression: $op")
+    I = domain(base)
+    O = codomain(base)
+    input = Iso{I}
+    output = Seq{O}
+    scope = base.scope
+    pipe = base.pipe >> SievePipe{O}(op.pipe)
+    return Flow(input, output, scope, pipe)
+end
+
+
+macro defunaryop(name, pipe, T1, T2)
+    return esc(quote
+        function compile(s::AbstractScope, ::Type{Fn{$name}}, op::Flow)
+            comode(op) == Iso || error("expected a singular expression: $op")
+            codomain(op) == $T1 || error("expected an expression of type $($T1): $(codomain(op))")
+            I = domain(op)
+            input = Iso{I}
+            output = Iso{$T2}
+            scope = ScalarScope(s.db, $T2)
+            pipe = $pipe{I}(op.pipe)
+            return Flow(input, output, scope, pipe)
+        end
+    end)
+end
+
+macro defbinaryop(name, pipe, T1, T2, T3)
+    return esc(quote
+        function compile(s::AbstractScope, ::Type{Fn{$name}}, op1::Flow, op2::Flow)
+            comode(op1) == Iso || error("expected a singular expression: $op1")
+            codomain(op1) == $T1 || error("expected an expression of type $($T1): $(codomain(op1))")
+            comode(op2) == Iso || error("expected a singular expression: $op2")
+            codomain(op2) == $T2 || error("expected an expression of type $($T2): $(codomain(op2))")
+            domain(op1) == domain(op2) || error("incompatible operands: $op1 and $op2")
+            I = domain(op1)
+            input = Iso{I}
+            output = Iso{$T3}
+            scope = ScalarScope(s.db, $T3)
+            pipe = $pipe{I}(op1.pipe, op2.pipe)
+            return Flow(input, output, scope, pipe)
+        end
+    end)
+end
+
+@defunaryop(:(!), NotPipe, Bool, Bool)
+@defunaryop(:(+), PosPipe, Int, Int)
+@defunaryop(:(-), NegPipe, Int, Int)
+
+@defbinaryop(:(<), LTPipe, Int, Int, Bool)
+@defbinaryop(:(<=), LEPipe, Int, Int, Bool)
+@defbinaryop(:(==), EQPipe, Int, Int, Bool)
+@defbinaryop(:(!=), NEPipe, Int, Int, Bool)
+@defbinaryop(:(>=), GEPipe, Int, Int, Bool)
+@defbinaryop(:(>), GTPipe, Int, Int, Bool)
+@defbinaryop(:(&), AndPipe, Bool, Bool, Bool)
+@defbinaryop(:(|), OrPipe, Bool, Bool, Bool)
+@defbinaryop(:(+), AddPipe, Int, Int, Int)
+@defbinaryop(:(-), SubPipe, Int, Int, Int)
+@defbinaryop(:(*), MulPipe, Int, Int, Int)
+@defbinaryop(:(/), DivPipe, Int, Int, Int)
 
 
 function lookup(s::RootScope, n::Symbol)
