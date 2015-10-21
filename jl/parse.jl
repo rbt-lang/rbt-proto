@@ -49,6 +49,8 @@ show(io::IO, syn::ComposeSyntax) = print(io, syn.f, ".", syn.g)
 query(str::AbstractString) =
     ex2syn(parse(string("(", str, ")")))
 
+query(ex::Union{Symbol,QuoteNode,LiteralType,Expr}) = ex2syn(ex)
+
 
 ex2syn(ex::Symbol) = ex == :null ? LiteralSyntax(nothing) : ApplySyntax(ex, [])
 ex2syn(ex::QuoteNode) = ApplySyntax(ex.value, [])
