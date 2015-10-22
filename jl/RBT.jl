@@ -1,23 +1,22 @@
 
 module RBT
 
-include("databases.jl")
-include("pipes.jl")
-include("parse.jl")
-include("compile.jl")
-
-import .Databases: Entity, Arrow, Class, Schema, Instance, Database, classname
-import .Parse: query
-import .Compile: compile
-
-import Base: fetch
-
 export
     setdb,
+    getdb,
     @q_str,
     query,
-    fetch,
-    @fetch
+    @query
+
+import Base: show, call, convert, isless, >>
+
+
+include("abstract.jl")
+include("database.jl")
+include("syntax.jl")
+include("pipe.jl")
+include("scope.jl")
+include("compile.jl")
 
 
 global DB = nothing
@@ -26,28 +25,69 @@ function setdb(db)
     global DB = db
 end
 
+function getdb()
+    return DB
+end
+
+
+function query(state, expr)
+    return execute(prepare(state, expr))
+end
+
+function query(expr)
+    return query(DB, expr)
+end
+
+macro query(args...)
+    @assert 1 <= length(args) <= 2
+    if length(args) == 2
+        db, expr = args
+    else
+        db, expr = DB, args[1]
+    end
+    expr = syntax(expr)
+    return quote
+        query($(esc(db)), $expr)
+    end
+end
 
 macro q_str(str)
     query(str)
 end
 
 
-function fetch(db::Database, q)
-    flow = compile(db, q)
-    return flow.pipe(())
+function prepare(expr)
+    return prepare(DB, expr)
+end
+
+macro prepare(args...)
+    @assert 1 <= length(args) <= 2
+    if length(args) == 2
+        db, expr = args
+    else
+        db, expr = DB, args[1]
+    end
+    expr = syntax(expr)
+    return quote
+        prepare($(esc(db)), $expr)
+    end
 end
 
 
-macro fetch(db, q...)
-    @assert length(q) <= 1
-    if isempty(q)
-        db, q = DB, db
+function compile(expr)
+    return compile(DB, expr)
+end
+
+macro compile(args...)
+    @assert 1 <= length(args) <= 2
+    if length(args) == 2
+        db, expr = args
     else
-        q = q[1]
+        db, expr = DB, args[1]
     end
-    local syn = query(string("(", q, ")"))
+    expr = syntax(expr)
     return quote
-        fetch($(esc(db)), $syn)
+        compile($(esc(db)), $expr)
     end
 end
 

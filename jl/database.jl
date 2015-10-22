@@ -1,18 +1,4 @@
 
-module Databases
-
-import Base: convert, show
-
-export
-    Entity,
-    Arrow,
-    Class,
-    Schema,
-    Instance,
-    Database,
-    classname
-
-
 immutable Entity{name}
     id::Int
 end
@@ -49,6 +35,7 @@ function show(io::IO, a::Arrow)
         print(io, " {", join(features, ", "), "}")
     end
 end
+
 
 immutable Class
     name::Symbol
@@ -89,12 +76,10 @@ immutable Instance
 end
 
 
-immutable Database
+immutable Database <: AbstractDatabase
     schema::Schema
     instance::Instance
 end
 
 show(io::IO, db::Database) = show(io, db.schema)
-
-end
 

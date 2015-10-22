@@ -1,20 +1,4 @@
 
-module Parse
-
-export
-    query,
-    AbstractSyntax,
-    LiteralType,
-    LiteralSyntax,
-    ApplySyntax,
-    ComposeSyntax
-
-import Base: show
-
-
-abstract AbstractSyntax
-
-
 const LiteralType = Union{Void,Int,Float64,AbstractString}
 
 immutable LiteralSyntax{T<:LiteralType} <: AbstractSyntax
@@ -22,7 +6,7 @@ immutable LiteralSyntax{T<:LiteralType} <: AbstractSyntax
 end
 
 show(io::IO, ::LiteralSyntax{Void}) = print(io, "null")
-show(io::IO, syn::LiteralSyntax) = show(io, syn.val)
+show(io::IO, syntax::LiteralSyntax) = show(io, syntax.val)
 
 
 immutable ApplySyntax <: AbstractSyntax
@@ -30,11 +14,11 @@ immutable ApplySyntax <: AbstractSyntax
     args::Vector{AbstractSyntax}
 end
 
-show(io::IO, syn::ApplySyntax) =
-    if isempty(syn.args)
-        print(io, syn.fn)
+show(io::IO, syntax::ApplySyntax) =
+    if isempty(syntax.args)
+        print(io, syntax.fn)
     else
-        print(io, syn.fn, "(", join(syn.args, ","), ")")
+        print(io, syntax.fn, "(", join(syntax.args, ","), ")")
     end
 
 
@@ -43,13 +27,14 @@ immutable ComposeSyntax <: AbstractSyntax
     g::AbstractSyntax
 end
 
-show(io::IO, syn::ComposeSyntax) = print(io, syn.f, ".", syn.g)
+show(io::IO, syntax::ComposeSyntax) = print(io, syntax.f, ".", syntax.g)
 
 
-query(str::AbstractString) =
+syntax(str::AbstractString) =
     ex2syn(parse(string("(", str, ")")))
 
-query(ex::Union{Symbol,QuoteNode,LiteralType,Expr}) = ex2syn(ex)
+syntax(ex::Union{Symbol,QuoteNode,LiteralType,Expr}) =
+    ex2syn(parse(string("(", ex, ")")))
 
 
 ex2syn(ex::Symbol) = ex == :null ? LiteralSyntax(nothing) : ApplySyntax(ex, [])
@@ -74,7 +59,7 @@ function ex2syn(ex::Expr)
                 append!(args, map(ex2syn, ex.args[2:end]))
                 syn = ApplySyntax(ex.args[1], args)
             else
-                error("not a query (:) expression: $ex")
+                error("invalid postfix notation: $ex")
             end
             if tail != nothing
                 syn = ComposeSyntax(syn, tail)
@@ -88,7 +73,7 @@ function ex2syn(ex::Expr)
     elseif ex.head == :comparison && length(ex.args) == 3 && isa(ex.args[2], Symbol)
         return ApplySyntax(ex.args[2], AbstractSyntax[ex2syn(ex.args[1]), ex2syn(ex.args[3])])
     else
-        error("not a query expression: $ex")
+        error("invalid syntax: $ex")
     end
 end
 
@@ -99,7 +84,5 @@ pushcall(ex::Expr, args) =
     Expr(ex.head, ex.args[1:end-1]..., pushcall(ex.args[end], args))
 
 pushcall(ex, args) =
-    error("not a query call expression: $ex")
-
-end
+    error("invalid call syntax: $ex")
 
