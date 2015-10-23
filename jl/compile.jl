@@ -74,18 +74,18 @@ end
 
 compile(state::AbstractScope, fn::Type{Fn{:select}}, base::AbstractSyntax, ops::AbstractSyntax...) =
     let base = compile(state, base)
-        compile(state, fn, base, map(op -> compile(base, op), ops)...)
+        compile(state, fn, base, map(op -> finalize(compile(base, op)), ops)...)
     end
 
 function compile(state::AbstractScope, ::Type{Fn{:select}}, base::Query, ops::Query...)
-    I = domain(base)
-    T = codomain(base)
+    I = codomain(base)
     O = Tuple{map(op -> datatype(op.output), ops)...}
     input = Iso{I}
-    output = comode(base){O}
+    output = Iso{O}
     scope = scalar(state, O)
-    pipe = base.pipe >> TuplePipe{T,O}([op.pipe for op in ops])
-    return Query(input, output, scope, pipe)
+    pipe = TuplePipe{I,O}([op.pipe for op in ops])
+    finish = Query(input, output, scope, pipe)
+    return Query(base.input, base.output, setfinish(base.scope, finish), base.pipe)
 end
 
 
@@ -157,4 +157,23 @@ end
 @compilebinaryop(:(-), SubPipe, Int, Int, Int)
 @compilebinaryop(:(*), MulPipe, Int, Int, Int)
 @compilebinaryop(:(/), DivPipe, Int, Int, Int)
+
+
+function finalize(q::Query)
+    finish = getfinish(q.scope)
+    if !isnull(finish)
+        finish = get(finish)
+        codomain(q) == domain(finish) || error("incompatible operands: $syntax")
+        I = domain(q)
+        O = codomain(finish)
+        M = max(comode(q), comode(finish))
+        input = Iso{I}
+        output = M{O}
+        scope = finish.scope
+        pipe = q.pipe >> finish.pipe
+        return Query(input, output, scope, pipe)
+    else
+        return q
+    end
+end
 

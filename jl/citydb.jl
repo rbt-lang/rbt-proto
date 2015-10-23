@@ -10,14 +10,16 @@ schema = Schema(
     Class(
         :department,
         Arrow(:name, UTF8String, unique=true),
-        Arrow(:employee, plural=true)),
+        Arrow(:employee, plural=true, select=(:name, :surname)),
+        select=(:name,)),
     Class(
         :employee,
         Arrow(:name, UTF8String),
         Arrow(:surname, UTF8String),
         Arrow(:position, UTF8String),
         Arrow(:salary, Int),
-        Arrow(:department)))
+        Arrow(:department, select=:name),
+        select=(:name, :surname, :department, :position, :salary)))
 
 
 D = Entity{:department}

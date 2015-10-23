@@ -17,6 +17,10 @@ abstract AbstractScope
 lookup(scope::AbstractScope, name::Symbol) =
     error("lookup() is not implemented for scope $scope")
 
+# Generates the terminating pipeline
+finish(scope::AbstractScope) =
+    Nullable{Query}()
+
 # The type of values produced at this scope.
 domain(scope::AbstractScope) =
     error("domain() is not implemented for scope $scope")

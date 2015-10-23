@@ -8,20 +8,23 @@ convert{name}(::Type{Entity{name}}, id::Int) = Entity{name}(id)
 show{name}(io::IO, e::Entity{name}) = print(io, "<", name, ":", e.id, ">")
 
 
+const SelectType = Union{Void, Symbol, Tuple{Vararg{Symbol}}}
+
 immutable Arrow
     name::Symbol
     T::DataType
     partial::Bool
     plural::Bool
     unique::Bool
+    select::SelectType
 end
 
-Arrow(name::Symbol, T::DataType; partial=false, plural=false, unique=false) =
-    Arrow(name, T, partial, plural, unique)
-Arrow(name::Symbol, targetname::Symbol; partial=false, plural=false, unique=false) =
-    Arrow(name, Entity{target}, partial, plural, unique)
-Arrow(name::Symbol; partial=false, plural=false, unique=false) =
-    Arrow(name, Entity{name}, partial, plural, unique)
+Arrow(name::Symbol, T::DataType; partial=false, plural=false, unique=false, select=nothing) =
+    Arrow(name, T, partial, plural, unique, select)
+Arrow(name::Symbol, targetname::Symbol; partial=false, plural=false, unique=false, select=nothing) =
+    Arrow(name, Entity{target}, partial, plural, unique, select)
+Arrow(name::Symbol; partial=false, plural=false, unique=false, select=nothing) =
+    Arrow(name, Entity{name}, partial, plural, unique, select)
 
 function show(io::IO, a::Arrow)
     print(io, a.name, ": ", a.T <: Entity ? ucfirst(string(classname(a.T))) : a.T)
@@ -40,9 +43,10 @@ end
 immutable Class
     name::Symbol
     arrows::Dict{Symbol, Arrow}
+    select::SelectType
 end
 
-Class(name::Symbol, as::Arrow...) = Class(name, Dict(map(a -> a.name=>a, as)...))
+Class(name::Symbol, as::Arrow...; select=nothing) = Class(name, Dict(map(a -> a.name=>a, as)...), select)
 
 function show(io::IO, c::Class)
     print(io, ucfirst(string(c.name)), ":")
