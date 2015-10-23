@@ -17,9 +17,22 @@ abstract AbstractScope
 lookup(scope::AbstractScope, name::Symbol) =
     error("lookup() is not implemented for scope $scope")
 
-# Generates the terminating pipeline
-finish(scope::AbstractScope) =
+# Generates the terminating pipeline.
+getfinish(scope::AbstractScope) =
     Nullable{Query}()
+
+# Replaces the default terminating pipeline.
+setfinish(scope::AbstractScope, finish) =
+    error("setfinish() is not implemented for scope $scope")
+
+# Get the sort direction (0 is default, +1 for ascending order,
+# -1 for descending order).
+getorder(scope::AbstractScope) =
+    error("getorder() is not implemented for scope $scope")
+
+# Set the sorting direction.
+setorder(scope::AbstractScope, order::Int) =
+    error("setorder() is not implemented for scope $scope")
 
 # The type of values produced at this scope.
 domain(scope::AbstractScope) =
@@ -163,6 +176,11 @@ finalize(q::Query) = q
 
 # Optimizes the execution pipeline.
 optimize(q::Query) = Query(q.input, q.output, q.scope, optimize(q.pipe))
+
+# Scope operations passthrough.
+lookup(q::Query, name::Symbol) = lookup(q.scope, name)
+getfinish(q::Query) = getfinish(q.scope)
+getorder(q::Query) = getorder(q.scope)
 
 # For dispatching on the function name.
 immutable Fn{name}

@@ -50,6 +50,15 @@ compile{name}(state::AbstractScope, fn::Type{Fn{name}}, arg1::AbstractSyntax, ar
     compile(state, fn, compile(state, arg1), map(arg -> compile(state, arg), args)...)
 
 
+function compile(state::AbstractScope, ::Type{Fn{:this}})
+    T = domain(state)
+    input = Iso{T}
+    output = Iso{T}
+    scope = state
+    pipe = ThisPipe{T}()
+    return Query(input, output, scope, pipe)
+end
+
 function compile(state::AbstractScope, ::Type{Fn{:count}}, op::Query)
     comode(op) == Seq || error("expected a plural expression: $op")
     I = domain(op)
@@ -105,6 +114,50 @@ function compile(state::AbstractScope, ::Type{Fn{:filter}}, base::Query, op::Que
     scope = base.scope
     pipe = base.pipe >> SievePipe{O}(op.pipe)
     return Query(input, output, scope, pipe)
+end
+
+
+function compile(state::AbstractScope, ::Type{Fn{:asc}}, op::Query)
+    return Query(op.input, op.output, setorder(op.scope, 1), op.pipe)
+end
+
+
+function compile(state::AbstractScope, ::Type{Fn{:desc}}, op::Query)
+    return Query(op.input, op.output, setorder(op.scope, -1), op.pipe)
+end
+
+
+compile(state::AbstractScope, fn::Type{Fn{:sort}}, base::AbstractSyntax, ops::AbstractSyntax...) =
+    let base = compile(state, base)
+        compile(state, fn, base, map(op -> compile(base, op), ops)...)
+    end
+
+function compile(state::AbstractScope, ::Type{Fn{:sort}}, base::Query, ops::Query...)
+    comode(base) == Seq || error("expected a plural expression: $base")
+    I = domain(base)
+    O = codomain(base)
+    if isempty(ops)
+        order = getorder(base.scope)
+        finish = getfinish(base.scope)
+        if isnull(finish)
+            pipe = SortPipe{I,O}(base.pipe, order)
+        else
+            finish = get(finish)
+            comode(finish) == Iso || error("expected a singular expression: $finish")
+            K = codomain(finish)
+            pipe = SortByPipe{I,O,K}(base.pipe, finish.pipe, order)
+        end
+    else
+        pipe = base.pipe
+        for op in reverse(ops)
+            order = getorder(op.scope)
+            op = finalize(op)
+            comode(op) == Iso || error("expected a singular expression: $op")
+            K = codomain(op)
+            pipe = SortByPipe{I,O,K}(pipe, op.pipe, order)
+        end
+    end
+    return Query(base.input, base.output, base.scope, pipe)
 end
 
 

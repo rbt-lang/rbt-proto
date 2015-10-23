@@ -21,7 +21,7 @@ function lookup(state::RootScope, name::Symbol)
         O = Entity{name}
         input = Iso{I}
         output = Seq{O}
-        scope = ClassScope(state.db, name, Nullable{Query}())
+        scope = ClassScope(state.db, name, Nullable{Query}(), 0)
         select = class.select
         if select == nothing
             select = tuple(keys(class.arrows)...)
@@ -40,11 +40,16 @@ getfinish(state::RootScope) = state.finish
 setfinish(state::RootScope, finish::Query) =
     RootScope(state.db, Nullable{Query}(finish))
 
+getorder(::RootScope) = 0
+
+setorder(state::RootScope, order::Int) = state
+
 
 immutable ClassScope <: AbstractScope
     db::Database
     name::Symbol
     finish::Nullable{Query}
+    order::Int
 end
 
 show(io::IO, state::ClassScope) = print(io, "Class(<", state.name, ">)")
@@ -73,7 +78,7 @@ function lookup(state::ClassScope, name::Symbol)
             if select == nothing
                 select = tuple(keys(targetclass.arrows)...)
             end
-            scope = ClassScope(state.db, classname(O), Nullable{Query}())
+            scope = ClassScope(state.db, classname(O), Nullable{Query}(), 0)
             finish = mkfinish(scope, select)
             scope = setfinish(scope, finish)
         else
@@ -99,17 +104,23 @@ getfinish(state::ClassScope) =
     Nullable{Query}(state.finish)
 
 setfinish(state::ClassScope, finish::Query) =
-    ClassScope(state.db, state.name, finish)
+    ClassScope(state.db, state.name, finish, state.order)
+
+getorder(state::ClassScope) = state.order
+
+setorder(state::ClassScope, order::Int) =
+    ClassScope(state.db, state.name, state.finish, order)
 
 
 immutable ScalarScope <: AbstractScope
     db::Database
     dom::DataType
     finish::Nullable{Query}
+    order::Int
 end
 
 ScalarScope(db::Database, dom::DataType) =
-    ScalarScope(db, dom, Nullable{Query}())
+    ScalarScope(db, dom, Nullable{Query}(), 0)
 
 show(io::IO, state::ScalarScope) = print(io, "Scalar(", state.dom, ")")
 
@@ -124,7 +135,12 @@ lookup(state::ScalarScope) = Nullable{Query}()
 getfinish(state::ScalarScope) = state.finish
 
 setfinish(state::ScalarScope, finish::Query) =
-    ScalarScope(state.db, state.dom, Nullable{Query}(finish))
+    ScalarScope(state.db, state.dom, Nullable{Query}(finish), state.order)
+
+getorder(state::ScalarScope) = state.order
+
+setorder(state::ScalarScope, order::Int) =
+    ScalarScope(state.db, state.dom, state.finish, order)
 
 
 function mkfinish(state::AbstractScope, select::Symbol)

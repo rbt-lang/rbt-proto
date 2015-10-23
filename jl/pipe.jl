@@ -198,6 +198,34 @@ execute{I}(pipe::SievePipe{I}, x::I) =
     execute(pipe.P, x)::Bool ? Nullable{I}(x) : Nullable{I}()
 
 
+immutable SortPipe{I,O} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+    order::Int
+end
+
+show(io::IO, pipe::SortPipe) = print(io, "Sort(", pipe.F, ", ", pipe.order, ")")
+
+execute{I,O}(pipe::SortPipe{I,O}, x::I) =
+    sort(execute(pipe.F, x)::Vector{O}, rev=(pipe.order<0))
+
+
+immutable SortByPipe{I,O,K} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+    key::IsoPipe{O,K}
+    order::Int
+end
+
+show(io::IO, pipe::SortByPipe) =
+    print(io, "SortBy(", pipe.F, ", ", pipe.key, ", ", pipe.order, ")")
+
+execute{I,O,K}(pipe::SortByPipe{I,O,K}, x::I) =
+    sort(
+        execute(pipe.F, x)::Vector{O},
+        alg=MergeSort,
+        by=(y::O -> execute(pipe.key, y)::K),
+        rev=(pipe.order<0))
+
+
 macro defunarypipe(Name, op, T1, T2)
     return esc(quote
         immutable $Name{I} <: IsoPipe{I,$T2}
