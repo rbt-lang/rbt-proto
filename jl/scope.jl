@@ -18,7 +18,8 @@ function lookup(self::RootScope, name::Symbol)
         input = Iso{I}
         output = Seq{O}
         pipe = SetPipe{I, O}(name, self.db.instance.sets[name])
-        query = Query(scope, O, input=input, output=output, pipe=pipe)
+        tag = NullableSymbol(name)
+        query = Query(scope, O, input=input, output=output, pipe=pipe, tag=tag)
         select =
             class.select != nothing ? class.select : tuple(keys(class.arrows)...)
         item, cap = mkselect(query, select)
@@ -45,6 +46,7 @@ empty(self::ClassScope) = EmptyScope(self.db)
 function lookup(self::ClassScope, name::Symbol)
     class = self.db.schema.classes[self.name]
     if name in keys(class.arrows)
+        tag = NullableSymbol(name)
         arrow = class.arrows[name]
         map = self.db.instance.maps[(self.name, arrow.name)]
         I = Entity{self.name}
@@ -64,7 +66,7 @@ function lookup(self::ClassScope, name::Symbol)
             targetname = classname(O)
             targetclass = self.db.schema.classes[targetname]
             scope = ClassScope(self.db, targetname)
-            query = Query(scope, O, input=input, output=output, pipe=pipe)
+            query = Query(scope, O, input=input, output=output, pipe=pipe, tag=tag)
             select =
                 arrow.select != nothing ? arrow.select :
                 targetclass.select != nothing ? targetclass.select :
@@ -74,7 +76,7 @@ function lookup(self::ClassScope, name::Symbol)
             query = Query(query, cap=cap, items=items)
         else
             scope = EmptyScope(self.db)
-            query = Query(scope, O, input=input, output=output, pipe=pipe)
+            query = Query(scope, O, input=input, output=output, pipe=pipe, tag=tag)
         end
         return NullableQuery(query)
     else

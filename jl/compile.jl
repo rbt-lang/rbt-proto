@@ -174,6 +174,37 @@ function compile(state::Query, ::Type{Fn{:sort}}, base::Query, ops::Query...)
 end
 
 
+function compile(state::Query, ::Type{Fn{:as}}, base::AbstractSyntax, ident::AbstractSyntax)
+    (isa(ident, ApplySyntax) && isempty(ident.args)) || error("expected an identifier: $ident")
+    return Query(compile(state, base), tag=NullableSymbol(ident.fn))
+end
+
+
+compile(state::Query, ::Type{Fn{:(=>)}}, ident::AbstractSyntax, base::AbstractSyntax) =
+    compile(state, Fn{:as}, base, ident)
+
+
+compile(state::Query, fn::Type{Fn{:define}}, base::AbstractSyntax, ops::AbstractSyntax...) =
+    let base = compile(state, base)
+        compile(state, fn, base, map(op -> compile(base, op), ops)...)
+    end
+
+
+function compile(state::Query, ::Type{Fn{:define}}, base::Query, ops::Query...)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    for op in ops
+        codomain(base) == domain(op) || error("incompatible operands: $base and $op")
+    end
+    comode(base) == Seq || error("expected a plural expression: $base")
+    attrs = base.attrs
+    for op in ops
+        !isnull(op.tag) || error("expected a named expression: $op")
+        attrs = merge(attrs, Dict(get(op.tag) => op))
+    end
+    return Query(base, attrs=attrs)
+end
+
+
 macro compileunaryop(fn, Pipe, T1, T2)
     return esc(quote
         function compile(state::Query, ::Type{Fn{$fn}}, op::Query)

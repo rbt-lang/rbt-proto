@@ -1,4 +1,6 @@
 
+__precompile__()
+
 module RBT
 
 export

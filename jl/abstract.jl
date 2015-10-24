@@ -129,12 +129,15 @@ immutable Query
     attrs::Dict{Symbol,Query}
     # Sorting direction (0 is default, +1 for ascending, -1 for descending).
     order::Int
+    # Identifier that denotes the combinator.
+    tag::Nullable{Symbol}
 end
 
 # Type aliases.
 const Queries = Tuple{Vararg{Query}}
 const NullableQuery = Nullable{Query}
 const NullableQueries = Nullable{Queries}
+const NullableSymbol = Nullable{Symbol}
 
 # Fresh state for the given scope.
 Query(
@@ -145,8 +148,9 @@ Query(
     cap=NullableQuery(),
     items=NullableQueries(),
     attrs=Dict{Symbol,Query}(),
-    order=0) =
-    Query(scope, input, output, pipe, state, cap, items, attrs, order)
+    order=0,
+    tag=NullableSymbol()) =
+    Query(scope, input, output, pipe, state, cap, items, attrs, order, tag)
 
 # Initial compiler state.
 Query(db::AbstractDatabase) = Query(scope(db))
@@ -157,7 +161,7 @@ Query(
     scope=nothing, input=nothing, output=nothing,
     pipe=nothing, state=nothing, cap=nothing,
     items=nothing, attrs=nothing,
-    order=nothing) =
+    order=nothing, tag=nothing) =
     Query(
         scope != nothing ? scope : q.scope,
         input != nothing ? input : q.input,
@@ -167,7 +171,8 @@ Query(
         cap != nothing ? cap : q.cap,
         items != nothing ? items : q.items,
         attrs != nothing ? attrs : q.attrs,
-        order != nothing ? order : q.order)
+        order != nothing ? order : q.order,
+        tag != nothing ? tag : q.tag)
 
 # Extracts local namespace.
 scope(q::Query) = q.scope

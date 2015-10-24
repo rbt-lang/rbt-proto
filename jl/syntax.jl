@@ -68,6 +68,8 @@ function ex2syn(ex::Expr)
         return syn
     elseif ex.head == :call && isa(ex.args[1], Symbol)
         return ApplySyntax(ex.args[1], map(ex2syn, ex.args[2:end]))
+    elseif ex.head == :(=>)
+        return ApplySyntax(:(=>), map(ex2syn, ex.args))
     elseif ex.head == :call
         return ex2syn(pushcall(ex.args[1], ex.args[2:end]))
     elseif ex.head == :comparison && length(ex.args) == 3 && isa(ex.args[2], Symbol)
