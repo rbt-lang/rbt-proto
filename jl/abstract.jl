@@ -10,41 +10,20 @@ scope(db::AbstractDatabase) =
 # TODO: introspection interface.
 # TODO: `Entity{name}` type.
 
-# Compiler state.
+# Local namespace.
 abstract AbstractScope
 
 # Resolves an arrow name into a `Nullable{Query}` object.
 lookup(scope::AbstractScope, name::Symbol) =
     error("lookup() is not implemented for scope $scope")
 
-# Generates the terminating pipeline.
-getfinish(scope::AbstractScope) =
-    Nullable{Query}()
-
-# Replaces the default terminating pipeline.
-setfinish(scope::AbstractScope, finish) =
-    error("setfinish() is not implemented for scope $scope")
-
-# Get the sort direction (0 is default, +1 for ascending order,
-# -1 for descending order).
-getorder(scope::AbstractScope) =
-    error("getorder() is not implemented for scope $scope")
-
-# Set the sorting direction.
-setorder(scope::AbstractScope, order::Int) =
-    error("setorder() is not implemented for scope $scope")
-
-# The type of values produced at this scope.
-domain(scope::AbstractScope) =
-    error("domain() is not implemented for scope $scope")
-
-# Returns the root scope.
+# Returns the root (unit) scope.
 root(scope::AbstractScope) =
     error("root() is not implemented for scope $scope")
 
-# Generates a scalar scope of the given type.
-scalar(scope::AbstractScope, T::DataType) =
-    error("scalar() is not implemented for scope $scope")
+# Returns an empty (zero) scope.
+empty(scope::AbstractScope) =
+    error("empty() is not implemented for scope $scope")
 
 # Compatibility with `scope(::AbstractDatabase)` and `scope(::Query)`.
 scope(scope::AbstractScope) = scope
@@ -68,6 +47,9 @@ abstract Opt{T} <: Mode{T}
 # A finite sequence of values (list monad).
 abstract Seq{T} <: Mode{T}
 
+# The unit type.
+const UnitType = Tuple{}
+
 # TODO: UniqueSeq, NonEmptySeq.
 
 # Extracts the type parameter.
@@ -80,10 +62,11 @@ mode{T}(::Type{Iso{T}}) = Iso
 mode{T}(::Type{Opt{T}}) = Opt
 mode{T}(::Type{Seq{T}}) = Seq
 
-# How the values are represented.
-datatype{T}(::Type{Iso{T}}) = T
-datatype{T}(::Type{Opt{T}}) = Nullable{T}
-datatype{T}(::Type{Seq{T}}) = Vector{T}
+# How the value is represented in the pipeline
+datatype{T}(::Type{Iso{T}}) = datatype(T)
+datatype{T}(::Type{Opt{T}}) = Nullable{datatype(T)}
+datatype{T}(::Type{Seq{T}}) = Vector{datatype(T)}
+datatype(T::DataType) = T
 
 # Partial order between structures: Iso < Opt < Seq.
 isless(::Type{Iso}, ::Type{Iso}) = false
@@ -118,21 +101,79 @@ codomain{I,O}(::SeqPipe{I,O}) = O
 execute{I}(pipe::AbstractPipe, x::I) =
     error("execute() is not implemented for pipeline $pipe and input of type $I")
 # Executes the pipeline with `()` input.
-execute(pipe::AbstractPipe{Tuple{}}) =
+execute(pipe::AbstractPipe{UnitType}) =
     execute(pipe, ())
 # Executes the pipeline by calling it.
 call(pipe::AbstractPipe, args...) = execute(pipe, args...)
 
 # Returns an equivalent, but improved pipeline.
-optimize(pipe::AbstractPipe) = pipe
+optimize{I,O}(pipe::AbstractPipe{I,O}) = pipe::AbstractPipe{I,O}
 
-# Encapsulates the compiler state and execution pipeline.
+# Encapsulates the compiler state and the query combinator.
 immutable Query
-    input::DataType
-    output::DataType
+    # Local namespace.
     scope::AbstractScope
+    # The input type of the combinator.
+    input::DataType
+    # The output type of the combinator.
+    output::DataType
+    # Execution pipeline that implements the combinator.
     pipe::AbstractPipe
+    # Pre-finalized state if we need to resume compilation.
+    state::Nullable{Query}
+    # Terminates the pipeline.
+    cap::Nullable{Query}
+    # Indexed fields, if any.
+    items::Nullable{Tuple{Vararg{Query}}}
+    # Named fields, if any.
+    attrs::Dict{Symbol,Query}
+    # Sorting direction (0 is default, +1 for ascending, -1 for descending).
+    order::Int
 end
+
+# Type aliases.
+const Queries = Tuple{Vararg{Query}}
+const NullableQuery = Nullable{Query}
+const NullableQueries = Nullable{Queries}
+
+# Fresh state for the given scope.
+Query(
+    scope::AbstractScope, domain::DataType=UnitType;
+    input=Iso{domain}, output=Iso{domain},
+    pipe=ThisPipe{datatype(domain)}(),
+    state=NullableQuery(),
+    cap=NullableQuery(),
+    items=NullableQueries(),
+    attrs=Dict{Symbol,Query}(),
+    order=0) =
+    Query(scope, input, output, pipe, state, cap, items, attrs, order)
+
+# Initial compiler state.
+Query(db::AbstractDatabase) = Query(scope(db))
+
+# Clone constructor.
+Query(
+    q::Query;
+    scope=nothing, input=nothing, output=nothing,
+    pipe=nothing, state=nothing, cap=nothing,
+    items=nothing, attrs=nothing,
+    order=nothing) =
+    Query(
+        scope != nothing ? scope : q.scope,
+        input != nothing ? input : q.input,
+        output != nothing ? output : q.output,
+        pipe != nothing ? pipe : q.pipe,
+        state != nothing ? state : q.state,
+        cap != nothing ? cap : q.cap,
+        items != nothing ? items : q.items,
+        attrs != nothing ? attrs : q.attrs,
+        order != nothing ? order : q.order)
+
+# Extracts local namespace.
+scope(q::Query) = q.scope
+
+# Extracts the pipeline.
+pipe(q::Query) = q.pipe
 
 # The input type and structure (e.g. `Iso{Int}`).
 input(q::Query) = q.input
@@ -145,42 +186,39 @@ mode(q::Query) = mode(q.input)
 codomain(q::Query) = domain(q.output)
 comode(q::Query) = mode(q.output)
 
-# Extracts the compiler state.
-scope(q::Query) = q.scope
-
-# Extracts the pipeline.
-pipe(q::Query) = q.pipe
-
 # Displays the query.
 show(io::IO, q::Query) =
-    q.input == Iso{Tuple{}} ?
+    q.input == Iso{UnitType} ?
         print(io, q.pipe, " : ", datatype(q.output)) :
         print(io, q.pipe, " : ", datatype(q.input), " -> ", datatype(q.output))
+
+# Compiles the query.
+prepare(state, expr) = prepare(Query(state), syntax(expr))
+prepare(state::Query, expr::AbstractSyntax) =
+    !isnull(state.state) ?
+        prepare(get(state.state), expr) :
+        optimize(finalize(compile(state, expr)))
 
 # Executes the query.
 execute(q::Query, args...) =
     execute(pipe(optimize(finalize(q))), args...)
 call(q::Query, args...) = execute(q, args...)
 
-# Compiles the query.
-prepare(state, expr) =
-    optimize(finalize(compile(state, expr)))
-
 # Builds initial execution pipeline.
-compile(state, expr) = compile(scope(state), syntax(expr))
-compile(state::AbstractScope, expr::AbstractSyntax) =
+compile(state::Query, expr::AbstractSyntax) =
     error("compile() is not implemented for $(typeof(expr))")
 
 # Finalizes the execution pipeline.
 finalize(q::Query) = q
 
 # Optimizes the execution pipeline.
-optimize(q::Query) = Query(q.input, q.output, q.scope, optimize(q.pipe))
+optimize(q::Query) = Query(q, pipe=optimize(q.pipe))
 
 # Scope operations passthrough.
-lookup(q::Query, name::Symbol) = lookup(q.scope, name)
-getfinish(q::Query) = getfinish(q.scope)
-getorder(q::Query) = getorder(q.scope)
+lookup(q::Query, name::Symbol) =
+    name in keys(q.attrs) ? NullableQuery(q.attrs[name]) : lookup(q.scope, name)
+root(q::Query) = root(q.scope)
+empty(q::Query) = empty(q.scope)
 
 # For dispatching on the function name.
 immutable Fn{name}

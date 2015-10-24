@@ -1,89 +1,55 @@
 
 immutable RootScope <: AbstractScope
     db::Database
-    finish::Nullable{Query}
 end
-
-RootScope(db::Database) = RootScope(db, Nullable{Query}())
 
 show(io::IO, ::RootScope) = print(io, "ROOT")
 
-domain(::RootScope) = Tuple{}
+root(self::RootScope) = self
 
-root(state::RootScope) = scope
+empty(self::RootScope) = EmptyScope(self.db)
 
-scalar(state::RootScope, T::DataType) = ScalarScope(state.db, T)
-
-function lookup(state::RootScope, name::Symbol)
-    if name in keys(state.db.schema.classes)
-        class = state.db.schema.classes[name]
-        I = domain(state)
+function lookup(self::RootScope, name::Symbol)
+    if name in keys(self.db.schema.classes)
+        class = self.db.schema.classes[name]
+        scope = ClassScope(self.db, name)
+        I = UnitType
         O = Entity{name}
         input = Iso{I}
         output = Seq{O}
-        scope = ClassScope(state.db, name, Nullable{Query}(), 0)
-        select = class.select
-        if select == nothing
-            select = tuple(keys(class.arrows)...)
-        end
-        finish = mkfinish(scope, select)
-        scope = setfinish(scope, finish)
-        pipe = SetPipe{I, O}(name, state.db.instance.sets[name])
-        return Nullable{Query}(Query(input, output, scope, pipe))
+        pipe = SetPipe{I, O}(name, self.db.instance.sets[name])
+        query = Query(scope, O, input=input, output=output, pipe=pipe)
+        select =
+            class.select != nothing ? class.select : tuple(keys(class.arrows)...)
+        item, cap = mkselect(query, select)
+        items = isa(item, Tuple) ? item : nothing
+        query = Query(query, cap=cap, items=items)
+        return NullableQuery(query)
     else
-        return Nullable{Query}()
+        return NullableQuery()
     end
 end
-
-getfinish(state::RootScope) = state.finish
-
-setfinish(state::RootScope, finish::Query) =
-    RootScope(state.db, Nullable{Query}(finish))
-
-getorder(::RootScope) = 0
-
-setorder(state::RootScope, order::Int) = state
 
 
 immutable ClassScope <: AbstractScope
     db::Database
     name::Symbol
-    finish::Nullable{Query}
-    order::Int
 end
 
-show(io::IO, state::ClassScope) = print(io, "Class(<", state.name, ">)")
+show(io::IO, self::ClassScope) = print(io, "Class(<", self.name, ">)")
 
-domain(state::ClassScope) = Entity{state.name}
+root(self::ClassScope) = RootScope(self.db)
 
-root(state::ClassScope) = RootScope(state.db)
+empty(self::ClassScope) = EmptyScope(self.db)
 
-scalar(state::ClassScope, T::DataType) = ScalarScope(state.db, T)
-
-function lookup(state::ClassScope, name::Symbol)
-    class = state.db.schema.classes[state.name]
+function lookup(self::ClassScope, name::Symbol)
+    class = self.db.schema.classes[self.name]
     if name in keys(class.arrows)
         arrow = class.arrows[name]
-        map = state.db.instance.maps[(state.name, arrow.name)]
-        I = domain(state)
+        map = self.db.instance.maps[(self.name, arrow.name)]
+        I = Entity{self.name}
         O = arrow.T
         input = Iso{I}
-        if O <: Entity
-            targetname = classname(O)
-            targetclass = state.db.schema.classes[targetname]
-            select = arrow.select
-            if select == nothing
-                select = targetclass.select
-            end
-            if select == nothing
-                select = tuple(keys(targetclass.arrows)...)
-            end
-            scope = ClassScope(state.db, classname(O), Nullable{Query}(), 0)
-            finish = mkfinish(scope, select)
-            scope = setfinish(scope, finish)
-        else
-            scope = ScalarScope(state.db, O)
-        end
         if !arrow.plural && !arrow.partial
             output = Iso{O}
             pipe = IsoMapPipe{I, O}(name, map)
@@ -94,72 +60,65 @@ function lookup(state::ClassScope, name::Symbol)
             output = Seq{O}
             pipe = SeqMapPipe{I, O}(name, map)
         end
-        return Nullable{Query}(Query(input, output, scope, pipe))
+        if O <: Entity
+            targetname = classname(O)
+            targetclass = self.db.schema.classes[targetname]
+            scope = ClassScope(self.db, targetname)
+            query = Query(scope, O, input=input, output=output, pipe=pipe)
+            select =
+                arrow.select != nothing ? arrow.select :
+                targetclass.select != nothing ? targetclass.select :
+                    tuple(keys(targetclass.arrows)...)
+            item, cap = mkselect(query, select)
+            items = isa(item, Tuple) ? item : nothing
+            query = Query(query, cap=cap, items=items)
+        else
+            scope = EmptyScope(self.db)
+            query = Query(scope, O, input=input, output=output, pipe=pipe)
+        end
+        return NullableQuery(query)
     else
-        return Nullable{Query}()
+        return NullableQuery()
     end
 end
 
-getfinish(state::ClassScope) =
-    Nullable{Query}(state.finish)
 
-setfinish(state::ClassScope, finish::Query) =
-    ClassScope(state.db, state.name, finish, state.order)
-
-getorder(state::ClassScope) = state.order
-
-setorder(state::ClassScope, order::Int) =
-    ClassScope(state.db, state.name, state.finish, order)
-
-
-immutable ScalarScope <: AbstractScope
+immutable EmptyScope <: AbstractScope
     db::Database
-    dom::DataType
-    finish::Nullable{Query}
-    order::Int
 end
 
-ScalarScope(db::Database, dom::DataType) =
-    ScalarScope(db, dom, Nullable{Query}(), 0)
+show(io::IO, ::EmptyScope) = print(io, "EMPTY")
 
-show(io::IO, state::ScalarScope) = print(io, "Scalar(", state.dom, ")")
+root(self::EmptyScope) = RootScope(self.db)
 
-domain(state::ScalarScope) = state.dom
+empty(self::EmptyScope) = self
 
-root(state::ScalarScope) = RootScope(state.db)
-
-scalar(state::ScalarScope, T::DataType) = ScalarScope(state.db, T)
-
-lookup(state::ScalarScope) = Nullable{Query}()
-
-getfinish(state::ScalarScope) = state.finish
-
-setfinish(state::ScalarScope, finish::Query) =
-    ScalarScope(state.db, state.dom, Nullable{Query}(finish), state.order)
-
-getorder(state::ScalarScope) = state.order
-
-setorder(state::ScalarScope, order::Int) =
-    ScalarScope(state.db, state.dom, state.finish, order)
+lookup(::EmptyScope, ::Symbol) = NullableQuery()
 
 
-function mkfinish(state::AbstractScope, select::Symbol)
+function mkselect(state::Query, select::Symbol)
     op = lookup(state, select)
     @assert !isnull(op)
     op = get(op)
-    op = finalize(op)
-    return op
+    return op, finalize(op)
 end
 
-function mkfinish(state::AbstractScope, select::Tuple)
-    ops = tuple(map(item -> mkfinish(state, item), select)...)
-    I = domain(state)
+function mkselect(state::Query, select::Tuple)
+    items = ()
+    ops = ()
+    for field in select
+        item, op = mkselect(state, field)
+        items = (items..., item)
+        ops = (ops..., op)
+    end
+    I = codomain(state)
     O = Tuple{map(op -> datatype(op.output), ops)...}
     input = Iso{I}
     output = Iso{O}
-    scope = scalar(state, O)
+    scope = empty(state)
     pipe = TuplePipe{I,O}([op.pipe for op in ops])
-    return Query(input, output, scope, pipe)
+    cup = Query(scope, O, input=input, output=output, pipe=pipe)
+    return items, cup
 end
 
 

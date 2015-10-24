@@ -4,7 +4,7 @@ end
 
 show(io::IO, pipe::ThisPipe) = print(io, "THIS")
 
-execute{I}(io::IO, x::I) = x
+execute{I}(::ThisPipe, x::I) = x
 
 
 immutable ConstPipe{I,O} <: IsoPipe{I,O}

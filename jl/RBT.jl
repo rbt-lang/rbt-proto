@@ -73,23 +73,5 @@ macro prepare(args...)
     end
 end
 
-
-function compile(expr)
-    return compile(DB, expr)
-end
-
-macro compile(args...)
-    @assert 1 <= length(args) <= 2
-    if length(args) == 2
-        db, expr = args
-    else
-        db, expr = DB, args[1]
-    end
-    expr = syntax(expr)
-    return quote
-        compile($(esc(db)), $expr)
-    end
-end
-
 end
 
