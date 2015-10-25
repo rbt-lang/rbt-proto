@@ -155,8 +155,10 @@ immutable Query
     pipe::AbstractPipe
     # For a composite query, the components that form it.
     parts::Nullable{Tuple{Vararg{Query}}}
-    # Current output formatter.
-    select::Nullable{Query}
+    # For opaque output, unique representable identifier.
+    identity::Nullable{Query}
+    # Output formatter.
+    selector::Nullable{Query}
     # Named fields, if any.
     defs::Dict{Symbol,Query}
     # Sorting direction (0 is default, +1 for ascending, -1 for descending).
@@ -182,13 +184,14 @@ Query(
     input=Input(domain), output=Output(domain, unique=true, reachable=true),
     pipe=ThisPipe{datatype(domain)}(),
     parts=NullableQueries(),
-    select=NullableQuery(),
+    identity=NullableQuery(),
+    selector=NullableQuery(),
     defs=Dict{Symbol,Query}(),
     order=0,
     tag=NullableSymbol(),
     src=NullableSyntax(),
     origin=NullableQuery()) =
-    Query(scope, input, output, pipe, parts, select, defs, order, tag, src, origin)
+    Query(scope, input, output, pipe, parts, identity, selector, defs, order, tag, src, origin)
 
 # Initial compiler state.
 Query(db::AbstractDatabase) = Query(scope(db))
@@ -197,7 +200,7 @@ Query(db::AbstractDatabase) = Query(scope(db))
 Query(
     q::Query;
     scope=nothing, input=nothing, output=nothing, pipe=nothing,
-    parts=nothing, select=nothing, defs=nothing,
+    parts=nothing, identity=nothing, selector=nothing, defs=nothing,
     order=nothing, tag=nothing,
     src=nothing, origin=nothing) =
     Query(
@@ -206,7 +209,8 @@ Query(
         output != nothing ? output : q.output,
         pipe != nothing ? pipe : q.pipe,
         parts != nothing ? parts : q.parts,
-        select != nothing ? select : q.select,
+        identity != nothing ? identity : q.identity,
+        selector != nothing ? selector : q.selector,
         defs != nothing ? defs : q.defs,
         order != nothing ? order : q.order,
         tag != nothing ? tag : q.tag,
@@ -263,6 +267,7 @@ compile(state::Query, expr::AbstractSyntax) =
 
 # Finalizes the execution pipeline.
 select(q::Query) = q
+identify(q::Query) = q
 
 # Optimizes the execution pipeline.
 optimize(q::Query) = Query(q, pipe=optimize(q.pipe))

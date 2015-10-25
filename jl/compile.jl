@@ -119,8 +119,8 @@ function compile(state::Query, ::Type{Fn{:select}}, base::Query, ops::Query...)
     input = Input(I)
     output = Output(O)
     pipe = TuplePipe{I,O}([op.pipe for op in ops])
-    cap = Query(scope, input=input, output=output, pipe=pipe, parts=parts)
-    return Query(base, select=cap, parts=parts)
+    selector = Query(scope, input=input, output=output, pipe=pipe, parts=parts)
+    return Query(base, selector=selector, parts=parts)
 end
 
 
@@ -167,12 +167,11 @@ function compile(state::Query, ::Type{Fn{:sort}}, base::Query, ops::Query...)
     I = domain(base)
     O = codomain(base)
     if isempty(ops)
-        if isnull(base.select)
+        if isnull(base.identity)
             pipe = SortPipe{I,O}(base.pipe, base.order)
         else
-            cap = get(base.select)
-            singular(cap) || error("expected a singular expression: $cap")
-            total(cap) || error("expected a total expression: $cap")
+            cap = get(base.identity)
+            @assert singular(cap) && total(cap) && unique(cap)
             K = codomain(cap)
             pipe = SortByPipe{I,O,K}(base.pipe, cap.pipe, base.order)
         end
@@ -180,7 +179,7 @@ function compile(state::Query, ::Type{Fn{:sort}}, base::Query, ops::Query...)
         pipe = base.pipe
         for op in reverse(ops)
             order = op.order
-            op = select(op)
+            op = identify(op)
             singular(op) || error("expected a singular expression: $op")
             total(op) || error("expected a total expression: $op")
             K = codomain(op)
@@ -276,6 +275,10 @@ end
 
 
 function select(q::Query)
-    return Query(isnull(q.select) ? q : q >> get(q.select), src=q.src, origin=q)
+    return Query(isnull(q.selector) ? q : q >> get(q.selector), src=q.src, origin=q)
+end
+
+function identify(q::Query)
+    return Query(isnull(q.identity) ? q : q >> get(q.identity), src=q.src, origin=q)
 end
 

@@ -236,6 +236,72 @@ execute{I,O,K}(pipe::SortByPipe{I,O,K}, x::I) =
         rev=(pipe.order<0))
 
 
+immutable IsoFieldPipe{I,O} <: IsoPipe{I,O}
+    field::Symbol
+end
+
+show(io::IO, pipe::IsoFieldPipe) =
+    print(io, "IsoField(<", pipe.field, ">)")
+
+execute{I,O}(pipe::IsoFieldPipe{I,O}, x::I) =
+    getfield(x, pipe.field)::O
+
+
+immutable OptFieldPipe{I,O} <: OptPipe{I,O}
+    field::Symbol
+end
+
+show(io::IO, pipe::OptFieldPipe) =
+    print(io, "OptField(<", pipe.field, ">)")
+
+execute{I,O}(pipe::OptFieldPipe{I,O}, x::I) =
+    getfield(x, pipe.field)::Nullable{O}
+
+
+immutable SeqFieldPipe{I,O} <: SeqPipe{I,O}
+    field::Symbol
+end
+
+show(io::IO, pipe::SeqFieldPipe) =
+    print(io, "SeqField(<", pipe.field, ">)")
+
+execute{I,O}(pipe::SeqFieldPipe{I,O}, x::I) =
+    getfield(x, pipe.field)::Vector{O}
+
+
+immutable IsoItemPipe{I,O} <: IsoPipe{I,O}
+    index::Int
+end
+
+show(io::IO, pipe::IsoItemPipe) =
+    print(io, "IsoItem(", pipe.index, ")")
+
+execute{I,O}(pipe::IsoItemPipe{I,O}, x::I) =
+    x[pipe.index]::O
+
+
+immutable OptItemPipe{I,O} <: OptPipe{I,O}
+    index::Int
+end
+
+show(io::IO, pipe::OptItemPipe) =
+    print(io, "OptItem(", pipe.index, ")")
+
+execute{I,O}(pipe::OptItemPipe{I,O}, x::I) =
+    x[pipe.index]::Nullable{O}
+
+
+immutable SeqItemPipe{I,O} <: SeqPipe{I,O}
+    index::Int
+end
+
+show(io::IO, pipe::SeqItemPipe) =
+    print(io, "SeqItem(", pipe.index, ")")
+
+execute{I,O}(pipe::SeqItemPipe{I,O}, x::I) =
+    x[pipe.index]::Vector{O}
+
+
 macro defunarypipe(Name, op, T1, T2)
     return esc(quote
         immutable $Name{I} <: IsoPipe{I,$T2}

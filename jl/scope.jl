@@ -21,10 +21,11 @@ function lookup(self::RootScope, name::Symbol)
         tag = NullableSymbol(name)
         src = NullableSyntax(ApplySyntax(name, []))
         query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, src=src)
-        select = mkselect(
+        selector = mkselect(
             query,
             class.select != nothing ? class.select : tuple(keys(class.arrows)...))
-        query = Query(query, select=select)
+        identity = mkidentity(query, :id)
+        query = Query(query, selector=selector, identity=identity)
         return NullableQuery(query)
     else
         return NullableQuery()
@@ -45,7 +46,16 @@ empty(self::ClassScope) = EmptyScope(self.db)
 
 function lookup(self::ClassScope, name::Symbol)
     class = self.db.schema.classes[self.name]
-    if name in keys(class.arrows)
+    if name == :id
+        scope = EmptyScope(self.db)
+        I = Entity{self.name}
+        input = Input(I)
+        output = Output(Int, unique=true)
+        pipe = IsoFieldPipe{I,Int}(:id)
+        tag = NullableSymbol(name)
+        src = NullableSyntax(ApplySyntax(name, []))
+        return NullableQuery(Query(scope, input=input, output=output, pipe=pipe, tag=tag, src=src))
+    elseif name in keys(class.arrows)
         tag = NullableSymbol(name)
         arrow = class.arrows[name]
         map = self.db.instance.maps[(self.name, arrow.name)]
@@ -66,12 +76,13 @@ function lookup(self::ClassScope, name::Symbol)
             targetclass = self.db.schema.classes[targetname]
             scope = ClassScope(self.db, targetname)
             query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, src=src)
-            select = mkselect(
+            selector = mkselect(
                 query,
                 arrow.select != nothing ? arrow.select :
                 targetclass.select != nothing ? targetclass.select :
                     tuple(keys(targetclass.arrows)...))
-            query = Query(query, select=select)
+            identity = mkidentity(query, :id)
+            query = Query(query, selector=selector, identity=identity)
         else
             scope = EmptyScope(self.db)
             query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, src=src)
@@ -96,7 +107,9 @@ empty(self::EmptyScope) = self
 lookup(::EmptyScope, ::Symbol) = NullableQuery()
 
 
-mkselect(state::Query, spec) = mkcomposite(state, spec, :select)
+mkselect(state::Query, spec) = mkcomposite(state, spec, :selector)
+
+mkidentity(state::Query, spec) = mkcomposite(state, spec, :identity)
 
 function mkcomposite(state::Query, name::Symbol, field)
     op = lookup(state, name)
@@ -110,8 +123,8 @@ function mkcomposite(state::Query, name::Symbol, field)
     return op
 end
 
-function mkcomposite(state::Query, select::Tuple, field)
-    parts = tuple([mkcomposite(state, part, field) for part in select]...)
+function mkcomposite(state::Query, parts::Tuple, field)
+    parts = tuple([mkcomposite(state, part, field) for part in parts]...)
     I = codomain(state)
     O = Tuple{[datatype(part.output) for part in parts]...}
     input = Input(I)
