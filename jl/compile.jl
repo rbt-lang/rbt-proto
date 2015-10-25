@@ -1,11 +1,12 @@
 
-function compile(state::Query, ::LiteralSyntax{Void})
+function compile(state::Query, syntax::LiteralSyntax{Void})
     scope = empty(state)
     I = codomain(state)
     input = Input(I)
     output = Output(Void, total=false)
     pipe = NullPipe{I, Void}()
-    return Query(scope, input=input, output=output, pipe=pipe)
+    src = NullableSyntax(syntax)
+    return Query(scope, input=input, output=output, pipe=pipe, src=src)
 end
 
 
@@ -16,25 +17,28 @@ function compile{T}(state::Query, syntax::LiteralSyntax{T})
     input = Input(I)
     output = Output(O)
     pipe = ConstPipe{I, O}(syntax.val)
-    return Query(scope, input=input, output=output, pipe=pipe)
+    src = NullableSyntax(syntax)
+    return Query(scope, input=input, output=output, pipe=pipe, src=src)
 end
 
 
 function compile(state::Query, syntax::ApplySyntax)
+    src = NullableSyntax(syntax)
     if isempty(syntax.args)
         query = lookup(state, syntax.fn)
         if !isnull(query)
-            return get(query)
+            return Query(get(query), src=src)
         end
     end
-    return compile(state, Fn{syntax.fn}, syntax.args...)
+    return Query(compile(state, Fn{syntax.fn}, syntax.args...), src=src)
 end
 
 
 function compile(state::Query, syntax::ComposeSyntax)
     f = compile(state, syntax.f)
     g = compile(f, syntax.g)
-    return f >> g
+    src = NullableSyntax(syntax)
+    return Query(f >> g, src=src)
 end
 
 
@@ -46,7 +50,11 @@ function >>(f::Query, g::Query)
     input = Input(I)
     output = Output(O, M)
     pipe = f.pipe >> g.pipe
-    return Query(g, input=input, output=output, pipe=pipe)
+    src = g.src
+    if !isnull(f.src) && !isnull(g.src)
+        src = NullableSyntax(ComposeSyntax(get(f.src), get(g.src)))
+    end
+    return Query(g, input=input, output=output, pipe=pipe, src=src)
 end
 
 
@@ -104,7 +112,7 @@ function compile(state::Query, ::Type{Fn{:select}}, base::Query, ops::Query...)
         codomain(base) == domain(op) || error("incompatible operands: $base and $op")
     end
     items = ops
-    ops = tuple(map(op -> finalize(op), ops)...)
+    ops = tuple(map(op -> fasten(op), ops)...)
     scope = empty(base)
     I = codomain(base)
     O = Tuple{map(op -> datatype(op.output), ops)...}
@@ -172,7 +180,7 @@ function compile(state::Query, ::Type{Fn{:sort}}, base::Query, ops::Query...)
         pipe = base.pipe
         for op in reverse(ops)
             order = op.order
-            op = finalize(op)
+            op = fasten(op)
             singular(op) || error("expected a singular expression: $op")
             total(op) || error("expected a total expression: $op")
             K = codomain(op)
@@ -269,7 +277,7 @@ end
 @compilebinaryop(:(/), DivPipe, Int, Int, Int)
 
 
-function finalize(q::Query)
-    return Query(isnull(q.cap) ? q : q >> get(q.cap), state=q)
+function fasten(q::Query)
+    return Query(isnull(q.cap) ? q : q >> get(q.cap), origin=q, src=q.src)
 end
 

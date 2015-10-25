@@ -154,7 +154,7 @@ immutable Query
     # Execution pipeline that implements the combinator.
     pipe::AbstractPipe
     # Pre-finalized state if we need to resume compilation.
-    state::Nullable{Query}
+    origin::Nullable{Query}
     # Terminates the pipeline.
     cap::Nullable{Query}
     # Indexed fields, if any.
@@ -165,6 +165,8 @@ immutable Query
     order::Int
     # Identifier that denotes the combinator.
     tag::Nullable{Symbol}
+    # The source code for the query.
+    src::Nullable{AbstractSyntax}
 end
 
 # Type aliases.
@@ -172,19 +174,21 @@ const Queries = Tuple{Vararg{Query}}
 const NullableQuery = Nullable{Query}
 const NullableQueries = Nullable{Queries}
 const NullableSymbol = Nullable{Symbol}
+const NullableSyntax = Nullable{AbstractSyntax}
 
 # Fresh state for the given scope.
 Query(
     scope::AbstractScope, domain::DataType=UnitType;
     input=Input(domain), output=Output(domain, unique=true, reachable=true),
     pipe=ThisPipe{datatype(domain)}(),
-    state=NullableQuery(),
+    origin=NullableQuery(),
     cap=NullableQuery(),
     items=NullableQueries(),
     attrs=Dict{Symbol,Query}(),
     order=0,
-    tag=NullableSymbol()) =
-    Query(scope, input, output, pipe, state, cap, items, attrs, order, tag)
+    tag=NullableSymbol(),
+    src=NullableSyntax()) =
+    Query(scope, input, output, pipe, origin, cap, items, attrs, order, tag, src)
 
 # Initial compiler state.
 Query(db::AbstractDatabase) = Query(scope(db))
@@ -193,20 +197,22 @@ Query(db::AbstractDatabase) = Query(scope(db))
 Query(
     q::Query;
     scope=nothing, input=nothing, output=nothing,
-    pipe=nothing, state=nothing, cap=nothing,
+    pipe=nothing, origin=nothing, cap=nothing,
     items=nothing, attrs=nothing,
-    order=nothing, tag=nothing) =
+    order=nothing, tag=nothing,
+    src=nothing) =
     Query(
         scope != nothing ? scope : q.scope,
         input != nothing ? input : q.input,
         output != nothing ? output : q.output,
         pipe != nothing ? pipe : q.pipe,
-        state != nothing ? state : q.state,
+        origin != nothing ? origin : q.origin,
         cap != nothing ? cap : q.cap,
         items != nothing ? items : q.items,
         attrs != nothing ? attrs : q.attrs,
         order != nothing ? order : q.order,
-        tag != nothing ? tag : q.tag)
+        tag != nothing ? tag : q.tag,
+        src != nothing ? src : q.src)
 
 # Extracts local namespace.
 scope(q::Query) = q.scope
@@ -232,21 +238,24 @@ unique(q::Query) = unique(q.output)
 reachable(q::Query) = reachable(q.output)
 
 # Displays the query.
-show(io::IO, q::Query) =
-    domain(q) == UnitType ?
-        print(io, q.pipe, " : ", datatype(q.output)) :
-        print(io, q.pipe, " : ", datatype(q.input), " -> ", datatype(q.output))
+function show(io::IO, q::Query)
+    print(io, isnull(q.src) ? "(?)" : get(q.src), " :: ")
+    if domain(q) != UnitType
+        print(io, datatype(q.input), " -> ")
+    end
+    print(io, datatype(q.output))
+end
 
 # Compiles the query.
 prepare(state, expr) = prepare(Query(state), syntax(expr))
 prepare(state::Query, expr::AbstractSyntax) =
-    !isnull(state.state) ?
-        prepare(get(state.state), expr) :
-        optimize(finalize(compile(state, expr)))
+    !isnull(state.origin) ?
+        prepare(get(state.origin), expr) :
+        optimize(fasten(compile(state, expr)))
 
 # Executes the query.
 execute(q::Query, args...) =
-    execute(pipe(optimize(finalize(q))), args...)
+    execute(pipe(optimize(fasten(q))), args...)
 call(q::Query, args...) = execute(q, args...)
 
 # Builds initial execution pipeline.
@@ -254,7 +263,7 @@ compile(state::Query, expr::AbstractSyntax) =
     error("compile() is not implemented for $(typeof(expr))")
 
 # Finalizes the execution pipeline.
-finalize(q::Query) = q
+fasten(q::Query) = q
 
 # Optimizes the execution pipeline.
 optimize(q::Query) = Query(q, pipe=optimize(q.pipe))
