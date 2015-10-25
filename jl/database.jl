@@ -12,28 +12,28 @@ const SelectType = Union{Void, Symbol, Tuple{Vararg{Symbol}}}
 
 immutable Arrow
     name::Symbol
-    T::DataType
-    singular::Bool
-    total::Bool
-    unique::Bool
-    reachable::Bool
+    output::Output
     select::SelectType
 end
 
-Arrow(name::Symbol, T::DataType; singular=true, total=true, unique=false, reachable=false, select=nothing) =
-    Arrow(name, T, singular, total, unique, reachable, select)
-Arrow(name::Symbol, targetname::Symbol; singular=true, total=true, unique=false, reachable=false, select=nothing) =
-    Arrow(name, Entity{target}, singular, total, unique, reachable, select)
-Arrow(name::Symbol; singular=true, total=true, unique=false, reachable=false, select=nothing) =
-    Arrow(name, Entity{name}, singular, total, unique, reachable, select)
+Arrow(
+    name::Symbol, T::DataType;
+    singular=true, total=true, unique=false, reachable=false,
+    select=nothing) =
+    Arrow(name, Output(T, singular=singular, total=total, unique=unique, reachable=reachable), select)
+Arrow(name::Symbol, targetname::Symbol; props...) =
+    Arrow(name, Entity{target}; props...)
+Arrow(name::Symbol; props...) =
+    Arrow(name, Entity{name}; props...)
 
 function show(io::IO, a::Arrow)
-    print(io, a.name, ": ", a.T <: Entity ? ucfirst(string(classname(a.T))) : a.T)
+    T = domain(a.output)
+    print(io, a.name, ": ", T <: Entity ? ucfirst(string(classname(T))) : T)
     features = []
-    a.singular || push!(features, :plural)
-    a.total || push!(features, :partial)
-    !a.unique || push!(features, :unique)
-    !a.reachable || push!(features, :reachable)
+    singular(a.output) || push!(features, :plural)
+    total(a.output) || push!(features, :partial)
+    !unique(a.output) || push!(features, :unique)
+    !reachable(a.output) || push!(features, :reachable)
     if !isempty(features)
         print(io, " {", join(features, ", "), "}")
     end

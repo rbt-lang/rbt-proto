@@ -51,14 +51,12 @@ function lookup(self::ClassScope, name::Symbol)
         arrow = class.arrows[name]
         map = self.db.instance.maps[(self.name, arrow.name)]
         I = Entity{self.name}
-        O = arrow.T
+        O = domain(arrow.output)
         input = Input(I)
-        output = Output(
-            O, singular=arrow.singular, total=arrow.total,
-            unique=arrow.unique, reachable=arrow.reachable)
-        if arrow.singular && arrow.total
+        output = arrow.output
+        if singular(arrow.output) && total(arrow.output)
             pipe = IsoMapPipe{I, O}(name, map)
-        elseif arrow.singular
+        elseif singular(arrow.output)
             pipe = OptMapPipe{I, O}(name, map)
         else
             pipe = SeqMapPipe{I, O}(name, map)
