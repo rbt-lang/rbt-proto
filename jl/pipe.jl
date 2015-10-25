@@ -173,6 +173,16 @@ end
 show(io::IO, pipe::MaxPipe) = print(io, "Max(", pipe.F, ")")
 
 execute{I}(pipe::MaxPipe{I}, x::I) =
+    maximum(execute(pipe.F, x)::Vector{Int})
+
+
+immutable OptMaxPipe{I} <: OptPipe{I,Int}
+    F::SeqPipe{I,Int}
+end
+
+show(io::IO, pipe::OptMaxPipe) = print(io, "OptMax(", pipe.F, ")")
+
+execute{I}(pipe::OptMaxPipe{I}, x::I) =
     let y = execute(pipe.F, x)::Vector{Int}
         isempty(y) ? Nullable{Int}() : Nullable{Int}(maximum(y))
     end

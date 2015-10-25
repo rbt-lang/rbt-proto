@@ -13,27 +13,27 @@ const SelectType = Union{Void, Symbol, Tuple{Vararg{Symbol}}}
 immutable Arrow
     name::Symbol
     T::DataType
-    partial::Bool
-    plural::Bool
+    singular::Bool
+    total::Bool
     unique::Bool
+    reachable::Bool
     select::SelectType
 end
 
-Arrow(name::Symbol, T::DataType; partial=false, plural=false, unique=false, select=nothing) =
-    Arrow(name, T, partial, plural, unique, select)
-Arrow(name::Symbol, targetname::Symbol; partial=false, plural=false, unique=false, select=nothing) =
-    Arrow(name, Entity{target}, partial, plural, unique, select)
-Arrow(name::Symbol; partial=false, plural=false, unique=false, select=nothing) =
-    Arrow(name, Entity{name}, partial, plural, unique, select)
+Arrow(name::Symbol, T::DataType; singular=true, total=true, unique=false, reachable=false, select=nothing) =
+    Arrow(name, T, singular, total, unique, reachable, select)
+Arrow(name::Symbol, targetname::Symbol; singular=true, total=true, unique=false, reachable=false, select=nothing) =
+    Arrow(name, Entity{target}, singular, total, unique, reachable, select)
+Arrow(name::Symbol; singular=true, total=true, unique=false, reachable=false, select=nothing) =
+    Arrow(name, Entity{name}, singular, total, unique, reachable, select)
 
 function show(io::IO, a::Arrow)
     print(io, a.name, ": ", a.T <: Entity ? ucfirst(string(classname(a.T))) : a.T)
     features = []
-    for feature in [:partial, :plural, :unique]
-        if getfield(a, feature)
-            push!(features, feature)
-        end
-    end
+    a.singular || push!(features, :plural)
+    a.total || push!(features, :partial)
+    !a.unique || push!(features, :unique)
+    !a.reachable || push!(features, :reachable)
     if !isempty(features)
         print(io, " {", join(features, ", "), "}")
     end

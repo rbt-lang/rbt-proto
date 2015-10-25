@@ -15,11 +15,11 @@ function lookup(self::RootScope, name::Symbol)
         scope = ClassScope(self.db, name)
         I = UnitType
         O = Entity{name}
-        input = Iso{I}
-        output = Seq{O}
+        input = Input(I)
+        output = Output(O, singular=false, total=false, unique=true, reachable=true)
         pipe = SetPipe{I, O}(name, self.db.instance.sets[name])
         tag = NullableSymbol(name)
-        query = Query(scope, O, input=input, output=output, pipe=pipe, tag=tag)
+        query = Query(scope, input=input, output=output, pipe=pipe, tag=tag)
         select =
             class.select != nothing ? class.select : tuple(keys(class.arrows)...)
         item, cap = mkselect(query, select)
@@ -51,22 +51,22 @@ function lookup(self::ClassScope, name::Symbol)
         map = self.db.instance.maps[(self.name, arrow.name)]
         I = Entity{self.name}
         O = arrow.T
-        input = Iso{I}
-        if !arrow.plural && !arrow.partial
-            output = Iso{O}
+        input = Input(I)
+        output = Output(
+            O, singular=arrow.singular, total=arrow.total,
+            unique=arrow.unique, reachable=arrow.reachable)
+        if arrow.singular && arrow.total
             pipe = IsoMapPipe{I, O}(name, map)
-        elseif !arrow.plural
-            output = Opt{O}
+        elseif arrow.singular
             pipe = OptMapPipe{I, O}(name, map)
         else
-            output = Seq{O}
             pipe = SeqMapPipe{I, O}(name, map)
         end
         if O <: Entity
             targetname = classname(O)
             targetclass = self.db.schema.classes[targetname]
             scope = ClassScope(self.db, targetname)
-            query = Query(scope, O, input=input, output=output, pipe=pipe, tag=tag)
+            query = Query(scope, input=input, output=output, pipe=pipe, tag=tag)
             select =
                 arrow.select != nothing ? arrow.select :
                 targetclass.select != nothing ? targetclass.select :
@@ -76,7 +76,7 @@ function lookup(self::ClassScope, name::Symbol)
             query = Query(query, cap=cap, items=items)
         else
             scope = EmptyScope(self.db)
-            query = Query(scope, O, input=input, output=output, pipe=pipe, tag=tag)
+            query = Query(scope, input=input, output=output, pipe=pipe, tag=tag)
         end
         return NullableQuery(query)
     else
@@ -115,11 +115,11 @@ function mkselect(state::Query, select::Tuple)
     end
     I = codomain(state)
     O = Tuple{map(op -> datatype(op.output), ops)...}
-    input = Iso{I}
-    output = Iso{O}
+    input = Input(I)
+    output = Output(O)
     scope = empty(state)
     pipe = TuplePipe{I,O}([op.pipe for op in ops])
-    cup = Query(scope, O, input=input, output=output, pipe=pipe)
+    cup = Query(scope, input=input, output=output, pipe=pipe)
     return items, cup
 end
 

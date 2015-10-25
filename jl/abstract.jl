@@ -38,46 +38,80 @@ syntax(syntax::AbstractSyntax) = syntax
 
 # TODO: interface for a pointer inside a syntax tree (for error reporting).
 
-# Structured output (and input).
-abstract Mode{T}
-# One value (identity monad).
-abstract Iso{T} <: Mode{T}
-# One or no value (maybe monad).
-abstract Opt{T} <: Mode{T}
-# A finite sequence of values (list monad).
-abstract Seq{T} <: Mode{T}
-
 # The unit type.
 const UnitType = Tuple{}
 
-# TODO: UniqueSeq, NonEmptySeq.
+# Structure of input.
+immutable InputMode
+    # Depends on the past input values.
+    sees_past::Bool
+    # Depends on the future input values.
+    sees_future::Bool
+end
 
-# Extracts the type parameter.
-domain{T}(::Type{Iso{T}}) = T
-domain{T}(::Type{Opt{T}}) = T
-domain{T}(::Type{Seq{T}}) = T
+# Structure of composition.
+max(mode1::InputMode, mode2::InputMode) =
+    InputMode(
+        max(mode1.sees_past, mode2.sees_past),
+        max(mode1.sees_future, mode2.sees_future))
 
-# Extracts the structure.
-mode{T}(::Type{Iso{T}}) = Iso
-mode{T}(::Type{Opt{T}}) = Opt
-mode{T}(::Type{Seq{T}}) = Seq
+# Structure and type of input.
+immutable Input
+    domain::DataType
+    mode::InputMode
+end
 
-# How the value is represented in the pipeline
-datatype{T}(::Type{Iso{T}}) = datatype(T)
-datatype{T}(::Type{Opt{T}}) = Nullable{datatype(T)}
-datatype{T}(::Type{Seq{T}}) = Vector{datatype(T)}
+Input(T::DataType) = Input(T, InputMode(false, false))
+
+domain(input::Input) = input.domain
+mode(input::Input) = input.mode
+
+# Structure of output.
+immutable OutputMode
+    # At most one output value for each input value.
+    singular::Bool
+    # At least one output for each input value.
+    total::Bool
+    # At most one input for each output value.
+    unique::Bool
+    # At least one input for each output value.
+    reachable::Bool
+end
+
+# Composition.
+max(mode1::OutputMode, mode2::OutputMode) =
+    OutputMode(
+        min(mode1.singular, mode2.singular),
+        min(mode1.total, mode2.total),
+        min(mode1.unique, mode2.unique),
+        min(mode1.reachable, mode2.reachable))
+
+# Structure and type of output.
+immutable Output
+    domain::DataType
+    mode::OutputMode
+end
+
+Output(T::DataType; singular=true, total=true, unique=false, reachable=false) =
+    Output(T, OutputMode(singular, total, unique, reachable))
+
+domain(output::Output) = output.domain
+mode(output::Output) = output.mode
+
+# Predicates.
+singular(output::Output) = output.mode.singular
+total(output::Output) = output.mode.total
+unique(output::Output) = output.mode.unique
+reachable(output::Output) = output.mode.reachable
+
+# How the value is represented in the pipeline.
+datatype(input::Input) = datatype(input.domain)
+datatype(output::Output) =
+    let T = datatype(output.domain)
+        output.mode.singular && output.mode.total ? T :
+        output.mode.singular ? Nullable{T} : Vector{T}
+    end
 datatype(T::DataType) = T
-
-# Partial order between structures: Iso < Opt < Seq.
-isless(::Type{Iso}, ::Type{Iso}) = false
-isless(::Type{Iso}, ::Type{Opt}) = true
-isless(::Type{Iso}, ::Type{Seq}) = true
-isless(::Type{Opt}, ::Type{Iso}) = false
-isless(::Type{Opt}, ::Type{Opt}) = false
-isless(::Type{Opt}, ::Type{Seq}) = true
-isless(::Type{Seq}, ::Type{Iso}) = false
-isless(::Type{Seq}, ::Type{Opt}) = false
-isless(::Type{Seq}, ::Type{Seq}) = false
 
 # Query execution pipeline (query plan).
 abstract AbstractPipe{I,O}
@@ -114,9 +148,9 @@ immutable Query
     # Local namespace.
     scope::AbstractScope
     # The input type of the combinator.
-    input::DataType
+    input::Input
     # The output type of the combinator.
-    output::DataType
+    output::Output
     # Execution pipeline that implements the combinator.
     pipe::AbstractPipe
     # Pre-finalized state if we need to resume compilation.
@@ -142,7 +176,7 @@ const NullableSymbol = Nullable{Symbol}
 # Fresh state for the given scope.
 Query(
     scope::AbstractScope, domain::DataType=UnitType;
-    input=Iso{domain}, output=Iso{domain},
+    input=Input(domain), output=Output(domain, unique=true, reachable=true),
     pipe=ThisPipe{datatype(domain)}(),
     state=NullableQuery(),
     cap=NullableQuery(),
@@ -191,9 +225,15 @@ mode(q::Query) = mode(q.input)
 codomain(q::Query) = domain(q.output)
 comode(q::Query) = mode(q.output)
 
+# Output predicates.
+singular(q::Query) = singular(q.output)
+total(q::Query) = total(q.output)
+unique(q::Query) = unique(q.output)
+reachable(q::Query) = reachable(q.output)
+
 # Displays the query.
 show(io::IO, q::Query) =
-    q.input == Iso{UnitType} ?
+    domain(q) == UnitType ?
         print(io, q.pipe, " : ", datatype(q.output)) :
         print(io, q.pipe, " : ", datatype(q.input), " -> ", datatype(q.output))
 
