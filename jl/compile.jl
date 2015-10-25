@@ -59,7 +59,7 @@ end
 
 
 compile{name}(state::Query, fn::Type{Fn{name}}, arg1::AbstractSyntax, args::AbstractSyntax...) =
-    compile(state, fn, compile(state, arg1), map(arg -> compile(state, arg), args)...)
+    compile(state, fn, compile(state, arg1), [compile(state, arg) for arg in args]...)
 
 
 function compile(state::Query, ::Type{Fn{:this}})
@@ -103,7 +103,7 @@ end
 
 compile(state::Query, fn::Type{Fn{:select}}, base::AbstractSyntax, ops::AbstractSyntax...) =
     let base = compile(state, base)
-        compile(state, fn, base, map(op -> compile(base, op), ops)...)
+        compile(state, fn, base, [compile(base, op) for op in ops]...)
     end
 
 function compile(state::Query, ::Type{Fn{:select}}, base::Query, ops::Query...)
@@ -111,16 +111,16 @@ function compile(state::Query, ::Type{Fn{:select}}, base::Query, ops::Query...)
     for op in ops
         codomain(base) == domain(op) || error("incompatible operands: $base and $op")
     end
-    items = ops
-    ops = tuple(map(op -> fasten(op), ops)...)
+    parts = ops
+    ops = tuple([select(op) for op in ops]...)
     scope = empty(base)
     I = codomain(base)
-    O = Tuple{map(op -> datatype(op.output), ops)...}
+    O = Tuple{[datatype(op.output) for op in ops]...}
     input = Input(I)
     output = Output(O)
     pipe = TuplePipe{I,O}([op.pipe for op in ops])
-    cap = Query(scope, input=input, output=output, pipe=pipe)
-    return Query(base, cap=cap, items=ops)
+    cap = Query(scope, input=input, output=output, pipe=pipe, parts=parts)
+    return Query(base, select=cap, parts=parts)
 end
 
 
@@ -155,7 +155,7 @@ end
 
 compile(state::Query, fn::Type{Fn{:sort}}, base::AbstractSyntax, ops::AbstractSyntax...) =
     let base = compile(state, base)
-        compile(state, fn, base, map(op -> compile(base, op), ops)...)
+        compile(state, fn, base, [compile(base, op) for op in ops]...)
     end
 
 function compile(state::Query, ::Type{Fn{:sort}}, base::Query, ops::Query...)
@@ -167,10 +167,10 @@ function compile(state::Query, ::Type{Fn{:sort}}, base::Query, ops::Query...)
     I = domain(base)
     O = codomain(base)
     if isempty(ops)
-        if isnull(base.cap)
+        if isnull(base.select)
             pipe = SortPipe{I,O}(base.pipe, base.order)
         else
-            cap = get(base.cap)
+            cap = get(base.select)
             singular(cap) || error("expected a singular expression: $cap")
             total(cap) || error("expected a total expression: $cap")
             K = codomain(cap)
@@ -180,7 +180,7 @@ function compile(state::Query, ::Type{Fn{:sort}}, base::Query, ops::Query...)
         pipe = base.pipe
         for op in reverse(ops)
             order = op.order
-            op = fasten(op)
+            op = select(op)
             singular(op) || error("expected a singular expression: $op")
             total(op) || error("expected a total expression: $op")
             K = codomain(op)
@@ -203,21 +203,19 @@ compile(state::Query, ::Type{Fn{:(=>)}}, ident::AbstractSyntax, base::AbstractSy
 
 compile(state::Query, fn::Type{Fn{:define}}, base::AbstractSyntax, ops::AbstractSyntax...) =
     let base = compile(state, base)
-        compile(state, fn, base, map(op -> compile(base, op), ops)...)
+        for op in ops
+            base = compile(state, fn, base, compile(base, op))
+        end
+        base
     end
 
 
-function compile(state::Query, ::Type{Fn{:define}}, base::Query, ops::Query...)
+function compile(state::Query, ::Type{Fn{:define}}, base::Query, op::Query)
     codomain(state) == domain(base) || error("incompatible operand: $base")
-    for op in ops
-        codomain(base) == domain(op) || error("incompatible operands: $base and $op")
-    end
-    attrs = base.attrs
-    for op in ops
-        !isnull(op.tag) || error("expected a named expression: $op")
-        attrs = merge(attrs, Dict(get(op.tag) => op))
-    end
-    return Query(base, attrs=attrs)
+    codomain(base) == domain(op) || error("incompatible operands: $base and $op")
+    !isnull(op.tag) || error("expected a named expression: $op")
+    defs = merge(base.defs, Dict(get(op.tag) => op))
+    return Query(base, defs=defs)
 end
 
 
@@ -277,7 +275,7 @@ end
 @compilebinaryop(:(/), DivPipe, Int, Int, Int)
 
 
-function fasten(q::Query)
-    return Query(isnull(q.cap) ? q : q >> get(q.cap), origin=q, src=q.src)
+function select(q::Query)
+    return Query(isnull(q.select) ? q : q >> get(q.select), src=q.src, origin=q)
 end
 

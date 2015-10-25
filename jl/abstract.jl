@@ -153,20 +153,20 @@ immutable Query
     output::Output
     # Execution pipeline that implements the combinator.
     pipe::AbstractPipe
-    # Pre-finalized state if we need to resume compilation.
-    origin::Nullable{Query}
-    # Terminates the pipeline.
-    cap::Nullable{Query}
-    # Indexed fields, if any.
-    items::Nullable{Tuple{Vararg{Query}}}
+    # For a composite query, the components that form it.
+    parts::Nullable{Tuple{Vararg{Query}}}
+    # Current output formatter.
+    select::Nullable{Query}
     # Named fields, if any.
-    attrs::Dict{Symbol,Query}
+    defs::Dict{Symbol,Query}
     # Sorting direction (0 is default, +1 for ascending, -1 for descending).
     order::Int
     # Identifier that denotes the combinator.
     tag::Nullable{Symbol}
     # The source code for the query.
     src::Nullable{AbstractSyntax}
+    # Pre-finalized state if we need to resume compilation.
+    origin::Nullable{Query}
 end
 
 # Type aliases.
@@ -181,14 +181,14 @@ Query(
     scope::AbstractScope, domain::DataType=UnitType;
     input=Input(domain), output=Output(domain, unique=true, reachable=true),
     pipe=ThisPipe{datatype(domain)}(),
-    origin=NullableQuery(),
-    cap=NullableQuery(),
-    items=NullableQueries(),
-    attrs=Dict{Symbol,Query}(),
+    parts=NullableQueries(),
+    select=NullableQuery(),
+    defs=Dict{Symbol,Query}(),
     order=0,
     tag=NullableSymbol(),
-    src=NullableSyntax()) =
-    Query(scope, input, output, pipe, origin, cap, items, attrs, order, tag, src)
+    src=NullableSyntax(),
+    origin=NullableQuery()) =
+    Query(scope, input, output, pipe, parts, select, defs, order, tag, src, origin)
 
 # Initial compiler state.
 Query(db::AbstractDatabase) = Query(scope(db))
@@ -196,23 +196,22 @@ Query(db::AbstractDatabase) = Query(scope(db))
 # Clone constructor.
 Query(
     q::Query;
-    scope=nothing, input=nothing, output=nothing,
-    pipe=nothing, origin=nothing, cap=nothing,
-    items=nothing, attrs=nothing,
+    scope=nothing, input=nothing, output=nothing, pipe=nothing,
+    parts=nothing, select=nothing, defs=nothing,
     order=nothing, tag=nothing,
-    src=nothing) =
+    src=nothing, origin=nothing) =
     Query(
         scope != nothing ? scope : q.scope,
         input != nothing ? input : q.input,
         output != nothing ? output : q.output,
         pipe != nothing ? pipe : q.pipe,
-        origin != nothing ? origin : q.origin,
-        cap != nothing ? cap : q.cap,
-        items != nothing ? items : q.items,
-        attrs != nothing ? attrs : q.attrs,
+        parts != nothing ? parts : q.parts,
+        select != nothing ? select : q.select,
+        defs != nothing ? defs : q.defs,
         order != nothing ? order : q.order,
         tag != nothing ? tag : q.tag,
-        src != nothing ? src : q.src)
+        src != nothing ? src : q.src,
+        origin != nothing ? origin : q.origin)
 
 # Extracts local namespace.
 scope(q::Query) = q.scope
@@ -251,11 +250,11 @@ prepare(state, expr) = prepare(Query(state), syntax(expr))
 prepare(state::Query, expr::AbstractSyntax) =
     !isnull(state.origin) ?
         prepare(get(state.origin), expr) :
-        optimize(fasten(compile(state, expr)))
+        optimize(select(compile(state, expr)))
 
 # Executes the query.
 execute(q::Query, args...) =
-    execute(pipe(optimize(fasten(q))), args...)
+    execute(pipe(optimize(select(q))), args...)
 call(q::Query, args...) = execute(q, args...)
 
 # Builds initial execution pipeline.
@@ -263,14 +262,14 @@ compile(state::Query, expr::AbstractSyntax) =
     error("compile() is not implemented for $(typeof(expr))")
 
 # Finalizes the execution pipeline.
-fasten(q::Query) = q
+select(q::Query) = q
 
 # Optimizes the execution pipeline.
 optimize(q::Query) = Query(q, pipe=optimize(q.pipe))
 
 # Scope operations passthrough.
 lookup(q::Query, name::Symbol) =
-    name in keys(q.attrs) ? NullableQuery(q.attrs[name]) : lookup(q.scope, name)
+    name in keys(q.defs) ? NullableQuery(q.defs[name]) : lookup(q.scope, name)
 root(q::Query) = root(q.scope)
 empty(q::Query) = empty(q.scope)
 

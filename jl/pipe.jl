@@ -195,7 +195,7 @@ end
 show(io::IO, pipe::TuplePipe) = print(io, "Tuple(", join(pipe.Fs, ", "), ")")
 
 execute{I,O}(pipe::TuplePipe{I,O}, x::I) =
-    tuple(map(F -> execute(F, x), pipe.Fs)...)::O
+    tuple([execute(F, x) for F in pipe.Fs]...)::O
 
 
 immutable SievePipe{I} <: OptPipe{I,I}

@@ -21,11 +21,10 @@ function lookup(self::RootScope, name::Symbol)
         tag = NullableSymbol(name)
         src = NullableSyntax(ApplySyntax(name, []))
         query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, src=src)
-        select =
-            class.select != nothing ? class.select : tuple(keys(class.arrows)...)
-        item, cap = mkselect(query, select)
-        items = isa(item, Tuple) ? item : nothing
-        query = Query(query, cap=cap, items=items)
+        select = mkselect(
+            query,
+            class.select != nothing ? class.select : tuple(keys(class.arrows)...))
+        query = Query(query, select=select)
         return NullableQuery(query)
     else
         return NullableQuery()
@@ -67,13 +66,12 @@ function lookup(self::ClassScope, name::Symbol)
             targetclass = self.db.schema.classes[targetname]
             scope = ClassScope(self.db, targetname)
             query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, src=src)
-            select =
+            select = mkselect(
+                query,
                 arrow.select != nothing ? arrow.select :
                 targetclass.select != nothing ? targetclass.select :
-                    tuple(keys(targetclass.arrows)...)
-            item, cap = mkselect(query, select)
-            items = isa(item, Tuple) ? item : nothing
-            query = Query(query, cap=cap, items=items)
+                    tuple(keys(targetclass.arrows)...))
+            query = Query(query, select=select)
         else
             scope = EmptyScope(self.db)
             query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, src=src)
@@ -98,29 +96,29 @@ empty(self::EmptyScope) = self
 lookup(::EmptyScope, ::Symbol) = NullableQuery()
 
 
-function mkselect(state::Query, select::Symbol)
-    op = lookup(state, select)
+mkselect(state::Query, spec) = mkcomposite(state, spec, :select)
+
+function mkcomposite(state::Query, name::Symbol, field)
+    op = lookup(state, name)
     @assert !isnull(op)
     op = get(op)
-    return op, fasten(op)
+    cap = getfield(op, field)
+    if !isnull(cap)
+        cap = get(cap)
+        op = Query(op >> cap, parts=op.parts)
+    end
+    return op
 end
 
-function mkselect(state::Query, select::Tuple)
-    items = ()
-    ops = ()
-    for field in select
-        item, op = mkselect(state, field)
-        items = (items..., item)
-        ops = (ops..., op)
-    end
+function mkcomposite(state::Query, select::Tuple, field)
+    parts = tuple([mkcomposite(state, part, field) for part in select]...)
     I = codomain(state)
-    O = Tuple{map(op -> datatype(op.output), ops)...}
+    O = Tuple{[datatype(part.output) for part in parts]...}
     input = Input(I)
     output = Output(O)
     scope = empty(state)
-    pipe = TuplePipe{I,O}([op.pipe for op in ops])
-    cup = Query(scope, input=input, output=output, pipe=pipe)
-    return items, cup
+    pipe = TuplePipe{I,O}([part.pipe for part in parts])
+    return Query(scope, input=input, output=output, pipe=pipe, parts=parts)
 end
 
 

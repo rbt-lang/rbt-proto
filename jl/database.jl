@@ -46,7 +46,7 @@ immutable Class
     select::SelectType
 end
 
-Class(name::Symbol, as::Arrow...; select=nothing) = Class(name, Dict(map(a -> a.name=>a, as)...), select)
+Class(name::Symbol, as::Arrow...; select=nothing) = Class(name, Dict([a.name => a for a in as]), select)
 
 function show(io::IO, c::Class)
     print(io, ucfirst(string(c.name)), ":")
@@ -60,7 +60,7 @@ immutable Schema
     classes::Dict{Symbol, Class}
 end
 
-Schema(cs::Class...) = Schema(Dict(map(c -> c.name=>c, cs)...))
+Schema(cs::Class...) = Schema(Dict([c.name => c for c in cs]))
 
 function show(io::IO, s::Schema)
     fst = true
