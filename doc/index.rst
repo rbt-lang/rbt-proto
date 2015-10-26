@@ -1,5 +1,5 @@
-Query Language for Functional Data Model
-========================================
+Querying with Combinators
+=========================
 
 
 .. slide:: Table of Contents
