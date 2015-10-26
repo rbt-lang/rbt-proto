@@ -190,6 +190,28 @@ function compile(state::Query, ::Type{Fn{:sort}}, base::Query, ops::Query...)
 end
 
 
+function compile(state::Query, ::Type{Fn{:unique}}, base::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    !singular(base) || error("expected a plural expression: $base")
+    I = domain(base)
+    O = codomain(base)
+    output = Output(
+        O, singular=false, complete=complete(base),
+        exclusive=true, reachable=reachable(base))
+    if isnull(base.identity)
+        PipeType = exclusive(base) ? SortPipe : UniquePipe
+        pipe = PipeType{I,O}(base.pipe, base.order)
+    else
+        cap = get(base.identity)
+        @assert singular(cap) && complete(cap) && exclusive(cap)
+        K = codomain(cap)
+        PipeType = exclusive(base) ? SortByPipe : UniqueByPipe
+        pipe = UniqueByPipe{I,O,K}(base.pipe, cap.pipe, base.order)
+    end
+    return Query(base, output=output, pipe=pipe)
+end
+
+
 function compile(state::Query, ::Type{Fn{:as}}, base::AbstractSyntax, ident::AbstractSyntax)
     (isa(ident, ApplySyntax) && isempty(ident.args)) || error("expected an identifier: $ident")
     return Query(compile(state, base), tag=NullableSymbol(ident.fn))

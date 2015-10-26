@@ -236,6 +236,42 @@ execute{I,O,K}(pipe::SortByPipe{I,O,K}, x::I) =
         rev=(pipe.order<0))
 
 
+immutable UniquePipe{I,O} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+    order::Int
+end
+
+show(io::IO, pipe::UniquePipe) = print(io, "Unique(", pipe.F, ", ", pipe.order, ")")
+
+execute{I,O}(pipe::UniquePipe{I,O}, x::I) =
+    sort(unique(execute(pipe.F, x)::Vector{O}), rev=(pipe.order<0))
+
+
+immutable UniqueByPipe{I,O,K} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+    key::IsoPipe{O,K}
+    order::Int
+end
+
+show(io::IO, pipe::UniqueByPipe) =
+    print(io, "UniqueBy(", pipe.F, ", ", pipe.key, ", ", pipe.order, ")")
+
+function execute{I,O,K}(pipe::UniqueByPipe{I,O,K}, x::I)
+    ys = execute(pipe.F, x)::Vector{O}
+    kys = Vector{Tuple{K,O}}()
+    seen = Set{K}()
+    for y in ys
+        k = execute(pipe.key, y)::K
+        if !in(k, seen)
+            push!(kys, (k, y))
+            push!(seen, k)
+        end
+    end
+    sort!(kys, rev=(pipe.order<0))
+    return O[y for (k, y) in kys]
+end
+
+
 immutable IsoFieldPipe{I,O} <: IsoPipe{I,O}
     field::Symbol
 end
