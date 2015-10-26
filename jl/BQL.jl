@@ -218,7 +218,7 @@ _binop(op, y1, y2) =
 
 vars(C::BinaryOp) = union(vars(C.F), vars(C.G))
 
-const Scalar = Union(Void, Bool, Number, AbstractString)
+const Scalar = Union{Void, Bool, Number, AbstractString}
 for op in [:(<), :(<=), :(>), :(>=), :(==), :(!=), :(&), :(|), :(+), :(-), :(*), :(/)]
     @eval begin
         $op(F::Combinator, G::Combinator) = BinaryOp($op, F, G)

@@ -21,7 +21,7 @@ include("scope.jl")
 include("compile.jl")
 
 
-global DB = nothing
+global DB = Database(Schema(), Instance(Dict(), Dict()))
 
 function setdb(db)
     global DB = db

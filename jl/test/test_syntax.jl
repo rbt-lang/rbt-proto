@@ -2,26 +2,26 @@
 push!(LOAD_PATH, "./jl")
 
 using Base.Test
-using RBT
+using RBT: LiteralSyntax, ApplySyntax, ComposeSyntax, syntax
 
 
-q1 = q"department"
+q1 = syntax("department")
 
 @test string(q1) == "department"
-@test typeof(q1) == RBT.Parse.ApplySyntax
+@test typeof(q1) == ApplySyntax
 @test q1.fn == :department
 @test q1.args == []
 
 
-q2 = q"department.name"
+q2 = syntax("department.name")
 
 @test string(q2) == "department.name"
-@test typeof(q2) == RBT.Parse.ComposeSyntax
+@test typeof(q2) == ComposeSyntax
 @test string(q2.f) == "department"
 @test string(q2.g) == "name"
 
 
-q3 = q"""
+q3 = syntax("""
     department
     :filter(count(employee)>100)
     :sort(count(employee):desc)
@@ -29,7 +29,7 @@ q3 = q"""
         name,
         count(employee),
         employee)
-"""
+""")
 
 @test string(q3) ==
     "select(" *
@@ -37,11 +37,11 @@ q3 = q"""
         "name," *
         "count(employee)," *
         "employee)"
-@test typeof(q3) == RBT.Parse.ApplySyntax
+@test typeof(q3) == ApplySyntax
 @test q3.fn == :select
 
 
-q4 = q"""
+q4 = syntax("""
     employee
     :by(position)
     :select(
@@ -49,7 +49,7 @@ q4 = q"""
         count(employee),
         max(employee.salary),
         mean(employee.salary))
-"""
+""")
 
 @test string(q4) ==
     "select(" *
@@ -60,20 +60,20 @@ q4 = q"""
         "mean(employee.salary))"
 
 
-q5 = q"""
+q5 = syntax("""
     department
     :filter(count(employee)>100)
     .employee
     .name
-"""
+""")
 
 @test string(q5) == "filter(department,>(count(employee),100)).employee.name"
 
 
-q6 = q"6 * (3 + 4)"
+q6 = syntax("6 * (3 + 4)")
 
 @test string(q6) == "*(6,+(3,4))"
-@test typeof(q6) == RBT.Parse.ApplySyntax
-@test typeof(q6.args[1]) == RBT.Parse.LiteralSyntax{Int}
+@test typeof(q6) == ApplySyntax
+@test typeof(q6.args[1]) == LiteralSyntax{Int}
 @test q6.args[1].val == 6
 
