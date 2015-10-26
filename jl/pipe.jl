@@ -166,7 +166,7 @@ execute{I,O}(pipe::CountPipe{I,O}, x::I) =
     length(execute(pipe.F, x)::Vector{O})
 
 
-immutable MaxPipe{I} <: OptPipe{I,Int}
+immutable MaxPipe{I} <: IsoPipe{I,Int}
     F::SeqPipe{I,Int}
 end
 
@@ -269,6 +269,38 @@ function execute{I,O,K}(pipe::UniqueByPipe{I,O,K}, x::I)
     end
     sort!(kys, rev=(pipe.order<0))
     return O[y for (k, y) in kys]
+end
+
+
+immutable GroupByPipe{I,K,U,V} <: SeqPipe{I,Tuple{K,Vector{V}}}
+    F::SeqPipe{I,V}
+    kernel::IsoPipe{V,K}
+    key::IsoPipe{K,U}
+    order::Int
+end
+
+show(io::IO, pipe::GroupByPipe) =
+    print(io, "GroupBy(", pipe.F, ", ", pipe.kernel, ", ", pipe.key, ", ", pipe.order, ")")
+
+
+function execute{I,K,U,V}(pipe::GroupByPipe{I,K,U,V}, x::I)
+    ys = execute(pipe.F, x)::Vector{V}
+    kys = Vector{Tuple{U,Vector{V}}}()
+    idx = Dict{U,Int}()
+    ker = Dict{U,K}()
+    for y in ys
+        q = execute(pipe.kernel, y)::K
+        k = execute(pipe.key, q)::U
+        if k in keys(idx)
+            push!(kys[idx[k]][2], y)
+        else
+            push!(kys, (k, V[y]))
+            idx[k] = length(kys)
+            ker[k] = q
+        end
+    end
+    sort!(kys, rev=(pipe.order<0))
+    return Tuple{K,Vector{V}}[(ker[k], ys) for (k, ys) in kys]
 end
 
 

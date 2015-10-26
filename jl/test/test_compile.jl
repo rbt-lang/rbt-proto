@@ -44,3 +44,19 @@ setdb(citydb)
 @query(employee.position:desc:unique)
 @query(department:select(name,count(unique(employee.position)),count(employee)))
 
+@query(employee:by(position))
+@query(employee:by(position):select(position,count(employee)))
+@query(employee:by(position):select(position, count(employee)):sort(count(employee):desc))
+@query(
+    employee:by(position)
+    :define(department => unique(employee.department))
+    :filter(count(department)>=5)
+    :select(position, department)
+    :sort(count(department):desc))
+@query(employee:by(name):select(name, count(employee)):sort(count(employee):desc))
+@query(
+    employee:by(name)
+    :filter(count(employee)>=10)
+    :select(name, max(employee.salary))
+    :sort(max(employee.salary):desc))
+

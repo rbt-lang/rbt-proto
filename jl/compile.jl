@@ -212,6 +212,70 @@ function compile(state::Query, ::Type{Fn{:unique}}, base::Query)
 end
 
 
+compile(state::Query, fn::Type{Fn{:by}}, base::AbstractSyntax, op1::AbstractSyntax, ops::AbstractSyntax...) =
+    let base = compile(state, base)
+        compile(state, fn, base, compile(base, op1), [compile(base, op) for op in ops]...)
+    end
+
+function compile(state::Query, ::Type{Fn{:by}}, base::Query, ops::Query...)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    !singular(base) || error("expected a plural expression: $base")
+    for op in ops
+        codomain(base) == domain(op) || error("incompatible operands: $base and $op")
+        singular(op) || error("expected a singular expression: $op")
+        complete(op) || error("expected a complete expression: $op")
+    end
+    scope = empty(state)
+    I = domain(base)
+    Kitems = [codomain(op) for op in ops]
+    K = Tuple{Kitems...}
+    Uitems = [!isnull(op.identity) ? codomain(get(op.identity)) : codomain(op) for op in ops]
+    U = Tuple{Uitems...}
+    V = codomain(base)
+    O = Tuple{K,Vector{V}}
+    input = Input(I)
+    output = Output(O, singular=false, complete=true)
+    kernel_pipe = TuplePipe{V,K}([op.pipe for op in ops])
+    key_pipe = TuplePipe{K,U}([
+        !isnull(op.identity) ? IsoItemPipe{K,Uitems[i]}(i) >> get(op.identity).pipe : IsoItemPipe{K,Uitems[i]}(i)
+        for (i, op) in enumerate(ops)])
+    pipe = GroupByPipe{I,K,U,V}(base.pipe, kernel_pipe, key_pipe, 0)
+    parts = ()
+    for (i, op) in enumerate(ops)
+        T = codomain(op)
+        part = Query(
+            op, input=Input(O),
+            pipe=(IsoItemPipe{O,K}(1) >> IsoItemPipe{K,T}(i)))
+        parts = (parts..., part)
+    end
+    identity = Query(
+        scope,
+        input=Input(O),
+        output=Output(K, exclusive=true),
+        pipe=(IsoItemPipe{O,K}(1) >> key_pipe),
+        parts=parts)
+    up = Query(
+        base,
+        input=Input(O),
+        output=Output(
+            V, singular=false, complete=true,
+            exclusive=exclusive(base), reachable=reachable(base)),
+        pipe=SeqItemPipe{O,V}(2))
+    defs = Dict{Symbol, Query}()
+    for part in parts
+        if !isnull(part.tag)
+            defs[get(part.tag)] = part
+        end
+    end
+    if !isnull(up.tag)
+        defs[get(up.tag)] = up
+    end
+    return Query(
+        scope, input=input, output=output, pipe=pipe,
+        identity=identity, selector=identity, defs=defs)
+end
+
+
 function compile(state::Query, ::Type{Fn{:as}}, base::AbstractSyntax, ident::AbstractSyntax)
     (isa(ident, ApplySyntax) && isempty(ident.args)) || error("expected an identifier: $ident")
     return Query(compile(state, base), tag=NullableSymbol(ident.fn))
