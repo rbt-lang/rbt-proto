@@ -9,8 +9,11 @@ CSV_PATH = "Current_Employee_Names,_Salaries,_and_Position_Titles.csv"
 schema = Schema(
     Class(
         :department,
-        Arrow(:name, UTF8String, unique=true),
-        Arrow(:employee, singular=false, total=false, reachable=true, select=(:name, :surname)),
+        Arrow(:name, UTF8String, exclusive=true),
+        Arrow(
+            :employee,
+            singular=false, complete=false, exclusive=true, reachable=true,
+            select=(:name, :surname), inverse=:department),
         select=(:name,)),
     Class(
         :employee,

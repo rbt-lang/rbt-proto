@@ -47,13 +47,13 @@ immutable InputMode
     sees_past::Bool
     # Depends on the future input values.
     sees_future::Bool
+    # For parameterized queries.
+    params::Tuple
 end
 
-# Structure of composition.
+# Structure of composition (TODO).
 max(mode1::InputMode, mode2::InputMode) =
-    InputMode(
-        max(mode1.sees_past, mode2.sees_past),
-        max(mode1.sees_future, mode2.sees_future))
+    InputMode(false, false, ())
 
 # Structure and type of input.
 immutable Input
@@ -61,7 +61,7 @@ immutable Input
     mode::InputMode
 end
 
-Input(T::DataType) = Input(T, InputMode(false, false))
+Input(T::DataType) = Input(T, InputMode(false, false, ()))
 
 domain(input::Input) = input.domain
 mode(input::Input) = input.mode
@@ -71,9 +71,9 @@ immutable OutputMode
     # At most one output value for each input value.
     singular::Bool
     # At least one output for each input value.
-    total::Bool
+    complete::Bool
     # At most one input for each output value.
-    unique::Bool
+    exclusive::Bool
     # At least one input for each output value.
     reachable::Bool
 end
@@ -82,8 +82,8 @@ end
 max(mode1::OutputMode, mode2::OutputMode) =
     OutputMode(
         min(mode1.singular, mode2.singular),
-        min(mode1.total, mode2.total),
-        min(mode1.unique, mode2.unique),
+        min(mode1.complete, mode2.complete),
+        min(mode1.exclusive, mode2.exclusive),
         min(mode1.reachable, mode2.reachable))
 
 # Structure and type of output.
@@ -92,23 +92,23 @@ immutable Output
     mode::OutputMode
 end
 
-Output(T::DataType; singular=true, total=true, unique=false, reachable=false) =
-    Output(T, OutputMode(singular, total, unique, reachable))
+Output(T::DataType; singular=true, complete=true, exclusive=false, reachable=false) =
+    Output(T, OutputMode(singular, complete, exclusive, reachable))
 
 domain(output::Output) = output.domain
 mode(output::Output) = output.mode
 
 # Predicates.
 singular(output::Output) = output.mode.singular
-total(output::Output) = output.mode.total
-unique(output::Output) = output.mode.unique
+complete(output::Output) = output.mode.complete
+exclusive(output::Output) = output.mode.exclusive
 reachable(output::Output) = output.mode.reachable
 
 # How the value is represented in the pipeline.
 datatype(input::Input) = datatype(input.domain)
 datatype(output::Output) =
     let T = datatype(output.domain)
-        output.mode.singular && output.mode.total ? T :
+        output.mode.singular && output.mode.complete ? T :
         output.mode.singular ? Nullable{T} : Vector{T}
     end
 datatype(T::DataType) = T
@@ -181,7 +181,7 @@ const NullableSyntax = Nullable{AbstractSyntax}
 # Fresh state for the given scope.
 Query(
     scope::AbstractScope, domain::DataType=UnitType;
-    input=Input(domain), output=Output(domain, unique=true, reachable=true),
+    input=Input(domain), output=Output(domain, exclusive=true, reachable=true),
     pipe=ThisPipe{datatype(domain)}(),
     parts=NullableQueries(),
     identity=NullableQuery(),
@@ -236,8 +236,8 @@ comode(q::Query) = mode(q.output)
 
 # Output predicates.
 singular(q::Query) = singular(q.output)
-total(q::Query) = total(q.output)
-unique(q::Query) = unique(q.output)
+complete(q::Query) = complete(q.output)
+exclusive(q::Query) = exclusive(q.output)
 reachable(q::Query) = reachable(q.output)
 
 # Displays the query.

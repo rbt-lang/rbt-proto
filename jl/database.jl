@@ -9,18 +9,20 @@ show{name}(io::IO, e::Entity{name}) = print(io, "<", name, ":", e.id, ">")
 
 
 const SelectType = Union{Void, Symbol, Tuple{Vararg{Symbol}}}
+const InverseType = Union{Void, Symbol}
 
 immutable Arrow
     name::Symbol
     output::Output
     select::SelectType
+    inverse::InverseType
 end
 
 Arrow(
     name::Symbol, T::DataType;
-    singular=true, total=true, unique=false, reachable=false,
-    select=nothing) =
-    Arrow(name, Output(T, singular=singular, total=total, unique=unique, reachable=reachable), select)
+    singular=true, complete=true, exclusive=false, reachable=false,
+    select=nothing, inverse=nothing) =
+    Arrow(name, Output(T, OutputMode(singular, complete, exclusive, reachable)), select, inverse)
 Arrow(name::Symbol, targetname::Symbol; props...) =
     Arrow(name, Entity{target}; props...)
 Arrow(name::Symbol; props...) =
@@ -30,10 +32,15 @@ function show(io::IO, a::Arrow)
     T = domain(a.output)
     print(io, a.name, ": ", T <: Entity ? ucfirst(string(classname(T))) : T)
     features = []
-    singular(a.output) || push!(features, :plural)
-    total(a.output) || push!(features, :partial)
-    !unique(a.output) || push!(features, :unique)
-    !reachable(a.output) || push!(features, :reachable)
+    inv = false
+    if (a.output.domain <: Entity && a.inverse != nothing)
+        push!(features, "inverse of $(classname(a.output.domain)).$(a.inverse)")
+        inv = true
+    end
+    singular(a.output) != inv || push!(features, "plural")
+    complete(a.output) != inv || push!(features, "partial")
+    exclusive(a.output) == inv || push!(features, "exclusive")
+    reachable(a.output) == inv || push!(features, "reachable")
     if !isempty(features)
         print(io, " {", join(features, ", "), "}")
     end
