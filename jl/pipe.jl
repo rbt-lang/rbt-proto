@@ -208,6 +208,104 @@ execute{I}(pipe::SievePipe{I}, x::I) =
     execute(pipe.P, x)::Bool ? Nullable{I}(x) : Nullable{I}()
 
 
+immutable IsoFirstPipe{I,O} <: IsoPipe{I,O}
+    F::SeqPipe{I,O}
+end
+
+show(io::IO, pipe::IsoFirstPipe) = print(io, "IsoFirst(", pipe.F, ")")
+
+execute{I,O}(pipe::IsoFirstPipe{I,O}, x::I) =
+    (execute(pipe.F, x)::Vector{O})[1]::O
+
+
+immutable OptFirstPipe{I,O} <: OptPipe{I,O}
+    F::SeqPipe{I,O}
+end
+
+show(io::IO, pipe::OptFirstPipe) = print(io, "OptFirst(", pipe.F, ")")
+
+execute{I,O}(pipe::OptFirstPipe{I,O}, x::I) =
+    let ys = execute(pipe.F, x)::Vector{O}
+        isempty(ys) ? Nullable{O}() : Nullable{O}(ys[1])
+    end
+
+
+immutable SeqFirstPipe{I,O} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+    N::IsoPipe{I,Int}
+end
+
+show(io::IO, pipe::SeqFirstPipe) = print(io, "SeqFirst(", pipe.F, ", ", pipe.N, ")")
+
+execute{I,O}(pipe::SeqFirstPipe{I,O}, x::I) =
+    let ys = execute(pipe.F, x)::Vector{O}, n = execute(pipe.N, x)::Int
+        n >= 0 ? ys[1:n] : ys[1:end+n]
+    end
+
+
+immutable IsoLastPipe{I,O} <: IsoPipe{I,O}
+    F::SeqPipe{I,O}
+end
+
+show(io::IO, pipe::IsoLastPipe) = print(io, "IsoLast(", pipe.F, ")")
+
+execute{I,O}(pipe::IsoLastPipe{I,O}, x::I) =
+    (execute(pipe.F, x)::Vector{O})[end]::O
+
+
+immutable OptLastPipe{I,O} <: OptPipe{I,O}
+    F::SeqPipe{I,O}
+end
+
+show(io::IO, pipe::OptLastPipe) = print(io, "OptLast(", pipe.F, ")")
+
+execute{I,O}(pipe::OptLastPipe{I,O}, x::I) =
+    let ys = execute(pipe.F, x)::Vector{O}
+        isempty(ys) ? Nullable{O}() : Nullable{O}(ys[end])
+    end
+
+
+immutable SeqLastPipe{I,O} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+    N::IsoPipe{I,Int}
+end
+
+show(io::IO, pipe::SeqLastPipe) = print(io, "SeqLast(", pipe.F, ", ", pipe.N, ")")
+
+execute{I,O}(pipe::SeqLastPipe{I,O}, x::I) =
+    let ys = execute(pipe.F, x)::Vector{O},
+        n = execute(pipe.N, x)::Int
+        n >= 0 ? ys[end-n+1:end] : ys[1-n:end]
+    end
+
+
+immutable TakePipe{I,O} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+    N::IsoPipe{I,Int}
+    M::IsoPipe{I,Int}
+end
+
+show(io::IO, pipe::TakePipe) = print(io, "Take(", pipe.F, ", ", pipe.N, ", ", pipe.M, ")")
+
+execute{I,O}(pipe::TakePipe{I,O}, x::I) =
+    let ys = execute(pipe.F, x)::Vector{O},
+        take = execute(pipe.N, x)::Int,
+        skip = execute(pipe.M, x)::Int,
+        zs = (skip >= 0 ? ys[1+skip:end] : ys[end+skip+1:end])
+        take >= 0 ? zs[1:take] : zs[1:end+take]
+    end
+
+
+immutable ReversePipe{I,O} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+end
+
+show(io::IO, pipe::ReversePipe) = print(io, "Reverse(", pipe.F, ")")
+
+execute{I,O}(pipe::ReversePipe{I,O}, x::I) =
+    reverse(execute(pipe.F, x)::Vector{O})
+
+
 immutable SortPipe{I,O} <: SeqPipe{I,O}
     F::SeqPipe{I,O}
     order::Int

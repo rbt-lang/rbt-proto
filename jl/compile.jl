@@ -143,6 +143,99 @@ function compile(state::Query, ::Type{Fn{:filter}}, base::Query, op::Query)
 end
 
 
+function compile(state::Query, ::Type{Fn{:reverse}}, base::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    !singular(base) || error("expected a plural expression: $base")
+    I = domain(base)
+    O = codomain(base)
+    pipe = ReversePipe{I,O}(base.pipe)
+    return Query(base, pipe=pipe)
+end
+
+
+function compile(state::Query, ::Type{Fn{:first}}, base::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    !singular(base) || error("expected a plural expression: $base")
+    I = domain(base)
+    O = codomain(base)
+    output = Output(O, complete=complete(base), exclusive=exclusive(base))
+    pipe = complete(base) ? IsoFirstPipe{I,O}(base.pipe) : OptFirstPipe{I,O}(base.pipe)
+    return Query(base, output=output, pipe=pipe)
+end
+
+function compile(state::Query, ::Type{Fn{:first}}, base::Query, size::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    codomain(state) == domain(size) || error("incompatible operand: $size")
+    !singular(base) || error("expected a plural expression: $base")
+    singular(size) || error("expected a singular expression: $size")
+    complete(size) || error("expected a complete expression: $size")
+    codomain(size) == Int || error("expected an integer expression: $size")
+    I = domain(base)
+    O = codomain(base)
+    output = Output(O, singular=false, complete=false, exclusive=exclusive(base))
+    pipe = SeqFirstPipe{I,O}(base.pipe, size.pipe)
+    return Query(base, output=output, pipe=pipe)
+end
+
+
+function compile(state::Query, ::Type{Fn{:last}}, base::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    !singular(base) || error("expected a plural expression: $base")
+    I = domain(base)
+    O = codomain(base)
+    output = Output(O, complete=complete(base), exclusive=exclusive(base))
+    pipe = complete(base) ? IsoLastPipe{I,O}(base.pipe) : OptLastPipe{I,O}(base.pipe)
+    return Query(base, output=output, pipe=pipe)
+end
+
+function compile(state::Query, ::Type{Fn{:last}}, base::Query, size::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    codomain(state) == domain(size) || error("incompatible operand: $size")
+    !singular(base) || error("expected a plural expression: $base")
+    singular(size) || error("expected a singular expression: $size")
+    complete(size) || error("expected a complete expression: $size")
+    codomain(size) == Int || error("expected an integer expression: $size")
+    I = domain(base)
+    O = codomain(base)
+    output = Output(O, singular=false, complete=false, exclusive=exclusive(base))
+    pipe = SeqLastPipe{I,O}(base.pipe, size.pipe)
+    return Query(base, output=output, pipe=pipe)
+end
+
+
+function compile(state::Query, ::Type{Fn{:take}}, base::Query, size::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    codomain(state) == domain(size) || error("incompatible operand: $size")
+    !singular(base) || error("expected a plural expression: $base")
+    singular(size) || error("expected a singular expression: $size")
+    complete(size) || error("expected a complete expression: $size")
+    codomain(size) == Int || error("expected an integer expression: $size")
+    I = domain(base)
+    O = codomain(base)
+    output = Output(O, singular=false, complete=false, exclusive=exclusive(base))
+    pipe = TakePipe{I,O}(base.pipe, size.pipe, ConstPipe{I,Int}(0))
+    return Query(base, output=output, pipe=pipe)
+end
+
+
+function compile(state::Query, ::Type{Fn{:take}}, base::Query, size::Query, skip::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    codomain(state) == domain(size) || error("incompatible operand: $size")
+    !singular(base) || error("expected a plural expression: $base")
+    singular(size) || error("expected a singular expression: $size")
+    complete(size) || error("expected a complete expression: $size")
+    codomain(size) == Int || error("expected an integer expression: $size")
+    singular(skip) || error("expected a singular expression: $skip")
+    complete(skip) || error("expected a complete expression: $skip")
+    codomain(skip) == Int || error("expected an integer expression: $skip")
+    I = domain(base)
+    O = codomain(base)
+    output = Output(O, singular=false, complete=false, exclusive=exclusive(base))
+    pipe = TakePipe{I,O}(base.pipe, size.pipe, skip.pipe)
+    return Query(base, output=output, pipe=pipe)
+end
+
+
 function compile(state::Query, ::Type{Fn{:asc}}, op::Query)
     return Query(op, order=1)
 end
