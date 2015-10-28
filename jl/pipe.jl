@@ -296,6 +296,25 @@ execute{I,O}(pipe::TakePipe{I,O}, x::I) =
     end
 
 
+immutable GetPipe{I,O,K} <: OptPipe{I,O}
+    F::SeqPipe{I,O}
+    key::IsoPipe{O,K}
+    val::IsoPipe{I,K}
+end
+
+show(io::IO, pipe::GetPipe) = print(io, "Get(", pipe.F, ", ", pipe.key, ", ", pipe.val, ")")
+
+function execute{I,O,K}(pipe::GetPipe{I,O,K}, x::I)
+    z0 = execute(pipe.val, x)::K
+    for y in execute(pipe.F, x)::Vector{O}
+        if execute(pipe.key, y)::K == z0
+            return Nullable{O}(y)
+        end
+    end
+    return Nullable{O}()
+end
+
+
 immutable ReversePipe{I,O} <: SeqPipe{I,O}
     F::SeqPipe{I,O}
 end

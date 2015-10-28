@@ -44,6 +44,12 @@ setdb(citydb)
 @query(department:take(5,10))
 @query(department:reverse)
 
+@query(department:select(id,name))
+@query(department:get(5))
+@query(department:get(-1))
+@query(department[5]:select(id,name,count(employee)))
+@query(department[5].employee)
+
 @query(department.name:sort)
 @query(department:desc:sort:select(id,name))
 @query(employee:sort(salary))

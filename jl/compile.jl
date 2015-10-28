@@ -221,6 +221,7 @@ end
 function compile(state::Query, ::Type{Fn{:take}}, base::Query, size::Query, skip::Query)
     codomain(state) == domain(base) || error("incompatible operand: $base")
     codomain(state) == domain(size) || error("incompatible operand: $size")
+    codomain(state) == domain(skip) || error("incompatible operand: $skip")
     !singular(base) || error("expected a plural expression: $base")
     singular(size) || error("expected a singular expression: $size")
     complete(size) || error("expected a complete expression: $size")
@@ -232,6 +233,25 @@ function compile(state::Query, ::Type{Fn{:take}}, base::Query, size::Query, skip
     O = codomain(base)
     output = Output(O, singular=false, complete=false, exclusive=exclusive(base))
     pipe = TakePipe{I,O}(base.pipe, size.pipe, skip.pipe)
+    return Query(base, output=output, pipe=pipe)
+end
+
+
+function compile(state::Query, ::Type{Fn{:get}}, base::Query, val::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    codomain(state) == domain(val) || error("incompatible operand: $val")
+    !singular(base) || error("expected a plural expression: $base")
+    exclusive(base) || error("expected an exclusive expression: $base")
+    !isnull(base.identity) || error("expected an expression with identity: $base")
+    singular(val) || error("expected a singular expression: $val")
+    complete(val) || error("expected a complete expression: $val")
+    codomain(val) == codomain(get(base.identity)) ||
+        error("expected an expression of type $(codomain(get(base.identity))): $size")
+    I = domain(base)
+    O = codomain(base)
+    K = codomain(val)
+    output = Output(O, complete=false, exclusive=exclusive(base))
+    pipe = GetPipe{I,O,K}(base.pipe, get(base.identity).pipe, val.pipe)
     return Query(base, output=output, pipe=pipe)
 end
 
