@@ -188,6 +188,34 @@ execute{I}(pipe::OptMaxPipe{I}, x::I) =
     end
 
 
+immutable MaxByPipe{I,O} <: IsoPipe{I,O}
+    F::SeqPipe{I,O}
+    val::IsoPipe{O,Int}
+end
+
+show(io::IO, pipe::MaxByPipe) = print(io, "MaxBy(", pipe.F, ", ", pipe.val, ")")
+
+execute{I,O}(pipe::MaxByPipe{I,O}, x::I) =
+    let ys = execute(pipe.F, x)::Vector{O},
+        vs = [execute(pipe.val, y)::Int for y in ys]
+        ys[indmax(vs)]
+    end
+
+
+immutable OptMaxByPipe{I,O} <: OptPipe{I,O}
+    F::SeqPipe{I,O}
+    val::IsoPipe{O,Int}
+end
+
+show(io::IO, pipe::OptMaxByPipe) = print(io, "OptMaxBy(", pipe.F, ", ", pipe.val, ")")
+
+execute{I,O}(pipe::OptMaxByPipe{I,O}, x::I) =
+    let ys = execute(pipe.F, x)::Vector{O},
+        vs = [execute(pipe.val, y)::Int for y in ys]
+        isempty(vs) ? Nullable{O}() : Nullable{O}(ys[indmax(vs)])
+    end
+
+
 immutable TuplePipe{I,O} <: IsoPipe{I,O}
     Fs::Vector{AbstractPipe{I}}
 end

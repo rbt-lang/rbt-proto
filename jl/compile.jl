@@ -100,6 +100,29 @@ function compile(state::Query, ::Type{Fn{:max}}, op::Query)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
+compile(state::Query, fn::Type{Fn{:max}}, base::AbstractSyntax, op::AbstractSyntax) =
+    let base = compile(state, base)
+        compile(state, fn, base, compile(base, op))
+    end
+
+function compile(state::Query, ::Type{Fn{:max}}, base::Query, op::Query)
+    codomain(state) == domain(base) || error("incompatible operand: $base")
+    !singular(base) || error("expected a plural expression: $base")
+    codomain(base) == domain(op) || error("incompatible operand: $op")
+    singular(op) || error("expected a singular expression: $op")
+    complete(op) || error("expected a complete expression: $op")
+    codomain(op) == Int || error("expected an integer expression: $op")
+    I = domain(base)
+    O = codomain(base)
+    output = Output(O, singular=true, complete=complete(base), exclusive=exclusive(base))
+    if complete(base)
+        pipe = MaxByPipe{I,O}(base.pipe, op.pipe)
+    else
+        pipe = OptMaxByPipe{I,O}(base.pipe, op.pipe)
+    end
+    return Query(base, output=output, pipe=pipe)
+end
+
 
 compile(state::Query, fn::Type{Fn{:select}}, base::AbstractSyntax, ops::AbstractSyntax...) =
     let base = compile(state, base)
