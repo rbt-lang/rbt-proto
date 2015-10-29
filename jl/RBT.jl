@@ -20,6 +20,12 @@ include("pipe.jl")
 include("scope.jl")
 include("compile.jl")
 
+try
+    using DataFrames
+    include("df.jl")
+catch ArgumentError
+end
+
 
 global DB = Database(Schema(), Instance(Dict(), Dict()))
 

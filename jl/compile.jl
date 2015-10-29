@@ -493,6 +493,7 @@ function compile(state::Query, fn::Type{Fn{:json}}, base::Query)
         selector = Query(get(base.selector), output=output, pipe=pipe)
         base = Query(base, selector=selector)
     else
+        base = select(base)
         if singular(base) && !complete(base)
             I = domain(base)
             O = codomain(base)

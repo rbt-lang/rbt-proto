@@ -118,7 +118,7 @@ function mkcomposite(state::Query, name::Symbol, field)
     cap = getfield(op, field)
     if !isnull(cap)
         cap = get(cap)
-        op = Query(op >> cap, parts=op.parts)
+        op = Query(op >> cap, tag=op.tag, parts=op.parts)
     end
     return op
 end

@@ -81,4 +81,6 @@ setdb(citydb)
 
 @query(department:json)
 @query(department:select(name,head => employee:sort(salary:desc):first):json)
+@query(employee:dataframe)
+@query(department:select(name,size => count(employee), max_salary => max(employee.salary)):dataframe)
 
