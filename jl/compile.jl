@@ -473,6 +473,40 @@ end
 @compilebinaryop(:(/), DivPipe, Int, Int, Int)
 
 
+function compile(state::Query, fn::Type{Fn{:json}}, base::Query)
+    if !isnull(base.selector) && !isnull(get(base.selector).parts)
+        parts = ()
+        fields = ()
+        for part in get(get(base.selector).parts)
+            part = compile(base, fn, part)
+            if !isnull(part.tag)
+                field = isnull(part.selector) ? part.pipe : part.pipe >> get(part.selector).pipe
+                if singular(part) && !complete(part)
+                    field = OptToVoidPipe(field)
+                end
+                fields = (fields..., (get(part.tag) => field))
+            end
+        end
+        I = codomain(base)
+        pipe = DictPipe{I}(fields)
+        output = Output(Dict)
+        selector = Query(get(base.selector), output=output, pipe=pipe)
+        base = Query(base, selector=selector)
+    else
+        if singular(base) && !complete(base)
+            I = domain(base)
+            O = codomain(base)
+            # FIXME:
+            #output = Output(Union{O,Void}, exclusive=exclusive(base), reachable=reachable(base))
+            output = Output(O, exclusive=exclusive(base), reachable=reachable(base))
+            pipe = OptToVoidPipe{I,O}(base.pipe)
+            base = Query(base, output=output, pipe=pipe)
+        end
+    end
+    return base
+end
+
+
 function select(q::Query)
     return Query(isnull(q.selector) ? q : q >> get(q.selector), src=q.src, origin=q)
 end

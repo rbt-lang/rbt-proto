@@ -239,7 +239,7 @@ show(io::IO, pipe::SeqFirstPipe) = print(io, "SeqFirst(", pipe.F, ", ", pipe.N, 
 
 execute{I,O}(pipe::SeqFirstPipe{I,O}, x::I) =
     let ys = execute(pipe.F, x)::Vector{O}, n = execute(pipe.N, x)::Int
-        n >= 0 ? ys[1:n] : ys[1:end+n]
+        n >= 0 ? ys[1:min(end,n)] : ys[1:end+n]
     end
 
 
@@ -275,7 +275,7 @@ show(io::IO, pipe::SeqLastPipe) = print(io, "SeqLast(", pipe.F, ", ", pipe.N, ")
 execute{I,O}(pipe::SeqLastPipe{I,O}, x::I) =
     let ys = execute(pipe.F, x)::Vector{O},
         n = execute(pipe.N, x)::Int
-        n >= 0 ? ys[end-n+1:end] : ys[1-n:end]
+        n >= 0 ? ys[max(1,end-n+1):end] : ys[1-n:end]
     end
 
 
@@ -291,8 +291,8 @@ execute{I,O}(pipe::TakePipe{I,O}, x::I) =
     let ys = execute(pipe.F, x)::Vector{O},
         take = execute(pipe.N, x)::Int,
         skip = execute(pipe.M, x)::Int,
-        zs = (skip >= 0 ? ys[1+skip:end] : ys[end+skip+1:end])
-        take >= 0 ? zs[1:take] : zs[1:end+take]
+        zs = (skip >= 0 ? ys[1+skip:end] : ys[max(1,end+skip+1):end])
+        take >= 0 ? zs[1:min(end,take)] : zs[1:end+take]
     end
 
 
@@ -524,4 +524,33 @@ end
 @defbinarypipe(SubPipe, (-), Int, Int, Int)
 @defbinarypipe(MulPipe, (*), Int, Int, Int)
 @defbinarypipe(DivPipe, div, Int, Int, Int)
+
+
+immutable OptToVoidPipe{I,O} <: IsoPipe{I,Union{O,Void}}
+    F::OptPipe{I,O}
+end
+
+show(io::IO, pipe::OptToVoidPipe) =
+    print(io, "OptToVoid(<", pipe.F, ">)")
+
+execute{I,O}(pipe::OptToVoidPipe{I,O}, x::I) =
+    let y = execute(pipe.F, x)::Nullable{O}
+        isnull(y) ? nothing : get(y)
+    end
+
+
+immutable DictPipe{I} <: IsoPipe{I,Dict}
+    fields::Tuple{Vararg{Pair{Symbol}}}
+end
+
+show(io::IO, pipe::DictPipe) =
+    print(io, "DictPipe(", join(["$name => $F" for (name, F) in pipe.fields], ", "), ")")
+
+execute{I}(pipe::DictPipe, x::I) =
+    let d = Dict{Any,Any}()
+        for (name, F) in pipe.fields
+            d[string(name)] = execute(F, x)
+        end
+        d
+    end
 

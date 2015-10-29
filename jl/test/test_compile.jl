@@ -79,3 +79,6 @@ setdb(citydb)
     :select(name, max(employee.salary))
     :sort(max(employee.salary):desc))
 
+@query(department:json)
+@query(department:select(name,head => employee:sort(salary:desc):first):json)
+
