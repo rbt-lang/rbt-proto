@@ -10,7 +10,7 @@ export
     query,
     @query
 
-import Base: show, call, convert, max, >>
+import Base: show, call, convert, max, *, >>
 
 
 include("abstract.jl")

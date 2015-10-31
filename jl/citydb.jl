@@ -1,4 +1,8 @@
 
+if !any([dirname(path) == dirname(@__FILE__) for path in LOAD_PATH])
+    push!(LOAD_PATH, dirname(@__FILE__))
+end
+
 using RBT: Entity, Database, Schema, Class, Arrow, Instance
 
 

@@ -156,6 +156,95 @@ execute{I,T,O}(pipe::SeqComposePipe{I,T,O}, x::I) =
     SeqComposePipe{I,T,O}(F, G)
 
 
+immutable AttachPipe{I,O} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+    P::IsoPipe{Tuple{I,O},Bool}
+end
+
+show(io::IO, pipe::AttachPipe) = print(io, "Attach(", pipe.F, ", ", pipe.P, ")")
+
+function execute{I,O}(pipe::AttachPipe{I,O}, x::I)
+    ys = O[]
+    for y in execute(pipe.F, x)::Vector{O}
+        if execute(pipe.P, (x,y))::Bool
+            push!(ys, y)
+        end
+    end
+    return ys
+end
+
+
+immutable IsoProductPipe{I,O1,O2} <: IsoPipe{I,Tuple{O1,O2}}
+    F::IsoPipe{I,O1}
+    G::IsoPipe{I,O2}
+end
+
+show(io::IO, pipe::IsoProductPipe) = print(io, "(", pipe.F, " * ", pipe.G, ")")
+
+execute{I,O1,O2}(pipe::IsoProductPipe{I,O1,O2}, x::I) =
+    (execute(pipe.F, x)::O1, execute(pipe.G, x)::O2)::Tuple{O1,O2}
+
+
+immutable OptProductPipe{I,O1,O2} <: OptPipe{I,Tuple{O1,O2}}
+    F::OptPipe{I,O1}
+    G::OptPipe{I,O2}
+end
+
+show(io::IO, pipe::OptProductPipe) = print(io, "(", pipe.F, " * ", pipe.G, ")")
+
+execute{I,O1,O2}(pipe::OptProductPipe{I,O1,O2}, x::I) =
+    let y1 = pipe.F(x)::Nullable{O1}
+        if !isnull(y1)
+            let y2 = pipe.G(x)::Nullable{O2}
+                if !isnull(y2)
+                    return Nullable{Tuple{O1,O2}}((get(y1), get(y2)))
+                end
+            end
+        end
+        return Nullable{Tuple{O1,O2}}()
+    end
+
+
+immutable SeqProductPipe{I,O1,O2} <: SeqPipe{I,Tuple{O1,O2}}
+    F::SeqPipe{I,O1}
+    G::SeqPipe{I,O2}
+end
+
+show(io::IO, pipe::SeqProductPipe) = print(io, "(", pipe.F, " * ", pipe.G, ")")
+
+execute{I,O1,O2}(pipe::SeqProductPipe{I,O1,O2}, x::I) =
+    let y1s = execute(pipe.F, x)::Vector{O1},
+        y2s = execute(pipe.G, x)::Vector{O2},
+        ys = Vector{Tuple{O1,O2}}()
+        for y1 in y1s
+            for y2 in y2s
+                push!(ys, (y1, y2))
+            end
+        end
+        ys
+    end
+
+
+*{I,O1,O2}(F::IsoPipe{I,O1}, G::IsoPipe{I,O2}) =
+    IsoProductPipe{I,O1,O2}(F, G)
+*{I,O1,O2}(F::IsoPipe{I,O1}, G::OptPipe{I,O2}) =
+    OptProductPipe{I,O1,O2}(IsoToOptPipe{I,O1}(F), G)
+*{I,O1,O2}(F::IsoPipe{I,O1}, G::SeqPipe{I,O2}) =
+    SeqProductPipe{I,O1,O2}(IsoToSeqPipe{I,O1}(F), G)
+*{I,O1,O2}(F::OptPipe{I,O1}, G::IsoPipe{I,O2}) =
+    OptProductPipe{I,O1,O2}(F, IsoToOptPipe{I,O2}(G))
+*{I,O1,O2}(F::OptPipe{I,O1}, G::OptPipe{I,O2}) =
+    OptProductPipe{I,O1,O2}(F, G)
+*{I,O1,O2}(F::OptPipe{I,O1}, G::SeqPipe{I,O2}) =
+    SeqProductPipe{I,O1,O2}(OptToSeqPipe{I,O1}(F), G)
+*{I,O1,O2}(F::SeqPipe{I,O1}, G::IsoPipe{I,O2}) =
+    SeqProductPipe{I,O1,O2}(F, IsoToSeqPipe{I,O2}(G))
+*{I,O1,O2}(F::SeqPipe{I,O1}, G::OptPipe{I,O2}) =
+    SeqProductPipe{I,O1,O2}(F, OptToSeqPipe{I,O2}(G))
+*{I,O1,O2}(F::SeqPipe{I,O1}, G::SeqPipe{I,O2}) =
+    SeqProductPipe{I,O1,O2}(F, G)
+
+
 immutable CountPipe{I,O} <: IsoPipe{I,Int}
     F::SeqPipe{I,O}
 end
@@ -515,6 +604,95 @@ execute{I,O}(pipe::SeqItemPipe{I,O}, x::I) =
     x[pipe.index]::Vector{O}
 
 
+immutable IsoNotPipe{I} <: IsoPipe{I,Bool}
+    F::IsoPipe{I,Bool}
+end
+
+show(io::IO, pipe::IsoNotPipe) = print(io, "(! ", pipe.F, ")")
+
+execute{I}(pipe::IsoNotPipe{I}, x::I) = !(execute(pipe.F, x)::Bool)
+
+
+immutable OptNotPipe{I} <: OptPipe{I,Bool}
+    F::OptPipe{I,Bool}
+end
+
+show(io::IO, pipe::OptNotPipe) = print(io, "(! ", pipe.F, ")")
+
+execute{I}(pipe::OptNotPipe{I}, x::I) =
+    let y = execute(pipe.F, x)::Nullable{Bool}
+        !isnull(y) ? Nullable{Bool}(!get(y)) : Nullable{Bool}()
+    end
+
+
+immutable IsoAndPipe{I} <: IsoPipe{I,Bool}
+    F::IsoPipe{I,Bool}
+    G::IsoPipe{I,Bool}
+end
+
+show(io::IO, pipe::IsoAndPipe) = print(io, "(", pipe.F, " & ", pipe.G, ")")
+
+execute{I}(pipe::IsoAndPipe{I}, x::I) =
+    (execute(pipe.F, x)::Bool && execute(pipe.G, x)::Bool)
+
+
+immutable OptAndPipe{I} <: OptPipe{I,Bool}
+    F::OptPipe{I,Bool}
+    G::OptPipe{I,Bool}
+end
+
+show(io::IO, pipe::OptAndPipe) = print(io, "(", pipe.F, " & ", pipe.G, ")")
+
+execute{I}(pipe::OptAndPipe{I}, x::I) =
+    let y1 = execute(pipe.F, x)::Nullable{Bool}
+        if !isnull(y1)
+            if get(y1)
+                return execute(pipe.G, x)::Nullable{Bool}
+            end
+        else
+            y2 = execute(pipe.G, x)::Nullable{Bool}
+            if isnull(y2) || get(y2)
+                return Nullable{Bool}()
+            end
+        end
+        return Nullable{Bool}(false)
+    end
+
+
+immutable IsoOrPipe{I} <: IsoPipe{I,Bool}
+    F::IsoPipe{I,Bool}
+    G::IsoPipe{I,Bool}
+end
+
+show(io::IO, pipe::IsoOrPipe) = print(io, "(", pipe.F, " | ", pipe.G, ")")
+
+execute{I}(pipe::IsoOrPipe{I}, x::I) =
+    (execute(pipe.F, x)::Bool || execute(pipe.G, x)::Bool)
+
+
+immutable OptOrPipe{I} <: OptPipe{I,Bool}
+    F::OptPipe{I,Bool}
+    G::OptPipe{I,Bool}
+end
+
+show(io::IO, pipe::OptOrPipe) = print(io, "(", pipe.F, " | ", pipe.G, ")")
+
+execute{I}(pipe::OptOrPipe{I}, x::I) =
+    let y1 = execute(pipe.F, x)::Nullable{Bool}
+        if !isnull(y1)
+            if !get(y1)
+                return execute(pipe.G, x)::Nullable{Bool}
+            end
+        else
+            y2 = execute(pipe.G, x)::Nullable{Bool}
+            if isnull(y2) || !get(y2)
+                return Nullable{Bool}()
+            end
+        end
+        return Nullable{Bool}(true)
+    end
+
+
 macro defunarypipe(Name, op, T1, T2)
     return esc(quote
         immutable $Name{I} <: IsoPipe{I,$T2}
@@ -536,7 +714,6 @@ macro defbinarypipe(Name, op, T1, T2, T3)
     end)
 end
 
-@defunarypipe(NotPipe, (!), Bool, Bool)
 @defunarypipe(PosPipe, (+), Int, Int)
 @defunarypipe(NegPipe, (-), Int, Int)
 
@@ -546,8 +723,6 @@ end
 @defbinarypipe(NEPipe, (!=), Int, Int, Bool)
 @defbinarypipe(GEPipe, (>=), Int, Int, Bool)
 @defbinarypipe(GTPipe, (>), Int, Int, Bool)
-@defbinarypipe(AndPipe, (&), Bool, Bool, Bool)
-@defbinarypipe(OrPipe, (|), Bool, Bool, Bool)
 @defbinarypipe(AddPipe, (+), Int, Int, Int)
 @defbinarypipe(SubPipe, (-), Int, Int, Int)
 @defbinarypipe(MulPipe, (*), Int, Int, Int)

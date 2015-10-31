@@ -71,6 +71,17 @@ function compile(state::Query, ::Type{Fn{:this}})
 end
 
 
+function compile(state::Query, ::Type{Fn{:attach}}, base::AbstractSyntax)
+    scope = root(state)
+    I = codomain(state)
+    input = Input(I)
+    output = Output(UnitType, reachable=true)
+    pipe = ConstPipe{I, UnitType}(())
+    state = Query(scope, input=input, output=output, pipe=pipe)
+    return state >> compile(state, base)
+end
+
+
 function compile(state::Query, ::Type{Fn{:count}}, op::Query)
     codomain(state) == domain(op) || error("incompatible operand: $op")
     !singular(op) || error("expected a plural expression: $op")
@@ -440,18 +451,66 @@ function compile(state::Query, ::Type{Fn{:define}}, base::Query, op::Query)
 end
 
 
+function compile(state::Query, ::Type{Fn{:!}}, op::Query)
+    codomain(state) == domain(op) || error("incompatible operand: $op")
+    singular(op) || error("expected a singular expression: $op")
+    codomain(op) == Bool || error("expected an expression of type Bool: $(codomain(op))")
+    scope = empty(state)
+    I = codomain(state)
+    input = Input(I)
+    output = Output(Bool, complete=complete(op))
+    pipe = complete(op) ? IsoNotPipe{I}(op.pipe) : OptNotPipe{I}(op.pipe)
+    return Query(scope, input=input, output=output, pipe=pipe)
+end
+
+
+function compile(state::Query, ::Type{Fn{:&}}, op1::Query, op2::Query)
+    codomain(state) == domain(op1) || error("incompatible operand: $op1")
+    singular(op1) || error("expected a singular expression: $op1")
+    codomain(op1) == Bool || error("expected an expression of type Bool: $(codomain(op1))")
+    codomain(state) == domain(op2) || error("incompatible operand: $op2")
+    singular(op2) || error("expected a singular expression: $op2")
+    codomain(op2) == Bool || error("expected an expression of type Bool: $(codomain(op2))")
+    scope = empty(state)
+    I = codomain(state)
+    input = Input(I)
+    output = Output(Bool, complete=complete(op1) && complete(op2))
+    pipe = complete(output) ?
+        IsoAndPipe{I}(op1.pipe, op2.pipe) : OptAndPipe{I}(op1.pipe, op2.pipe)
+    return Query(scope, input=input, output=output, pipe=pipe)
+end
+
+
+function compile(state::Query, ::Type{Fn{:|}}, op1::Query, op2::Query)
+    codomain(state) == domain(op1) || error("incompatible operand: $op1")
+    singular(op1) || error("expected a singular expression: $op1")
+    codomain(op1) == Bool || error("expected an expression of type Bool: $(codomain(op1))")
+    codomain(state) == domain(op2) || error("incompatible operand: $op2")
+    singular(op2) || error("expected a singular expression: $op2")
+    codomain(op2) == Bool || error("expected an expression of type Bool: $(codomain(op2))")
+    scope = empty(state)
+    I = codomain(state)
+    input = Input(I)
+    output = Output(Bool)
+    output = Output(Bool, complete=complete(op1) && complete(op2))
+    pipe = complete(output) ?
+        IsoOrPipe{I}(op1.pipe, op2.pipe) : OptOrPipe{I}(op1.pipe, op2.pipe)
+    return Query(scope, input=input, output=output, pipe=pipe)
+end
+
+
 macro compileunaryop(fn, Pipe, T1, T2)
     return esc(quote
         function compile(state::Query, ::Type{Fn{$fn}}, op::Query)
             codomain(state) == domain(op) || error("incompatible operand: $op")
-            singular(op) || error("expected a singular expression: $op")
-            complete(op) || error("expected a complete expression: $op")
             codomain(op) == $T1 || error("expected an expression of type $($T1): $(codomain(op))")
             scope = empty(state)
             I = codomain(state)
             input = Input(I)
-            output = Output($T2)
-            pipe = $Pipe{I}(op.pipe)
+            output = Output($T2, comode(op))
+            pipe = singular(output) && complete(output) ?
+                $Pipe{I}(op.pipe) :
+                op.pipe >> $Pipe{$T1}(ThisPipe{$T1})
             return Query(scope, input=input, output=output, pipe=pipe)
         end
     end)
@@ -461,24 +520,23 @@ macro compilebinaryop(fn, Pipe, T1, T2, T3)
     return esc(quote
         function compile(state::Query, ::Type{Fn{$fn}}, op1::Query, op2::Query)
             codomain(state) == domain(op1) || error("incompatible operand: $op1")
-            singular(op1) || error("expected a singular expression: $op1")
-            complete(op1) || error("expected a complete expression: $op1")
             codomain(op1) == $T1 || error("expected an expression of type $($T1): $(codomain(op1))")
             codomain(state) == domain(op2) || error("incompatible operand: $op2")
-            singular(op2) || error("expected a singular expression: $op2")
-            complete(op2) || error("expected a complete expression: $op2")
             codomain(op2) == $T2 || error("expected an expression of type $($T2): $(codomain(op2))")
+            (singular(op1) || singular(op2)) || error("expected singular expressions: $op1 or $op2")
+            T = Tuple{$T1,$T2}
             scope = empty(state)
             I = codomain(state)
             input = Input(I)
-            output = Output($T3)
-            pipe = $Pipe{I}(op1.pipe, op2.pipe)
+            output = Output($T3, max(comode(op1), comode(op2)))
+            pipe = singular(output) && complete(output) ?
+                $Pipe{I}(op1.pipe, op2.pipe) :
+                (op1.pipe * op2.pipe) >> $Pipe{Tuple{$T1,$T2}}(IsoItemPipe{T,$T1}(1), IsoItemPipe{T,$T2}(2))
             return Query(scope, input=input, output=output, pipe=pipe)
         end
     end)
 end
 
-@compileunaryop(:(!), NotPipe, Bool, Bool)
 @compileunaryop(:(+), PosPipe, Int, Int)
 @compileunaryop(:(-), NegPipe, Int, Int)
 
@@ -488,8 +546,6 @@ end
 @compilebinaryop(:(!=), NEPipe, Int, Int, Bool)
 @compilebinaryop(:(>=), GEPipe, Int, Int, Bool)
 @compilebinaryop(:(>), GTPipe, Int, Int, Bool)
-@compilebinaryop(:(&), AndPipe, Bool, Bool, Bool)
-@compilebinaryop(:(|), OrPipe, Bool, Bool, Bool)
 @compilebinaryop(:(+), AddPipe, Int, Int, Int)
 @compilebinaryop(:(-), SubPipe, Int, Int, Int)
 @compilebinaryop(:(*), MulPipe, Int, Int, Int)

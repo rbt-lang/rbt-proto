@@ -39,7 +39,7 @@ syntax(syntax::AbstractSyntax) = syntax
 # TODO: interface for a pointer inside a syntax tree (for error reporting).
 
 # The unit type.
-const UnitType = Tuple{}
+typealias UnitType Tuple{}
 
 # Structure of input.
 immutable InputMode
@@ -172,11 +172,11 @@ immutable Query
 end
 
 # Type aliases.
-const Queries = Tuple{Vararg{Query}}
-const NullableQuery = Nullable{Query}
-const NullableQueries = Nullable{Queries}
-const NullableSymbol = Nullable{Symbol}
-const NullableSyntax = Nullable{AbstractSyntax}
+typealias Queries Tuple{Vararg{Query}}
+typealias NullableQuery Nullable{Query}
+typealias NullableQueries Nullable{Queries}
+typealias NullableSymbol Nullable{Symbol}
+typealias NullableSyntax Nullable{AbstractSyntax}
 
 # Fresh state for the given scope.
 Query(

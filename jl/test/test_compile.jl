@@ -85,3 +85,5 @@ setdb(citydb)
 @query(employee:dataframe)
 @query(department:select(name,size => count(employee), max_salary => max(employee.salary)):dataframe)
 
+@query((max(employee.salary) > 100000) & (max(employee.salary) < 300000))
+
