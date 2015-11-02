@@ -26,6 +26,9 @@ setdb(citydb)
 @query(department:select(name,count(employee),max(employee.salary)))
 @query(employee:select(name,surname,position,department))
 
+@query(record(count(employee), max(employee.salary), employee))
+@query(department.record(name, count(employee), max(employee.salary), employee))
+
 @query(employee:filter(salary>200000))
 @query(employee:select(name,surname,position):filter(salary>200000))
 @query(department:filter(count(employee)>1000).name)
@@ -79,6 +82,10 @@ setdb(citydb)
     :filter(count(employee)>=10)
     :select(name, max(employee.salary))
     :sort(max(employee.salary):desc))
+@query(
+    employee
+    :by(department, salary_bracket => salary/10000*10000)
+    :select(department, salary_bracket, salary_bracket+9999, count(employee)))
 
 @query(department:json)
 @query(department:select(name,head => employee:max(salary)):json)
