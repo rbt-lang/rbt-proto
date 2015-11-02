@@ -1,7 +1,49 @@
 
-function compile(state::Query, syntax::LiteralSyntax{Void})
-    scope = empty(state)
-    I = codomain(state)
+
+reqcomposable(f, gs...) =
+    for g in gs
+        codomain(f) == domain(g) || error("expected composable expressions: $f and $g")
+    end
+
+reqsingular(fs...) =
+    for f in fs
+        singular(f) || error("expected a singular expression: $f")
+    end
+
+reqplural(fs...) =
+    for f in fs
+        !singular(f) || error("expected a plural expression: $f")
+    end
+
+reqcomplete(fs...) =
+    for f in fs
+        complete(f) || error("expected a complete expression: $f")
+    end
+
+reqexclusive(fs...) =
+    for f in fs
+        exclusive(f) || error("expected an exclusive expression: $f")
+    end
+
+reqcodomain(dom, fs...) =
+    for f in fs
+        codomain(f) <: dom || error("expected an expression of type $dom: $f")
+    end
+
+reqidentity(fs...) =
+    for f in fs
+        !isnull(f.identity) || error("expected an expression with identity: $f")
+    end
+
+reqtag(fs...) =
+    for f in fs
+        !isnull(f.tag) || error("expected a tagged expression: $f")
+    end
+
+
+function compile(base::Query, syntax::LiteralSyntax{Void})
+    scope = empty(base)
+    I = codomain(base)
     input = Input(I)
     output = Output(Void, complete=false)
     pipe = NullPipe{I, Void}()
@@ -10,9 +52,9 @@ function compile(state::Query, syntax::LiteralSyntax{Void})
 end
 
 
-function compile{T}(state::Query, syntax::LiteralSyntax{T})
-    scope = empty(state)
-    I = codomain(state)
+function compile{T}(base::Query, syntax::LiteralSyntax{T})
+    scope = empty(base)
+    I = codomain(base)
     O = T
     input = Input(I)
     output = Output(O)
@@ -22,20 +64,20 @@ function compile{T}(state::Query, syntax::LiteralSyntax{T})
 end
 
 
-function compile(state::Query, syntax::ApplySyntax)
+function compile(base::Query, syntax::ApplySyntax)
     src = NullableSyntax(syntax)
     if isempty(syntax.args)
-        query = lookup(state, syntax.fn)
+        query = lookup(base, syntax.fn)
         if !isnull(query)
             return Query(get(query), src=src)
         end
     end
-    return Query(compile(state, Fn{syntax.fn}, syntax.args...), src=src)
+    return Query(compile(Fn{syntax.fn}, base, syntax.args...), src=src)
 end
 
 
-function compile(state::Query, syntax::ComposeSyntax)
-    f = compile(state, syntax.f)
+function compile(base::Query, syntax::ComposeSyntax)
+    f = compile(base, syntax.f)
     g = compile(f, syntax.g)
     src = NullableSyntax(syntax)
     return Query(f >> g, src=src)
@@ -43,12 +85,12 @@ end
 
 
 function >>(f::Query, g::Query)
-    codomain(f) == domain(g) || error("incompatible operands: $f and $g")
+    reqcomposable(f, g)
     I = domain(f)
     O = codomain(g)
-    M = max(comode(f), comode(g))
+    OM = max(comode(f), comode(g))
     input = Input(I)
-    output = Output(O, M)
+    output = Output(O, OM)
     pipe = f.pipe >> g.pipe
     src = g.src
     if !isnull(f.src) && !isnull(g.src)
@@ -58,327 +100,268 @@ function >>(f::Query, g::Query)
 end
 
 
-compile{name}(state::Query, fn::Type{Fn{name}}, arg1::AbstractSyntax, args::AbstractSyntax...) =
-    compile(state, fn, compile(state, arg1), [compile(state, arg) for arg in args]...)
+compile{name}(fn::Type{Fn{name}}, base::Query, arg1::AbstractSyntax, args::AbstractSyntax...) =
+    compile(fn, base, compile(base, arg1), [compile(base, arg) for arg in args]...)
 
 
-function compile(state::Query, ::Type{Fn{:this}})
-    T = codomain(state)
+function compile(::Type{Fn{:this}}, base::Query)
+    T = codomain(base)
     input = Input(T)
     output = Output(T, exclusive=true, reachable=true)
     pipe = ThisPipe{T}()
-    return Query(state, input=input, output=output, pipe=pipe)
+    return Query(base, input=input, output=output, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:attach}}, base::AbstractSyntax)
-    scope = root(state)
-    I = codomain(state)
+function compile(::Type{Fn{:unlink}}, base::Query, arg::AbstractSyntax)
+    scope = root(base)
+    I = codomain(base)
     input = Input(I)
     output = Output(UnitType, reachable=true)
     pipe = ConstPipe{I, UnitType}(())
-    state = Query(scope, input=input, output=output, pipe=pipe)
-    return state >> compile(state, base)
+    root_base = Query(scope, input=input, output=output, pipe=pipe)
+    return root_base >> compile(root_base, arg)
 end
 
 
-function compile(state::Query, ::Type{Fn{:count}}, op::Query)
-    codomain(state) == domain(op) || error("incompatible operand: $op")
-    !singular(op) || error("expected a plural expression: $op")
-    scope = empty(state)
-    I = domain(op)
-    T = codomain(op)
+function compile(::Type{Fn{:count}}, base::Query, flow::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    scope = empty(base)
+    I = domain(flow)
+    T = codomain(flow)
     input = Input(I)
     output = Output(Int)
-    pipe = CountPipe{I, T}(op.pipe)
+    pipe = CountPipe{I, T}(flow.pipe)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:max}}, op::Query)
-    codomain(state) == domain(op) || error("incompatible operand: $op")
-    !singular(op) || error("expected a plural expression: $op")
-    codomain(op) == Int || error("expected an integer expression: $op")
-    scope = empty(state)
-    I = domain(op)
+function compile(::Type{Fn{:max}}, base::Query, flow::Query)
+    reqcomposable(base, flow); reqplural(flow); reqcodomain(Int, flow)
+    scope = empty(base)
+    I = domain(flow)
     input = Input(I)
-    output = Output(Int, complete=complete(op))
-    if complete(op)
-        pipe = MaxPipe{I}(op.pipe)
-    else
-        pipe = OptMaxPipe{I}(op.pipe)
-    end
+    output = Output(Int, complete=complete(flow))
+    pipe = complete(flow) ? MaxPipe{I}(flow.pipe) : OptMaxPipe{I}(flow.pipe)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
-compile(state::Query, fn::Type{Fn{:max}}, base::AbstractSyntax, op::AbstractSyntax) =
-    let base = compile(state, base)
-        compile(state, fn, base, compile(base, op))
+compile(fn::Type{Fn{:max}}, base::Query, flow::AbstractSyntax, op::AbstractSyntax) =
+    let flow = compile(base, flow)
+        compile(fn, base, flow, compile(flow, op))
     end
 
-function compile(state::Query, ::Type{Fn{:max}}, base::Query, op::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    !singular(base) || error("expected a plural expression: $base")
-    codomain(base) == domain(op) || error("incompatible operand: $op")
-    singular(op) || error("expected a singular expression: $op")
-    complete(op) || error("expected a complete expression: $op")
-    codomain(op) == Int || error("expected an integer expression: $op")
-    I = domain(base)
-    O = codomain(base)
-    output = Output(O, singular=true, complete=complete(base), exclusive=exclusive(base))
-    if complete(base)
-        pipe = MaxByPipe{I,O}(base.pipe, op.pipe)
-    else
-        pipe = OptMaxByPipe{I,O}(base.pipe, op.pipe)
-    end
-    return Query(base, output=output, pipe=pipe)
+function compile(::Type{Fn{:max}}, base::Query, flow::Query, op::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    reqcomposable(flow, op); reqsingular(op); reqcomplete(op); reqcodomain(Int, op)
+    I = domain(flow)
+    O = codomain(flow)
+    output = Output(O, singular=true, complete=complete(flow), exclusive=exclusive(flow))
+    pipe = complete(flow) ?
+        MaxByPipe{I,O}(flow.pipe, op.pipe) : OptMaxByPipe{I,O}(flow.pipe, op.pipe)
+    return Query(flow, output=output, pipe=pipe)
 end
 
 
-compile(state::Query, fn::Type{Fn{:select}}, base::AbstractSyntax, ops::AbstractSyntax...) =
-    let base = compile(state, base)
-        compile(state, fn, base, [compile(base, op) for op in ops]...)
+compile(fn::Type{Fn{:select}}, base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
+    let flow = compile(base, flow)
+        compile(fn, base, flow, [compile(flow, op) for op in ops]...)
     end
 
-function compile(state::Query, ::Type{Fn{:select}}, base::Query, ops::Query...)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    for op in ops
-        codomain(base) == domain(op) || error("incompatible operands: $base and $op")
-    end
+function compile(::Type{Fn{:select}}, base::Query, flow::Query, ops::Query...)
+    reqcomposable(base, flow)
+    reqcomposable(flow, ops...)
     parts = ops
     ops = tuple([select(op) for op in ops]...)
-    scope = empty(base)
-    I = codomain(base)
+    scope = empty(flow)
+    I = codomain(flow)
     O = Tuple{[datatype(op.output) for op in ops]...}
     input = Input(I)
     output = Output(O)
     pipe = TuplePipe{I,O}([op.pipe for op in ops])
     selector = Query(scope, input=input, output=output, pipe=pipe, parts=parts)
-    return Query(base, selector=selector, parts=parts)
+    return Query(flow, selector=selector, parts=parts)
 end
 
 
-compile(state::Query, fn::Type{Fn{:filter}}, base::AbstractSyntax, op::AbstractSyntax) =
-    let base = compile(state, base)
-        compile(state, fn, base, compile(base, op))
+compile(fn::Type{Fn{:filter}}, base::Query, flow::AbstractSyntax, op::AbstractSyntax) =
+    let flow = compile(base, flow)
+        compile(fn, base, flow, compile(flow, op))
     end
 
-function compile(state::Query, ::Type{Fn{:filter}}, base::Query, op::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    codomain(base) == domain(op) || error("incompatible operands: $base and $op")
-    !singular(base) || error("expected a plural expression: $base")
-    singular(op) || error("expected a singular expresssion: $op")
-    complete(op) || error("expected a complete expresssion: $op")
-    codomain(op) == Bool || error("expected a boolean expression: $op")
-    O = codomain(base)
+function compile(::Type{Fn{:filter}}, base::Query, flow::Query, op::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    reqcomposable(flow, op); reqsingular(op); reqcomplete(op); reqcodomain(Bool, op)
+    O = codomain(flow)
     output = Output(O, singular=false, complete=false, exclusive=exclusive(op))
-    pipe = base.pipe >> SievePipe{O}(op.pipe)
-    return Query(base, output=output, pipe=pipe)
+    pipe = flow.pipe >> SievePipe{O}(op.pipe)
+    return Query(flow, output=output, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:reverse}}, base::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    !singular(base) || error("expected a plural expression: $base")
-    I = domain(base)
-    O = codomain(base)
-    pipe = ReversePipe{I,O}(base.pipe)
-    return Query(base, pipe=pipe)
+function compile(::Type{Fn{:reverse}}, base::Query, flow::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    I = domain(flow)
+    O = codomain(flow)
+    pipe = ReversePipe{I,O}(flow.pipe)
+    return Query(flow, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:first}}, base::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    !singular(base) || error("expected a plural expression: $base")
-    I = domain(base)
-    O = codomain(base)
-    output = Output(O, complete=complete(base), exclusive=exclusive(base))
-    pipe = complete(base) ? IsoFirstPipe{I,O}(base.pipe) : OptFirstPipe{I,O}(base.pipe)
-    return Query(base, output=output, pipe=pipe)
+function compile(::Type{Fn{:first}}, base::Query, flow::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    I = domain(flow)
+    O = codomain(flow)
+    output = Output(O, complete=complete(flow), exclusive=exclusive(flow))
+    pipe = complete(flow) ? IsoFirstPipe{I,O}(flow.pipe) : OptFirstPipe{I,O}(flow.pipe)
+    return Query(flow, output=output, pipe=pipe)
 end
 
-function compile(state::Query, ::Type{Fn{:first}}, base::Query, size::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    codomain(state) == domain(size) || error("incompatible operand: $size")
-    !singular(base) || error("expected a plural expression: $base")
-    singular(size) || error("expected a singular expression: $size")
-    complete(size) || error("expected a complete expression: $size")
-    codomain(size) == Int || error("expected an integer expression: $size")
-    I = domain(base)
-    O = codomain(base)
-    output = Output(O, singular=false, complete=false, exclusive=exclusive(base))
-    pipe = SeqFirstPipe{I,O}(base.pipe, size.pipe)
-    return Query(base, output=output, pipe=pipe)
+function compile(::Type{Fn{:first}}, base::Query, flow::Query, size::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    reqcomposable(base, size); reqsingular(size); reqcomplete(size); reqcodomain(Int, size)
+    I = domain(flow)
+    O = codomain(flow)
+    output = Output(O, singular=false, complete=false, exclusive=exclusive(flow))
+    pipe = SeqFirstPipe{I,O}(flow.pipe, size.pipe)
+    return Query(flow, output=output, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:last}}, base::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    !singular(base) || error("expected a plural expression: $base")
-    I = domain(base)
-    O = codomain(base)
-    output = Output(O, complete=complete(base), exclusive=exclusive(base))
-    pipe = complete(base) ? IsoLastPipe{I,O}(base.pipe) : OptLastPipe{I,O}(base.pipe)
-    return Query(base, output=output, pipe=pipe)
+function compile(::Type{Fn{:last}}, base::Query, flow::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    I = domain(flow)
+    O = codomain(flow)
+    output = Output(O, complete=complete(flow), exclusive=exclusive(flow))
+    pipe = complete(flow) ? IsoLastPipe{I,O}(flow.pipe) : OptLastPipe{I,O}(flow.pipe)
+    return Query(flow, output=output, pipe=pipe)
 end
 
-function compile(state::Query, ::Type{Fn{:last}}, base::Query, size::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    codomain(state) == domain(size) || error("incompatible operand: $size")
-    !singular(base) || error("expected a plural expression: $base")
-    singular(size) || error("expected a singular expression: $size")
-    complete(size) || error("expected a complete expression: $size")
-    codomain(size) == Int || error("expected an integer expression: $size")
-    I = domain(base)
-    O = codomain(base)
-    output = Output(O, singular=false, complete=false, exclusive=exclusive(base))
-    pipe = SeqLastPipe{I,O}(base.pipe, size.pipe)
-    return Query(base, output=output, pipe=pipe)
+function compile(::Type{Fn{:last}}, base::Query, flow::Query, size::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    reqcomposable(base, size); reqsingular(size); reqcomplete(size); reqcodomain(Int, size)
+    I = domain(flow)
+    O = codomain(flow)
+    output = Output(O, singular=false, complete=false, exclusive=exclusive(flow))
+    pipe = SeqLastPipe{I,O}(flow.pipe, size.pipe)
+    return Query(flow, output=output, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:take}}, base::Query, size::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    codomain(state) == domain(size) || error("incompatible operand: $size")
-    !singular(base) || error("expected a plural expression: $base")
-    singular(size) || error("expected a singular expression: $size")
-    complete(size) || error("expected a complete expression: $size")
-    codomain(size) == Int || error("expected an integer expression: $size")
-    I = domain(base)
-    O = codomain(base)
-    output = Output(O, singular=false, complete=false, exclusive=exclusive(base))
-    pipe = TakePipe{I,O}(base.pipe, size.pipe, ConstPipe{I,Int}(0))
-    return Query(base, output=output, pipe=pipe)
+function compile(::Type{Fn{:take}}, base::Query, flow::Query, size::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    reqcomposable(base, size); reqsingular(size); reqcomplete(size); reqcodomain(Int, size)
+    I = domain(flow)
+    O = codomain(flow)
+    output = Output(O, singular=false, complete=false, exclusive=exclusive(flow))
+    pipe = TakePipe{I,O}(flow.pipe, size.pipe, ConstPipe{I,Int}(0))
+    return Query(flow, output=output, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:take}}, base::Query, size::Query, skip::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    codomain(state) == domain(size) || error("incompatible operand: $size")
-    codomain(state) == domain(skip) || error("incompatible operand: $skip")
-    !singular(base) || error("expected a plural expression: $base")
-    singular(size) || error("expected a singular expression: $size")
-    complete(size) || error("expected a complete expression: $size")
-    codomain(size) == Int || error("expected an integer expression: $size")
-    singular(skip) || error("expected a singular expression: $skip")
-    complete(skip) || error("expected a complete expression: $skip")
-    codomain(skip) == Int || error("expected an integer expression: $skip")
-    I = domain(base)
-    O = codomain(base)
-    output = Output(O, singular=false, complete=false, exclusive=exclusive(base))
-    pipe = TakePipe{I,O}(base.pipe, size.pipe, skip.pipe)
-    return Query(base, output=output, pipe=pipe)
+function compile(::Type{Fn{:take}}, base::Query, flow::Query, size::Query, skip::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    reqcomposable(base, size, skip); reqsingular(size, skip)
+    reqcomplete(size, skip); reqcodomain(Int, size, skip)
+    I = domain(flow)
+    O = codomain(flow)
+    output = Output(O, singular=false, complete=false, exclusive=exclusive(flow))
+    pipe = TakePipe{I,O}(flow.pipe, size.pipe, skip.pipe)
+    return Query(flow, output=output, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:get}}, base::Query, val::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    codomain(state) == domain(val) || error("incompatible operand: $val")
-    !singular(base) || error("expected a plural expression: $base")
-    exclusive(base) || error("expected an exclusive expression: $base")
-    !isnull(base.identity) || error("expected an expression with identity: $base")
-    singular(val) || error("expected a singular expression: $val")
-    complete(val) || error("expected a complete expression: $val")
-    codomain(val) == codomain(get(base.identity)) ||
-        error("expected an expression of type $(codomain(get(base.identity))): $size")
-    I = domain(base)
-    O = codomain(base)
-    K = codomain(val)
-    output = Output(O, complete=false, exclusive=exclusive(base))
-    pipe = GetPipe{I,O,K}(base.pipe, get(base.identity).pipe, val.pipe)
-    return Query(base, output=output, pipe=pipe)
+function compile(::Type{Fn{:get}}, base::Query, flow::Query, key::Query)
+    reqcomposable(base, flow); reqplural(flow); reqexclusive(flow); reqidentity(flow)
+    reqcomposable(base, key); reqsingular(key); reqcomplete(key)
+    reqcodomain(codomain(get(flow.identity)), key)
+    I = domain(flow)
+    O = codomain(flow)
+    K = codomain(key)
+    output = Output(O, complete=false, exclusive=exclusive(flow))
+    pipe = GetPipe{I,O,K}(flow.pipe, get(flow.identity).pipe, key.pipe)
+    return Query(flow, output=output, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:asc}}, op::Query)
+function compile(::Type{Fn{:asc}}, base::Query, op::Query)
     return Query(op, order=1)
 end
 
 
-function compile(state::Query, ::Type{Fn{:desc}}, op::Query)
+function compile(::Type{Fn{:desc}}, base::Query, op::Query)
     return Query(op, order=-1)
 end
 
 
-compile(state::Query, fn::Type{Fn{:sort}}, base::AbstractSyntax, ops::AbstractSyntax...) =
-    let base = compile(state, base)
-        compile(state, fn, base, [compile(base, op) for op in ops]...)
+compile(fn::Type{Fn{:sort}}, base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
+    let flow = compile(base, flow)
+        compile(fn, base, flow, [compile(flow, op) for op in ops]...)
     end
 
-function compile(state::Query, ::Type{Fn{:sort}}, base::Query, ops::Query...)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    for op in ops
-        codomain(base) == domain(op) || error("incompatible operands: $base and $op")
-    end
-    !singular(base) || error("expected a plural expression: $base")
-    I = domain(base)
-    O = codomain(base)
+function compile(::Type{Fn{:sort}}, base::Query, flow::Query, ops::Query...)
+    reqcomposable(base, flow); reqplural(flow)
+    reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
+    I = domain(flow)
+    O = codomain(flow)
     if isempty(ops)
-        if isnull(base.identity)
-            pipe = SortPipe{I,O}(base.pipe, base.order)
+        if isnull(flow.identity)
+            pipe = SortPipe{I,O}(flow.pipe, flow.order)
         else
-            cap = get(base.identity)
+            cap = get(flow.identity)
             @assert singular(cap) && complete(cap) && exclusive(cap)
             K = codomain(cap)
-            pipe = SortByPipe{I,O,K}(base.pipe, cap.pipe, base.order)
+            pipe = SortByPipe{I,O,K}(flow.pipe, cap.pipe, flow.order)
         end
     else
-        pipe = base.pipe
+        pipe = flow.pipe
         for op in reverse(ops)
             order = op.order
             op = identify(op)
-            singular(op) || error("expected a singular expression: $op")
-            complete(op) || error("expected a complete expression: $op")
             K = codomain(op)
             pipe = SortByPipe{I,O,K}(pipe, op.pipe, order)
         end
     end
-    return Query(base, pipe=pipe)
+    return Query(flow, pipe=pipe)
 end
 
 
-function compile(state::Query, ::Type{Fn{:unique}}, base::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    !singular(base) || error("expected a plural expression: $base")
-    I = domain(base)
-    O = codomain(base)
+function compile(::Type{Fn{:unique}}, base::Query, flow::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    I = domain(flow)
+    O = codomain(flow)
     output = Output(
-        O, singular=false, complete=complete(base),
-        exclusive=true, reachable=reachable(base))
-    if isnull(base.identity)
-        PipeType = exclusive(base) ? SortPipe : UniquePipe
-        pipe = PipeType{I,O}(base.pipe, base.order)
+        O, singular=false, complete=complete(flow),
+        exclusive=true, reachable=reachable(flow))
+    if isnull(flow.identity)
+        PipeType = exclusive(flow) ? SortPipe : UniquePipe
+        pipe = PipeType{I,O}(flow.pipe, flow.order)
     else
-        cap = get(base.identity)
+        cap = get(flow.identity)
         @assert singular(cap) && complete(cap) && exclusive(cap)
         K = codomain(cap)
-        PipeType = exclusive(base) ? SortByPipe : UniqueByPipe
-        pipe = UniqueByPipe{I,O,K}(base.pipe, cap.pipe, base.order)
+        PipeType = exclusive(flow) ? SortByPipe : UniqueByPipe
+        pipe = UniqueByPipe{I,O,K}(flow.pipe, cap.pipe, flow.order)
     end
-    return Query(base, output=output, pipe=pipe)
+    return Query(flow, output=output, pipe=pipe)
 end
 
 
-compile(state::Query, fn::Type{Fn{:by}}, base::AbstractSyntax, op1::AbstractSyntax, ops::AbstractSyntax...) =
-    let base = compile(state, base)
-        compile(state, fn, base, compile(base, op1), [compile(base, op) for op in ops]...)
+compile(fn::Type{Fn{:by}}, base::Query, flow::AbstractSyntax, op1::AbstractSyntax, ops::AbstractSyntax...) =
+    let flow = compile(base, flow)
+        compile(fn, base, flow, compile(flow, op1), [compile(flow, op) for op in ops]...)
     end
 
-function compile(state::Query, ::Type{Fn{:by}}, base::Query, ops::Query...)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    !singular(base) || error("expected a plural expression: $base")
-    for op in ops
-        codomain(base) == domain(op) || error("incompatible operands: $base and $op")
-        singular(op) || error("expected a singular expression: $op")
-        complete(op) || error("expected a complete expression: $op")
-    end
-    scope = empty(state)
-    I = domain(base)
+function compile(::Type{Fn{:by}}, base::Query, flow::Query, ops::Query...)
+    reqcomposable(base, flow); reqplural(flow)
+    reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
+    scope = empty(base)
+    I = domain(flow)
     Kitems = [codomain(op) for op in ops]
     K = Tuple{Kitems...}
     Uitems = [!isnull(op.identity) ? codomain(get(op.identity)) : codomain(op) for op in ops]
     U = Tuple{Uitems...}
-    V = codomain(base)
+    V = codomain(flow)
     O = Tuple{K,Vector{V}}
     input = Input(I)
     output = Output(O, singular=false, complete=true)
@@ -386,7 +369,7 @@ function compile(state::Query, ::Type{Fn{:by}}, base::Query, ops::Query...)
     key_pipe = TuplePipe{K,U}([
         !isnull(op.identity) ? IsoItemPipe{K,Uitems[i]}(i) >> get(op.identity).pipe : IsoItemPipe{K,Uitems[i]}(i)
         for (i, op) in enumerate(ops)])
-    pipe = GroupByPipe{I,K,U,V}(base.pipe, kernel_pipe, key_pipe, 0)
+    pipe = GroupByPipe{I,K,U,V}(flow.pipe, kernel_pipe, key_pipe, 0)
     parts = ()
     for (i, op) in enumerate(ops)
         T = codomain(op)
@@ -402,11 +385,11 @@ function compile(state::Query, ::Type{Fn{:by}}, base::Query, ops::Query...)
         pipe=(IsoItemPipe{O,K}(1) >> key_pipe),
         parts=parts)
     up = Query(
-        base,
+        flow,
         input=Input(O),
         output=Output(
             V, singular=false, complete=true,
-            exclusive=exclusive(base), reachable=reachable(base)),
+            exclusive=exclusive(flow), reachable=reachable(flow)),
         pipe=SeqItemPipe{O,V}(2))
     defs = Dict{Symbol, Query}()
     for part in parts
@@ -423,40 +406,37 @@ function compile(state::Query, ::Type{Fn{:by}}, base::Query, ops::Query...)
 end
 
 
-function compile(state::Query, ::Type{Fn{:as}}, base::AbstractSyntax, ident::AbstractSyntax)
+function compile(::Type{Fn{:as}}, base::Query, op::AbstractSyntax, ident::AbstractSyntax)
     (isa(ident, ApplySyntax) && isempty(ident.args)) || error("expected an identifier: $ident")
-    return Query(compile(state, base), tag=NullableSymbol(ident.fn))
+    return Query(compile(base, op), tag=NullableSymbol(ident.fn))
 end
 
 
-compile(state::Query, ::Type{Fn{:(=>)}}, ident::AbstractSyntax, base::AbstractSyntax) =
-    compile(state, Fn{:as}, base, ident)
+compile(::Type{Fn{:(=>)}}, base::Query, ident::AbstractSyntax, op::AbstractSyntax) =
+    compile(Fn{:as}, base, op, ident)
 
 
-compile(state::Query, fn::Type{Fn{:define}}, base::AbstractSyntax, ops::AbstractSyntax...) =
-    let base = compile(state, base)
+compile(fn::Type{Fn{:define}}, base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
+    let flow = compile(base, flow)
         for op in ops
-            base = compile(state, fn, base, compile(base, op))
+            flow = compile(fn, base, flow, compile(flow, op))
         end
-        base
+        flow
     end
 
 
-function compile(state::Query, ::Type{Fn{:define}}, base::Query, op::Query)
-    codomain(state) == domain(base) || error("incompatible operand: $base")
-    codomain(base) == domain(op) || error("incompatible operands: $base and $op")
-    !isnull(op.tag) || error("expected a named expression: $op")
-    defs = merge(base.defs, Dict(get(op.tag) => op))
-    return Query(base, defs=defs)
+function compile(::Type{Fn{:define}}, base::Query, flow::Query, op::Query)
+    reqcomposable(base, flow)
+    reqcomposable(flow, op); reqtag(op)
+    defs = merge(flow.defs, Dict(get(op.tag) => op))
+    return Query(flow, defs=defs)
 end
 
 
-function compile(state::Query, ::Type{Fn{:!}}, op::Query)
-    codomain(state) == domain(op) || error("incompatible operand: $op")
-    singular(op) || error("expected a singular expression: $op")
-    codomain(op) == Bool || error("expected an expression of type Bool: $(codomain(op))")
-    scope = empty(state)
-    I = codomain(state)
+function compile(::Type{Fn{:!}}, base::Query, op::Query)
+    reqcomposable(base, op); reqsingular(op); reqcodomain(Bool, op)
+    scope = empty(base)
+    I = codomain(base)
     input = Input(I)
     output = Output(Bool, complete=complete(op))
     pipe = complete(op) ? IsoNotPipe{I}(op.pipe) : OptNotPipe{I}(op.pipe)
@@ -464,15 +444,10 @@ function compile(state::Query, ::Type{Fn{:!}}, op::Query)
 end
 
 
-function compile(state::Query, ::Type{Fn{:&}}, op1::Query, op2::Query)
-    codomain(state) == domain(op1) || error("incompatible operand: $op1")
-    singular(op1) || error("expected a singular expression: $op1")
-    codomain(op1) == Bool || error("expected an expression of type Bool: $(codomain(op1))")
-    codomain(state) == domain(op2) || error("incompatible operand: $op2")
-    singular(op2) || error("expected a singular expression: $op2")
-    codomain(op2) == Bool || error("expected an expression of type Bool: $(codomain(op2))")
-    scope = empty(state)
-    I = codomain(state)
+function compile(::Type{Fn{:&}}, base::Query, op1::Query, op2::Query)
+    reqcomposable(base, op1, op2); reqsingular(op1, op2); reqcodomain(Bool, op1, op2)
+    scope = empty(base)
+    I = codomain(base)
     input = Input(I)
     output = Output(Bool, complete=complete(op1) && complete(op2))
     pipe = complete(output) ?
@@ -481,15 +456,10 @@ function compile(state::Query, ::Type{Fn{:&}}, op1::Query, op2::Query)
 end
 
 
-function compile(state::Query, ::Type{Fn{:|}}, op1::Query, op2::Query)
-    codomain(state) == domain(op1) || error("incompatible operand: $op1")
-    singular(op1) || error("expected a singular expression: $op1")
-    codomain(op1) == Bool || error("expected an expression of type Bool: $(codomain(op1))")
-    codomain(state) == domain(op2) || error("incompatible operand: $op2")
-    singular(op2) || error("expected a singular expression: $op2")
-    codomain(op2) == Bool || error("expected an expression of type Bool: $(codomain(op2))")
-    scope = empty(state)
-    I = codomain(state)
+function compile(::Type{Fn{:|}}, base::Query, op1::Query, op2::Query)
+    reqcomposable(base, op1, op2); reqsingular(op1, op2); reqcodomain(Bool, op1, op2)
+    scope = empty(base)
+    I = codomain(base)
     input = Input(I)
     output = Output(Bool)
     output = Output(Bool, complete=complete(op1) && complete(op2))
@@ -501,11 +471,10 @@ end
 
 macro compileunaryop(fn, Pipe, T1, T2)
     return esc(quote
-        function compile(state::Query, ::Type{Fn{$fn}}, op::Query)
-            codomain(state) == domain(op) || error("incompatible operand: $op")
-            codomain(op) == $T1 || error("expected an expression of type $($T1): $(codomain(op))")
-            scope = empty(state)
-            I = codomain(state)
+        function compile(::Type{Fn{$fn}}, base::Query, op::Query)
+            reqcomposable(base, op); reqcodomain($T1, op)
+            scope = empty(base)
+            I = codomain(base)
             input = Input(I)
             output = Output($T2, comode(op))
             pipe = singular(output) && complete(output) ?
@@ -518,15 +487,12 @@ end
 
 macro compilebinaryop(fn, Pipe, T1, T2, T3)
     return esc(quote
-        function compile(state::Query, ::Type{Fn{$fn}}, op1::Query, op2::Query)
-            codomain(state) == domain(op1) || error("incompatible operand: $op1")
-            codomain(op1) == $T1 || error("expected an expression of type $($T1): $(codomain(op1))")
-            codomain(state) == domain(op2) || error("incompatible operand: $op2")
-            codomain(op2) == $T2 || error("expected an expression of type $($T2): $(codomain(op2))")
-            (singular(op1) || singular(op2)) || error("expected singular expressions: $op1 or $op2")
+        function compile(::Type{Fn{$fn}}, base::Query, op1::Query, op2::Query)
+            reqcomposable(base, op1, op2); reqcodomain($T1, op1); reqcodomain($T2, op2)
+            singular(op1) || reqsingular(op2)
             T = Tuple{$T1,$T2}
-            scope = empty(state)
-            I = codomain(state)
+            scope = empty(base)
+            I = codomain(base)
             input = Input(I)
             output = Output($T3, max(comode(op1), comode(op2)))
             pipe = singular(output) && complete(output) ?
@@ -552,12 +518,12 @@ end
 @compilebinaryop(:(/), DivPipe, Int, Int, Int)
 
 
-function compile(state::Query, fn::Type{Fn{:json}}, base::Query)
-    if !isnull(base.selector) && !isnull(get(base.selector).parts)
+function compile(fn::Type{Fn{:json}}, base::Query, flow::Query)
+    if !isnull(flow.selector) && !isnull(get(flow.selector).parts)
         parts = ()
         fields = ()
-        for part in get(get(base.selector).parts)
-            part = compile(base, fn, part)
+        for part in get(get(flow.selector).parts)
+            part = compile(fn, flow, part)
             if !isnull(part.tag)
                 field = isnull(part.selector) ? part.pipe : part.pipe >> get(part.selector).pipe
                 if singular(part) && !complete(part)
@@ -566,24 +532,24 @@ function compile(state::Query, fn::Type{Fn{:json}}, base::Query)
                 fields = (fields..., (get(part.tag) => field))
             end
         end
-        I = codomain(base)
+        I = codomain(flow)
         pipe = DictPipe{I}(fields)
         output = Output(Dict)
-        selector = Query(get(base.selector), output=output, pipe=pipe)
-        base = Query(base, selector=selector)
+        selector = Query(get(flow.selector), output=output, pipe=pipe)
+        flow = Query(flow, selector=selector)
     else
-        base = select(base)
-        if singular(base) && !complete(base)
-            I = domain(base)
-            O = codomain(base)
+        flow = select(flow)
+        if singular(flow) && !complete(flow)
+            I = domain(flow)
+            O = codomain(flow)
             # FIXME:
-            #output = Output(Union{O,Void}, exclusive=exclusive(base), reachable=reachable(base))
-            output = Output(O, exclusive=exclusive(base), reachable=reachable(base))
-            pipe = OptToVoidPipe{I,O}(base.pipe)
-            base = Query(base, output=output, pipe=pipe)
+            #output = Output(Union{O,Void}, exclusive=exclusive(flow), reachable=reachable(flow))
+            output = Output(O, exclusive=exclusive(flow), reachable=reachable(flow))
+            pipe = OptToVoidPipe{I,O}(flow.pipe)
+            flow = Query(flow, output=output, pipe=pipe)
         end
     end
-    return base
+    return flow
 end
 
 

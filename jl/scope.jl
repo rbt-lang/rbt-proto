@@ -21,7 +21,7 @@ function lookup(self::RootScope, name::Symbol)
         tag = NullableSymbol(name)
         src = NullableSyntax(ApplySyntax(name, []))
         query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, src=src)
-        selector = mkselect(
+        selector = mkselector(
             query,
             class.select != nothing ? class.select : tuple(keys(class.arrows)...))
         identity = mkidentity(query, :id)
@@ -76,7 +76,7 @@ function lookup(self::ClassScope, name::Symbol)
             targetclass = self.db.schema.classes[targetname]
             scope = ClassScope(self.db, targetname)
             query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, src=src)
-            selector = mkselect(
+            selector = mkselector(
                 query,
                 arrow.select != nothing ? arrow.select :
                 targetclass.select != nothing ? targetclass.select :
@@ -107,29 +107,32 @@ empty(self::EmptyScope) = self
 lookup(::EmptyScope, ::Symbol) = NullableQuery()
 
 
-mkselect(state::Query, spec) = mkcomposite(state, spec, :selector)
+mkselector(base::Query, spec) = mkcomposite(base, spec, :selector)
 
-mkidentity(state::Query, spec) = mkcomposite(state, spec, :identity)
+mkidentity(base::Query, spec) = mkcomposite(base, spec, :identity)
 
-function mkcomposite(state::Query, name::Symbol, field)
-    op = lookup(state, name)
-    @assert !isnull(op)
-    op = get(op)
-    cap = getfield(op, field)
+function mkcomposite(base::Query, query::Query, field)
+    cap = getfield(query, field)
     if !isnull(cap)
         cap = get(cap)
-        op = Query(op >> cap, tag=op.tag, parts=op.parts)
+        query = Query(query >> cap, tag=query.tag, parts=query.parts)
     end
-    return op
+    return query
 end
 
-function mkcomposite(state::Query, parts::Tuple, field)
-    parts = tuple([mkcomposite(state, part, field) for part in parts]...)
-    I = codomain(state)
+function mkcomposite(base::Query, name::Symbol, field)
+    op = lookup(base, name)
+    @assert !isnull(op)
+    return mkcomposite(base, get(op), field)
+end
+
+function mkcomposite(base::Query, parts::Tuple, field)
+    parts = tuple([mkcomposite(base, part, field) for part in parts]...)
+    I = codomain(base)
     O = Tuple{[datatype(part.output) for part in parts]...}
     input = Input(I)
     output = Output(O)
-    scope = empty(state)
+    scope = empty(base)
     pipe = TuplePipe{I,O}([part.pipe for part in parts])
     return Query(scope, input=input, output=output, pipe=pipe, parts=parts)
 end
