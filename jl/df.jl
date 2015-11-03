@@ -73,9 +73,18 @@ function execute{I}(pipe::SeqDataFramePipe, x::I)
     ys = pipe.F(x)
     for (name, A, F) in pipe.fields
         push!(names, name)
-        a = A()
+        a = A([])
         for y in ys
-            push!(a, F(y))
+            z = F(y)
+            if A <: DataVector
+                if isnull(z)
+                    push!(a, NA)
+                else
+                    push!(a, get(z))
+                end
+            else
+                push!(a, z)
+            end
         end
         push!(data, a)
     end
@@ -115,10 +124,12 @@ function mkdffields(flow::Query)
             fields = (fields..., mkdffields(field.fields)...)
         else
             name = get(field.tag, symbol(""))
-            part = compile(Fn{:dataframe}, flow, field)
-            O = singular(part) ? codomain(part) : Any
-            A = singular(part) && !complete(part) ? DataVector{O} : Vector{O}
-            F = part.pipe
+            if !singular(field)
+                field = compile(Fn{:dataframe}, flow, field)
+            end
+            O = codomain(field)
+            A = singular(field) && !complete(field) ? DataVector{O} : Vector{O}
+            F = field.pipe
             fields = (fields..., (name, A, F))
         end
     end

@@ -84,7 +84,11 @@ setdb(citydb)
     :sort(max(employee.salary):desc))
 @query(
     employee
-    :by(department, salary_bracket => salary/10000*10000)
+    :by(department, salary_bracket => salary/10000*10000 :desc)
+    :select(department, salary_bracket, salary_bracket+9999, count(employee)))
+@query(
+    employee
+    :cube_by(department, salary_bracket => salary/10000*10000 :desc)
     :select(department, salary_bracket, salary_bracket+9999, count(employee)))
 
 @query(department:json)

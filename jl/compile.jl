@@ -379,60 +379,69 @@ function compile(::Type{Fn{:unique}}, base::Query, flow::Query)
 end
 
 
-compile(fn::Type{Fn{:by}}, base::Query, flow::AbstractSyntax, op1::AbstractSyntax, ops::AbstractSyntax...) =
+compile(fn::Union{Type{Fn{:by}}, Type{Fn{:cube_by}}},
+        base::Query, flow::AbstractSyntax, op1::AbstractSyntax, ops::AbstractSyntax...) =
     let flow = compile(base, flow)
         compile(fn, base, flow, compile(flow, op1), [compile(flow, op) for op in ops]...)
     end
 
-function compile(::Type{Fn{:by}}, base::Query, flow::Query, ops::Query...)
+function compile(
+        fn::Union{Type{Fn{:by}}, Type{Fn{:cube_by}}},
+        base::Query, flow::Query, ops::Query...)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
+    iscube = (fn == Fn{:cube_by})
+    GroupPipe = iscube ? CubeGroupByPipe : GroupByPipe
     scope = empty(base)
     I = domain(flow)
     V = codomain(flow)
     Ps = ()
-    O = Tuple{UnitType, Vector{V}}
+    Q = UnitType
+    O = Tuple{Q, Vector{V}}
     pipe = TuplePipe{I, O}([ConstPipe{I,UnitType}(()), flow.pipe])
     for op in ops
         opid = !isnull(op.identity) ? get(op.identity) : compile(Fn{:this}, op)
         P = Tuple{Ps...}
         K = codomain(op)
         J = codomain(opid)
-        Ps = (Ps..., K)
+        Ps = (Ps..., (iscube ? Nullable{K} : K))
         Q = Tuple{Ps...}
-        pipe = pipe >> GroupByPipe{P,Q,V,K,J}(op.pipe, opid.pipe, op.order)
+        pipe = pipe >> GroupPipe{P,Q,V,K,J}(op.pipe, opid.pipe, op.order)
     end
-    O = Tuple{Tuple{Ps...}, Vector{V}}
+    O = Tuple{Q, Vector{V}}
     input = Input(I)
-    output = Output(O, singular=isempty(ops), complete=true)
-    kernel_field = Query(
-        record(flow, ops...),
-        input=Input(O),
-        pipe=IsoItemPipe{O,Tuple{Ps...}}(1))
-    flow_field = Query(
-        flow,
-        input=Input(O),
-        output=Output(
-            V, singular=false, complete=true,
-            exclusive=exclusive(flow), reachable=reachable(flow)),
-        pipe=SeqItemPipe{O,V}(2))
-    fields = (kernel_field, flow_field)
-    query = Query(scope, input=input, output=output, pipe=pipe, fields=fields)
-    identity = identify(kernel_field)
+    output = Output(O, singular=isempty(ops), complete=(complete(flow) || isempty(ops) || iscube))
+    query = Query(scope, input=input, output=output, pipe=pipe)
     items = []
     defs = Dict{Symbol, Query}()
+    kernel_pipe = IsoItemPipe{O, Q}(1)
     for (k, op) in enumerate(ops)
-        item = kernel_field >> get(kernel_field.fields)[k]
+        T = codomain(op)
+        item_pipe = kernel_pipe >> (iscube ? OptItemPipe : IsoItemPipe){Q, T}(k)
+        item = Query(
+            op,
+            input=Input(O),
+            output=Output(T, complete=!iscube, exclusive=(length(ops)==1), reachable=reachable(op)),
+            pipe=item_pipe)
         if !isnull(item.tag)
             defs[get(item.tag)] = item
         end
         push!(items, item)
     end
+    kernel_field = record(query, items...)
+    flow_field = Query(
+        flow,
+        input=Input(O),
+        output=Output(
+            V, singular=false, complete=!iscube,
+            exclusive=(exclusive(flow) && !iscube), reachable=reachable(flow)),
+        pipe=SeqItemPipe{O,V}(2))
     if !isnull(flow_field.tag)
         defs[get(flow_field.tag)] = flow_field
     end
-    push!(items, flow_field)
-    selector = select(record(query, items...))
+    fields = (kernel_field, flow_field)
+    selector = select(record(query, items..., flow_field))
+    identity = identify(record(query, items...))
     return Query(query, identity=identity, selector=selector, defs=defs)
 end
 

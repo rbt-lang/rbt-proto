@@ -537,6 +537,39 @@ function execute{P,Q,V,K,J}(pipe::GroupByPipe{P,Q,V,K,J}, x::Tuple{P, Vector{V}}
 end
 
 
+immutable CubeGroupByPipe{P,Q,V,K,J} <: SeqPipe{Tuple{P, Vector{V}}, Tuple{Q, Vector{V}}}
+    # Q is Tuple{P..., Nullable{K}}
+    ker::IsoPipe{V,K}
+    id::IsoPipe{K,J}
+    order::Int
+end
+
+show(io::IO, pipe::CubeGroupByPipe) =
+    print(io, "CubeGroupBy(", pipe.ker, ", ", pipe.id, ", ", pipe.order, ")")
+
+function execute{P,Q,V,K,J}(pipe::CubeGroupByPipe{P,Q,V,K,J}, x::Tuple{P, Vector{V}})
+    p, vs = x
+    js = Vector{J}()
+    qvs = Vector{Tuple{Q,Vector{V}}}()
+    j2idx = Dict{J,Int}()
+    for v in vs
+        k = execute(pipe.ker, v)::K
+        j = execute(pipe.id, k)::J
+        if j in keys(j2idx)
+            push!(qvs[j2idx[j]][2], v)
+        else
+            push!(qvs, ((p..., Nullable{K}(k)), V[v]))
+            push!(js, j)
+            j2idx[j] = length(js)
+        end
+    end
+    sort!(js, rev=(pipe.order<0))
+    qvs = Tuple{Q, Vector{V}}[qvs[j2idx[j]] for j in js]
+    push!(qvs, ((p..., Nullable{K}()), vs))
+    return qvs
+end
+
+
 immutable IsoFieldPipe{I,O} <: IsoPipe{I,O}
     field::Symbol
 end
