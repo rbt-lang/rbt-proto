@@ -84,16 +84,16 @@ end
 
 
 function compile(::Type{Fn{:dataframe}}, base::Query, flow::Query)
-    if !isnull(flow.selector) && !isnull(get(flow.selector).parts)
-        fields = mkdffields(flow, get(get(flow.selector).parts))
+    flow = select(flow)
+    if !isnull(flow.fields)
+        fields = mkdffields(flow)
         I = domain(flow)
-        O = codomain(flow)
-        output = Output(O)
+        output = Output(DataFrame)
         pipe =
             singular(flow) && complete(flow) ? IsoDataFramePipe{I}(flow.pipe, fields) :
             singular(flow) ? OptDataFramePipe{I}(flow.pipe, fields) :
             SeqDataFramePipe{I}(flow.pipe, fields)
-        return Query(scope(flow), input=flow.input, output=output, pipe=pipe)
+        return Query(empty(flow), input=flow.input, output=output, pipe=pipe)
     else
         flow = select(flow)
         if singular(flow) && !complete(flow)
@@ -108,14 +108,14 @@ function compile(::Type{Fn{:dataframe}}, base::Query, flow::Query)
 end
 
 
-function mkdffields(flow::Query, parts)
+function mkdffields(flow::Query)
     fields = ()
-    for part in parts
-        if !isnull(part.selector) && !isnull(get(part.selector).parts)
-            fields = (fields..., mkdffields(flow, get(get(part.selector).parts))...)
+    for field in get(flow.fields)
+        if !isnull(field.fields)
+            fields = (fields..., mkdffields(field.fields)...)
         else
-            name = get(part.tag, symbol(""))
-            part = compile(Fn{:dataframe}, flow, part)
+            name = get(field.tag, symbol(""))
+            part = compile(Fn{:dataframe}, flow, field)
             O = singular(part) ? codomain(part) : Any
             A = singular(part) && !complete(part) ? DataVector{O} : Vector{O}
             F = part.pipe

@@ -41,14 +41,74 @@ reqtag(fs...) =
     end
 
 
+function >>(f::Query, g::Query)
+    reqcomposable(f, g)
+    I = domain(f)
+    O = codomain(g)
+    OM = max(comode(f), comode(g))
+    input = Input(I)
+    output = Output(O, OM)
+    pipe = f.pipe >> g.pipe
+    syntax =
+        !isnull(f.syntax) && !isnull(g.syntax) ?
+            NullableSyntax(ComposeSyntax(get(f.syntax), get(g.syntax))) :
+        !isnull(f.syntax) ? f.syntax :
+        !isnull(g.syntax) ? g.syntax :
+        NullableSyntax()
+    return Query(g, input=input, output=output, pipe=pipe, syntax=syntax)
+end
+
+
+select(q::Query) =
+    !isnull(q.selector) ? Query(q >> get(q.selector), order=q.order, tag=q.tag) : q
+
+
+identify(q::Query) =
+    !isnull(q.identity) ? Query(q >> get(q.identity), order=q.order, tag=q.tag) : q
+
+
+function record(base::Query, ops::Query...)
+    reqcomposable(base, ops...)
+    scope = empty(base)
+    I = codomain(base)
+    O = Tuple{[datatype(op.output) for op in ops]...}
+    input = Input(I)
+    output = Output(O)
+    pipe = TuplePipe{I,O}([op.pipe for op in ops])
+    fields = Query[]
+    defs = Dict{Symbol,Query}()
+    for (k, op) in enumerate(ops)
+        T = codomain(op)
+        field = Query(
+            op, input=Input(O),
+            pipe=
+                singular(op) && complete(op) ? IsoItemPipe{O,T}(k) :
+                singular(op) ? OptItemPipe{O,T}(k) : SeqItemPipe{O,T}(k))
+        push!(fields, field)
+        if !isnull(field.tag)
+            defs[get(field.tag)] = field
+        end
+    end
+    query = Query(scope, input=input, output=output, pipe=pipe, fields=tuple(fields...), defs=defs)
+    if any([!isnull(field.identity) for field in fields])
+        identity = record(query, [identify(field) for field in fields]...)
+        query = Query(query, identity=identity)
+    end
+    if any([!isnull(field.selector) for field in fields])
+        selector = record(query, [select(field) for field in fields]...)
+        query = Query(query, selector=selector)
+    end
+    return query
+end
+
+
 function compile(base::Query, syntax::LiteralSyntax{Void})
     scope = empty(base)
     I = codomain(base)
     input = Input(I)
     output = Output(Void, complete=false)
     pipe = NullPipe{I, Void}()
-    src = NullableSyntax(syntax)
-    return Query(scope, input=input, output=output, pipe=pipe, src=src)
+    return Query(scope, input=input, output=output, pipe=pipe, syntax=syntax)
 end
 
 
@@ -59,44 +119,25 @@ function compile{T}(base::Query, syntax::LiteralSyntax{T})
     input = Input(I)
     output = Output(O)
     pipe = ConstPipe{I, O}(syntax.val)
-    src = NullableSyntax(syntax)
-    return Query(scope, input=input, output=output, pipe=pipe, src=src)
+    return Query(scope, input=input, output=output, pipe=pipe, syntax=syntax)
 end
 
 
 function compile(base::Query, syntax::ApplySyntax)
-    src = NullableSyntax(syntax)
     if isempty(syntax.args)
         query = lookup(base, syntax.fn)
         if !isnull(query)
-            return Query(get(query), src=src)
+            return Query(get(query), syntax=syntax)
         end
     end
-    return Query(compile(Fn{syntax.fn}, base, syntax.args...), src=src)
+    return Query(compile(Fn{syntax.fn}, base, syntax.args...), syntax=syntax)
 end
 
 
 function compile(base::Query, syntax::ComposeSyntax)
     f = compile(base, syntax.f)
     g = compile(f, syntax.g)
-    src = NullableSyntax(syntax)
-    return Query(f >> g, src=src)
-end
-
-
-function >>(f::Query, g::Query)
-    reqcomposable(f, g)
-    I = domain(f)
-    O = codomain(g)
-    OM = max(comode(f), comode(g))
-    input = Input(I)
-    output = Output(O, OM)
-    pipe = f.pipe >> g.pipe
-    src = g.src
-    if !isnull(f.src) && !isnull(g.src)
-        src = NullableSyntax(ComposeSyntax(get(f.src), get(g.src)))
-    end
-    return Query(g, input=input, output=output, pipe=pipe, src=src)
+    return Query(f >> g, syntax=syntax)
 end
 
 
@@ -163,49 +204,7 @@ function compile(::Type{Fn{:max}}, base::Query, flow::Query, op::Query)
 end
 
 
-function mkproduct(base::Query, fields::Query...)
-    for field in fields
-        @assert codomain(base) == domain(field) "$(codomain(base)) != $(domain(field))"
-    end
-    scope = empty(base)
-    I = codomain(base)
-    O = Tuple{[datatype(field.output) for field in fields]...}
-    input = Input(I)
-    output = Output(O)
-    pipe = TuplePipe{I,O}([field.pipe for field in fields])
-    parts = NullableQueries(fields)
-    query = Query(scope, input=input, output=output, pipe=pipe, parts=parts)
-    projections = [mkprojection(base, query, i) for (i, field) in enumerate(fields)]
-    if any([!isnull(field.identity) for field in fields])
-        identity = mkproduct(query, [identify(projection) for projection in projections]...)
-        query = Query(query, identity=identity)
-    end
-    if any([!isnull(field.selector) for field in fields])
-        selector = mkproduct(query, [select(projection) for projection in projections]...)
-        query = Query(query, selector=selector)
-    end
-    return query
-end
-
-
-function mkprojection(base::Query, product::Query, index::Int)
-    @assert codomain(base) == domain(product)
-    @assert !isnull(product.parts) && 1 <= index <= length(get(product.parts))
-    part = get(product.parts)[index]
-    I = codomain(product)
-    O = codomain(part)
-    input = Input(I)
-    pipe =
-        singular(part) && complete(part) ? IsoItemPipe{I,O}(index) :
-        singular(part) ? OptItemPipe{I,O}(index) : SeqItemPipe{I,O}(index)
-    return Query(part, input=input, pipe=pipe)
-end
-
-
-function compile(::Type{Fn{:record}}, base::Query, ops::Query...)
-    reqcomposable(base, ops...)
-    return mkproduct(base, ops...)
-end
+compile(::Type{Fn{:record}}, base::Query, ops::Query...) = record(base, ops...)
 
 
 compile(fn::Type{Fn{:select}}, base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
@@ -216,16 +215,8 @@ compile(fn::Type{Fn{:select}}, base::Query, flow::AbstractSyntax, ops::AbstractS
 function compile(::Type{Fn{:select}}, base::Query, flow::Query, ops::Query...)
     reqcomposable(base, flow)
     reqcomposable(flow, ops...)
-    parts = ops
-    ops = tuple([select(op) for op in ops]...)
-    scope = empty(flow)
-    I = codomain(flow)
-    O = Tuple{[datatype(op.output) for op in ops]...}
-    input = Input(I)
-    output = Output(O)
-    pipe = TuplePipe{I,O}([op.pipe for op in ops])
-    selector = Query(scope, input=input, output=output, pipe=pipe, parts=parts)
-    return Query(flow, selector=selector, parts=parts)
+    selector = record(flow, [select(op) for op in ops]...)
+    return Query(flow, selector=selector)
 end
 
 
@@ -344,20 +335,17 @@ compile(fn::Type{Fn{:sort}}, base::Query, flow::AbstractSyntax, ops::AbstractSyn
         compile(fn, base, flow, [compile(flow, op) for op in ops]...)
     end
 
-function compile(::Type{Fn{:sort}}, base::Query, flow::Query, ops::Query...)
+function compile(fn::Type{Fn{:sort}}, base::Query, flow::Query, ops::Query...)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
     I = domain(flow)
     O = codomain(flow)
     if isempty(ops)
-        if isnull(flow.identity)
-            pipe = SortPipe{I,O}(flow.pipe, flow.order)
-        else
-            cap = get(flow.identity)
-            @assert singular(cap) && complete(cap) && exclusive(cap)
-            K = codomain(cap)
-            pipe = SortByPipe{I,O,K}(flow.pipe, cap.pipe, flow.order)
+        if !isnull(flow.identity)
+            identity = Query(get(flow.identity), order=flow.order)
+            return compile(fn, base, flow, identity)
         end
+        pipe = SortPipe{I,O}(flow.pipe, flow.order)
     else
         pipe = flow.pipe
         for op in reverse(ops)
@@ -378,15 +366,14 @@ function compile(::Type{Fn{:unique}}, base::Query, flow::Query)
     output = Output(
         O, singular=false, complete=complete(flow),
         exclusive=true, reachable=reachable(flow))
-    if isnull(flow.identity)
+    if !isnull(flow.identity)
+        identity = get(flow.identity)
+        K = codomain(identity)
+        PipeType = exclusive(flow) ? SortByPipe : UniqueByPipe
+        pipe = PipeType{I,O,K}(flow.pipe, identity.pipe, flow.order)
+    else
         PipeType = exclusive(flow) ? SortPipe : UniquePipe
         pipe = PipeType{I,O}(flow.pipe, flow.order)
-    else
-        cap = get(flow.identity)
-        @assert singular(cap) && complete(cap) && exclusive(cap)
-        K = codomain(cap)
-        PipeType = exclusive(flow) ? SortByPipe : UniqueByPipe
-        pipe = UniqueByPipe{I,O,K}(flow.pipe, cap.pipe, flow.order)
     end
     return Query(flow, output=output, pipe=pipe)
 end
@@ -400,7 +387,7 @@ compile(fn::Type{Fn{:by}}, base::Query, flow::AbstractSyntax, op1::AbstractSynta
 function compile(::Type{Fn{:by}}, base::Query, flow::Query, ops::Query...)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
-    kernel = mkproduct(flow, ops...)
+    kernel = record(flow, ops...)
     key = !isnull(kernel.identity) ? get(kernel.identity) : compile(Fn{:this}, kernel)
     I = codomain(base)
     K = codomain(kernel)
@@ -411,40 +398,38 @@ function compile(::Type{Fn{:by}}, base::Query, flow::Query, ops::Query...)
     input = Input(I)
     output = Output(O, singular=false, complete=true)
     pipe = GroupByPipe{I,K,U,V}(flow.pipe, kernel.pipe, key.pipe, 0)
-    parts = (
-        Query(kernel, input=Input(O), pipe=IsoItemPipe{O,K}(1)),
-        Query(
-            flow,
-            input=Input(O),
-            output=Output(
-                V, singular=false, complete=true,
-                exclusive=exclusive(flow), reachable=reachable(flow)),
-            pipe=SeqItemPipe{O,V}(2)))
-    query = Query(scope, input=input, output=output, pipe=pipe, parts=parts)
-    kerproj = mkprojection(base, query, 1)
-    valproj = mkprojection(base, query, 2)
-    identity = identify(kerproj)
+    kernel_field = Query(kernel, input=Input(O), pipe=IsoItemPipe{O,K}(1))
+    flow_field = Query(
+        flow,
+        input=Input(O),
+        output=Output(
+            V, singular=false, complete=true,
+            exclusive=exclusive(flow), reachable=reachable(flow)),
+        pipe=SeqItemPipe{O,V}(2))
+    fields = (kernel_field, flow_field)
+    query = Query(scope, input=input, output=output, pipe=pipe, fields=fields)
+    identity = identify(kernel_field)
     items = []
     defs = Dict{Symbol, Query}()
-    for (i, op) in enumerate(ops)
-        itemproj = kerproj >> mkprojection(query, kerproj, i)
-        if !isnull(itemproj.tag)
-            defs[get(itemproj.tag)] = itemproj
+    for (k, op) in enumerate(ops)
+        item = kernel_field >> get(kernel_field.fields)[k]
+        if !isnull(item.tag)
+            defs[get(item.tag)] = item
         end
-        push!(items, itemproj)
+        push!(items, item)
     end
-    if !isnull(valproj.tag)
-        defs[get(valproj.tag)] = valproj
+    if !isnull(flow_field.tag)
+        defs[get(flow_field.tag)] = flow_field
     end
-    push!(items, valproj)
-    selector = select(mkproduct(query, items...))
+    push!(items, flow_field)
+    selector = select(record(query, items...))
     return Query(query, identity=identity, selector=selector, defs=defs)
 end
 
 
 function compile(::Type{Fn{:as}}, base::Query, op::AbstractSyntax, ident::AbstractSyntax)
     (isa(ident, ApplySyntax) && isempty(ident.args)) || error("expected an identifier: $ident")
-    return Query(compile(base, op), tag=NullableSymbol(ident.fn))
+    return Query(compile(base, op), tag=ident.fn)
 end
 
 
@@ -555,31 +540,31 @@ end
 
 
 function compile(fn::Type{Fn{:json}}, base::Query, flow::Query)
-    if !isnull(flow.selector) && !isnull(get(flow.selector).parts)
+    flow = select(flow)
+    if !isnull(flow.fields)
         parts = ()
         fields = ()
-        for part in get(get(flow.selector).parts)
-            part = compile(fn, flow, part)
-            if !isnull(part.tag)
-                field = isnull(part.selector) ? part.pipe : part.pipe >> get(part.selector).pipe
-                if singular(part) && !complete(part)
-                    field = OptToVoidPipe(field)
-                end
-                fields = (fields..., (get(part.tag) => field))
+        for field in get(flow.fields)
+            field = compile(fn, flow, field)
+            if !isnull(field.tag)
+                fields = (fields..., (get(field.tag) => field))
             end
         end
-        I = codomain(flow)
-        pipe = DictPipe{I}(fields)
-        output = Output(Dict)
-        selector = Query(get(flow.selector), output=output, pipe=pipe)
-        flow = Query(flow, selector=selector)
+        I = domain(flow)
+        O = codomain(flow)
+        scope = empty(base)
+        input = flow.input
+        output = Output(Dict)   # FIXME: Union{Dict,Void}
+        pipe = flow.pipe >> DictPipe{O}(fields)
+        if singular(flow) && !complete(flow)
+            pipe = OptToVoidPipe{I,Dict}(pipe)
+        end
+        flow = Query(scope, input=input, output=output, pipe=pipe, tag=flow.tag)
     else
-        flow = select(flow)
         if singular(flow) && !complete(flow)
             I = domain(flow)
             O = codomain(flow)
-            # FIXME:
-            #output = Output(Union{O,Void}, exclusive=exclusive(flow), reachable=reachable(flow))
+            # FIXME: Union{O,Void}
             output = Output(O, exclusive=exclusive(flow), reachable=reachable(flow))
             pipe = OptToVoidPipe{I,O}(flow.pipe)
             flow = Query(flow, output=output, pipe=pipe)
@@ -588,12 +573,4 @@ function compile(fn::Type{Fn{:json}}, base::Query, flow::Query)
     return flow
 end
 
-
-function select(q::Query)
-    return Query(isnull(q.selector) ? q : q >> get(q.selector), src=q.src, origin=q)
-end
-
-function identify(q::Query)
-    return Query(isnull(q.identity) ? q : q >> get(q.identity), src=q.src, origin=q)
-end
 

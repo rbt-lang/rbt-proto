@@ -153,21 +153,23 @@ immutable Query
     output::Output
     # Execution pipeline that implements the combinator.
     pipe::AbstractPipe
-    # For a composite query, the components that form it.
-    parts::Nullable{Tuple{Vararg{Query}}}
-    # For opaque output, unique representable identifier.
+    # Extractors of individual fields for a record-generating combinator.
+    fields::Nullable{Tuple{Vararg{Query}}}
+    # Generator of a unique representable value (for opaque output values
+    # that cannot be tested for equality).
     identity::Nullable{Query}
-    # Output formatter.
+    # Output formatter (for opaque output values).
     selector::Nullable{Query}
-    # Named fields, if any.
+    # Named attributes that augment the current scope.
     defs::Dict{Symbol,Query}
-    # Sorting direction (0 is default, +1 for ascending, -1 for descending).
+    # Sorting direction (0 or +1 for ascending, -1 for descending).
     order::Int
     # Identifier that denotes the combinator.
     tag::Nullable{Symbol}
     # The source code for the query.
-    src::Nullable{AbstractSyntax}
-    # Pre-finalized state if we need to resume compilation.
+    syntax::Nullable{AbstractSyntax}
+    # The query as it was before formatting and optimizing.  Use it to
+    # resume compilation.
     origin::Nullable{Query}
 end
 
@@ -183,15 +185,15 @@ Query(
     scope::AbstractScope, domain::DataType=UnitType;
     input=Input(domain), output=Output(domain, exclusive=true, reachable=true),
     pipe=ThisPipe{datatype(domain)}(),
-    parts=NullableQueries(),
+    fields=NullableQueries(),
     identity=NullableQuery(),
     selector=NullableQuery(),
     defs=Dict{Symbol,Query}(),
     order=0,
     tag=NullableSymbol(),
-    src=NullableSyntax(),
+    syntax=NullableSyntax(),
     origin=NullableQuery()) =
-    Query(scope, input, output, pipe, parts, identity, selector, defs, order, tag, src, origin)
+    Query(scope, input, output, pipe, fields, identity, selector, defs, order, tag, syntax, origin)
 
 # Initial compiler state.
 Query(db::AbstractDatabase) = Query(scope(db))
@@ -200,21 +202,21 @@ Query(db::AbstractDatabase) = Query(scope(db))
 Query(
     q::Query;
     scope=nothing, input=nothing, output=nothing, pipe=nothing,
-    parts=nothing, identity=nothing, selector=nothing, defs=nothing,
+    fields=nothing, identity=nothing, selector=nothing, defs=nothing,
     order=nothing, tag=nothing,
-    src=nothing, origin=nothing) =
+    syntax=nothing, origin=nothing) =
     Query(
         scope != nothing ? scope : q.scope,
         input != nothing ? input : q.input,
         output != nothing ? output : q.output,
         pipe != nothing ? pipe : q.pipe,
-        parts != nothing ? parts : q.parts,
+        fields != nothing ? fields : q.fields,
         identity != nothing ? identity : q.identity,
         selector != nothing ? selector : q.selector,
         defs != nothing ? defs : q.defs,
         order != nothing ? order : q.order,
         tag != nothing ? tag : q.tag,
-        src != nothing ? src : q.src,
+        syntax != nothing ? syntax : q.syntax,
         origin != nothing ? origin : q.origin)
 
 # Extracts local namespace.
@@ -242,7 +244,7 @@ reachable(q::Query) = reachable(q.output)
 
 # Displays the query.
 function show(io::IO, q::Query)
-    print(io, isnull(q.src) ? "(?)" : get(q.src), " :: ")
+    print(io, isnull(q.syntax) ? "(?)" : get(q.syntax), " :: ")
     if domain(q) != UnitType
         print(io, datatype(q.input), " -> ")
     end
@@ -250,11 +252,14 @@ function show(io::IO, q::Query)
 end
 
 # Compiles the query.
-prepare(state, expr) = prepare(Query(state), syntax(expr))
-prepare(state::Query, expr::AbstractSyntax) =
-    !isnull(state.origin) ?
-        prepare(get(state.origin), expr) :
-        optimize(select(compile(state, expr)))
+prepare(base, expr) = prepare(Query(base), syntax(expr))
+prepare(base::Query, expr::AbstractSyntax) =
+    if !isnull(base.origin)
+        return prepare(get(base.origin), expr)
+    else
+        origin = compile(base, expr)
+        return Query(optimize(select(origin)), origin=origin)
+    end
 
 # Executes the query.
 execute(q::Query, args...) =
@@ -262,12 +267,8 @@ execute(q::Query, args...) =
 call(q::Query, args...) = execute(q, args...)
 
 # Builds initial execution pipeline.
-compile(state::Query, expr::AbstractSyntax) =
+compile(base::Query, expr::AbstractSyntax) =
     error("compile() is not implemented for $(typeof(expr))")
-
-# Finalizes the execution pipeline.
-select(q::Query) = q
-identify(q::Query) = q
 
 # Optimizes the execution pipeline.
 optimize(q::Query) = Query(q, pipe=optimize(q.pipe))
