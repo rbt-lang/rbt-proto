@@ -387,18 +387,28 @@ compile(fn::Type{Fn{:by}}, base::Query, flow::AbstractSyntax, op1::AbstractSynta
 function compile(::Type{Fn{:by}}, base::Query, flow::Query, ops::Query...)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
-    kernel = record(flow, ops...)
-    key = !isnull(kernel.identity) ? get(kernel.identity) : compile(Fn{:this}, kernel)
-    I = codomain(base)
-    K = codomain(kernel)
-    U = codomain(key)
-    V = codomain(flow)
-    O = Tuple{K,Vector{V}}
     scope = empty(base)
+    I = domain(flow)
+    V = codomain(flow)
+    Ps = ()
+    O = Tuple{UnitType, Vector{V}}
+    pipe = TuplePipe{I, O}([ConstPipe{I,UnitType}(()), flow.pipe])
+    for op in ops
+        opid = !isnull(op.identity) ? get(op.identity) : compile(Fn{:this}, op)
+        P = Tuple{Ps...}
+        K = codomain(op)
+        J = codomain(opid)
+        Ps = (Ps..., K)
+        Q = Tuple{Ps...}
+        pipe = pipe >> GroupByPipe{P,Q,V,K,J}(op.pipe, opid.pipe, op.order)
+    end
+    O = Tuple{Tuple{Ps...}, Vector{V}}
     input = Input(I)
-    output = Output(O, singular=false, complete=true)
-    pipe = GroupByPipe{I,K,U,V}(flow.pipe, kernel.pipe, key.pipe, 0)
-    kernel_field = Query(kernel, input=Input(O), pipe=IsoItemPipe{O,K}(1))
+    output = Output(O, singular=isempty(ops), complete=true)
+    kernel_field = Query(
+        record(flow, ops...),
+        input=Input(O),
+        pipe=IsoItemPipe{O,Tuple{Ps...}}(1))
     flow_field = Query(
         flow,
         input=Input(O),

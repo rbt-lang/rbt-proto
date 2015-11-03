@@ -506,35 +506,34 @@ function execute{I,O,K}(pipe::UniqueByPipe{I,O,K}, x::I)
 end
 
 
-immutable GroupByPipe{I,K,U,V} <: SeqPipe{I,Tuple{K,Vector{V}}}
-    F::SeqPipe{I,V}
-    kernel::IsoPipe{V,K}
-    key::IsoPipe{K,U}
+immutable GroupByPipe{P,Q,V,K,J} <: SeqPipe{Tuple{P, Vector{V}}, Tuple{Q, Vector{V}}}
+    # Q is Tuple{P..., K}
+    ker::IsoPipe{V,K}
+    id::IsoPipe{K,J}
     order::Int
 end
 
 show(io::IO, pipe::GroupByPipe) =
-    print(io, "GroupBy(", pipe.F, ", ", pipe.kernel, ", ", pipe.key, ", ", pipe.order, ")")
+    print(io, "GroupBy(", pipe.ker, ", ", pipe.id, ", ", pipe.order, ")")
 
-
-function execute{I,K,U,V}(pipe::GroupByPipe{I,K,U,V}, x::I)
-    ys = execute(pipe.F, x)::Vector{V}
-    kys = Vector{Tuple{U,Vector{V}}}()
-    idx = Dict{U,Int}()
-    ker = Dict{U,K}()
-    for y in ys
-        q = execute(pipe.kernel, y)::K
-        k = execute(pipe.key, q)::U
-        if k in keys(idx)
-            push!(kys[idx[k]][2], y)
+function execute{P,Q,V,K,J}(pipe::GroupByPipe{P,Q,V,K,J}, x::Tuple{P, Vector{V}})
+    p, vs = x
+    js = Vector{J}()
+    qvs = Vector{Tuple{Q,Vector{V}}}()
+    j2idx = Dict{J,Int}()
+    for v in vs
+        k = execute(pipe.ker, v)::K
+        j = execute(pipe.id, k)::J
+        if j in keys(j2idx)
+            push!(qvs[j2idx[j]][2], v)
         else
-            push!(kys, (k, V[y]))
-            idx[k] = length(kys)
-            ker[k] = q
+            push!(qvs, ((p..., k), V[v]))
+            push!(js, j)
+            j2idx[j] = length(js)
         end
     end
-    sort!(kys, rev=(pipe.order<0))
-    return Tuple{K,Vector{V}}[(ker[k], ys) for (k, ys) in kys]
+    sort!(js, rev=(pipe.order<0))
+    return Tuple{Q, Vector{V}}[qvs[j2idx[j]] for j in js]
 end
 
 
