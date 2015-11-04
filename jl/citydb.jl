@@ -11,6 +11,11 @@ using RBT: Entity, Database, Schema, Class, Arrow, Instance
 URL = "https://data.cityofchicago.org/api/views/xzkq-xp2w/rows.csv?accessType=DOWNLOAD"
 CSV_PATH = "Current_Employee_Names,_Salaries,_and_Position_Titles.csv"
 
+TREASURER_DEPT = "TREASURER"
+TREASURER_HEAD = "CITY TREASURER"
+ACC_HEAD = "DIR OF ACCOUNTING"
+ACCS = ["AUDITOR IV", "ACCOUNTANT IV", "ACCOUNTANT III", "STAFF ASST", "ACCOUNTANT I"]
+
 
 schema = Schema(
     Class(
@@ -28,6 +33,15 @@ schema = Schema(
         Arrow(:position, UTF8String),
         Arrow(:salary, Int),
         Arrow(:department, select=:name),
+        Arrow(
+            :reports_to, :employee,
+            complete=false,
+            select=(:name, :surname, :position)),
+        Arrow(
+            :reported_by, :employee,
+            singular=false, complete=false, exclusive=true,
+            select=(:name, :surname, :position),
+            inverse=:reports_to),
         select=(:name, :surname, :department, :position, :salary)))
 
 
@@ -45,6 +59,13 @@ empl_surname = Dict{E, UTF8String}()
 empl_position = Dict{E, UTF8String}()
 empl_salary = Dict{E, Int}()
 empl_dept = Dict{E, D}()
+empl_reports_to = Dict{E, E}()
+empl_reported_by = Dict{E, Vector{E}}()
+
+tr_head = nothing
+trs = []
+acc_head = nothing
+accs = []
 
 
 BASE_PATH = joinpath(dirname(@__FILE__), "data")
@@ -84,6 +105,27 @@ for i = 1:size(csv, 1)
     empl_position[eid] = position
     empl_salary[eid] = salary
     empl_dept[eid] = did
+    if department_name == TREASURER_DEPT
+        if position == TREASURER_HEAD
+            tr_head = eid
+        elseif position == ACC_HEAD
+            acc_head = eid
+            push!(trs, eid)
+        elseif position in ACCS
+            push!(accs, eid)
+        else
+            push!(trs, eid)
+        end
+    end
+end
+
+empl_reported_by[tr_head] = trs
+empl_reported_by[acc_head] = accs
+for tr in trs
+    empl_reports_to[tr] = tr_head
+end
+for acc in accs
+    empl_reports_to[acc] = acc_head
 end
 
 instance = Instance(
@@ -97,7 +139,9 @@ instance = Instance(
         (:employee, :surname) => empl_surname,
         (:employee, :position) => empl_position,
         (:employee, :salary) => empl_salary,
-        (:employee, :department) => empl_dept))
+        (:employee, :department) => empl_dept,
+        (:employee, :reports_to) => empl_reports_to,
+        (:employee, :reported_by) => empl_reported_by))
 
 
 citydb = Database(schema, instance)

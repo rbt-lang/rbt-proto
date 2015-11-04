@@ -24,7 +24,7 @@ Arrow(
     select=nothing, inverse=nothing) =
     Arrow(name, Output(T, OutputMode(singular, complete, exclusive, reachable)), select, inverse)
 Arrow(name::Symbol, targetname::Symbol; props...) =
-    Arrow(name, Entity{target}; props...)
+    Arrow(name, Entity{targetname}; props...)
 Arrow(name::Symbol; props...) =
     Arrow(name, Entity{name}; props...)
 
