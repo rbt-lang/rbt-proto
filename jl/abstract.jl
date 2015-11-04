@@ -283,3 +283,9 @@ empty(q::Query) = empty(q.scope)
 immutable Fn{name}
 end
 
+# Type constructor shortcut.
+Fn(names...) =
+    isempty(names) ? Union{} :
+    length(names) == 1 ? Type{Fn{names[1]}} :
+    Union{[Type{Fn{name}} for name in names]...}
+

@@ -145,7 +145,7 @@ compile{name}(fn::Type{Fn{name}}, base::Query, arg1::AbstractSyntax, args::Abstr
     compile(fn, base, compile(base, arg1), [compile(base, arg) for arg in args]...)
 
 
-function compile(::Type{Fn{:this}}, base::Query)
+function compile(::Fn(:this), base::Query)
     T = codomain(base)
     input = Input(T)
     output = Output(T, exclusive=true, reachable=true)
@@ -154,7 +154,7 @@ function compile(::Type{Fn{:this}}, base::Query)
 end
 
 
-function compile(::Type{Fn{:unlink}}, base::Query, arg::AbstractSyntax)
+function compile(::Fn(:unlink), base::Query, arg::AbstractSyntax)
     scope = root(base)
     I = codomain(base)
     input = Input(I)
@@ -165,7 +165,7 @@ function compile(::Type{Fn{:unlink}}, base::Query, arg::AbstractSyntax)
 end
 
 
-function compile(::Type{Fn{:count}}, base::Query, flow::Query)
+function compile(::Fn(:count), base::Query, flow::Query)
     reqcomposable(base, flow); reqplural(flow)
     scope = empty(base)
     I = domain(flow)
@@ -177,7 +177,7 @@ function compile(::Type{Fn{:count}}, base::Query, flow::Query)
 end
 
 
-function compile(::Type{Fn{:max}}, base::Query, flow::Query)
+function compile(::Fn(:max), base::Query, flow::Query)
     reqcomposable(base, flow); reqplural(flow); reqcodomain(Int, flow)
     scope = empty(base)
     I = domain(flow)
@@ -187,32 +187,15 @@ function compile(::Type{Fn{:max}}, base::Query, flow::Query)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
-compile(fn::Type{Fn{:max}}, base::Query, flow::AbstractSyntax, op::AbstractSyntax) =
-    let flow = compile(base, flow)
-        compile(fn, base, flow, compile(flow, op))
-    end
-
-function compile(::Type{Fn{:max}}, base::Query, flow::Query, op::Query)
-    reqcomposable(base, flow); reqplural(flow)
-    reqcomposable(flow, op); reqsingular(op); reqcomplete(op); reqcodomain(Int, op)
-    I = domain(flow)
-    O = codomain(flow)
-    output = Output(O, singular=true, complete=complete(flow), exclusive=exclusive(flow))
-    pipe = complete(flow) ?
-        MaxByPipe{I,O}(flow.pipe, op.pipe) : OptMaxByPipe{I,O}(flow.pipe, op.pipe)
-    return Query(flow, output=output, pipe=pipe)
-end
+compile(::Fn(:record), base::Query, ops::Query...) = record(base, ops...)
 
 
-compile(::Type{Fn{:record}}, base::Query, ops::Query...) = record(base, ops...)
-
-
-compile(fn::Type{Fn{:select}}, base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
+compile(fn::Fn(:select), base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
     let flow = compile(base, flow)
         compile(fn, base, flow, [compile(flow, op) for op in ops]...)
     end
 
-function compile(::Type{Fn{:select}}, base::Query, flow::Query, ops::Query...)
+function compile(::Fn(:select), base::Query, flow::Query, ops::Query...)
     reqcomposable(base, flow)
     reqcomposable(flow, ops...)
     selector = record(flow, [select(op) for op in ops]...)
@@ -220,22 +203,26 @@ function compile(::Type{Fn{:select}}, base::Query, flow::Query, ops::Query...)
 end
 
 
-compile(fn::Type{Fn{:filter}}, base::Query, flow::AbstractSyntax, op::AbstractSyntax) =
+compile(fn::Fn(:filter), base::Query, flow::AbstractSyntax, op::AbstractSyntax) =
     let flow = compile(base, flow)
         compile(fn, base, flow, compile(flow, op))
     end
 
-function compile(::Type{Fn{:filter}}, base::Query, flow::Query, op::Query)
+function compile(::Fn(:filter), base::Query, flow::Query, op::Query)
     reqcomposable(base, flow); reqplural(flow)
-    reqcomposable(flow, op); reqsingular(op); reqcomplete(op); reqcodomain(Bool, op)
+    reqcomposable(flow, op); reqsingular(op); reqcodomain(Bool, op)
     O = codomain(flow)
     output = Output(O, singular=false, complete=false, exclusive=exclusive(op))
-    pipe = flow.pipe >> SievePipe{O}(op.pipe)
+    predicate = op.pipe
+    if !complete(op)
+        predicate = IsoIfNullPipe{O,Bool}(predicate, ConstPipe{O,Bool}(false))
+    end
+    pipe = flow.pipe >> SievePipe{O}(predicate)
     return Query(flow, output=output, pipe=pipe)
 end
 
 
-function compile(::Type{Fn{:reverse}}, base::Query, flow::Query)
+function compile(::Fn(:reverse), base::Query, flow::Query)
     reqcomposable(base, flow); reqplural(flow)
     I = domain(flow)
     O = codomain(flow)
@@ -244,47 +231,39 @@ function compile(::Type{Fn{:reverse}}, base::Query, flow::Query)
 end
 
 
-function compile(::Type{Fn{:first}}, base::Query, flow::Query)
+function compile(fn::Fn(:first, :last), base::Query, flow::Query)
     reqcomposable(base, flow); reqplural(flow)
     I = domain(flow)
     O = codomain(flow)
     output = Output(O, complete=complete(flow), exclusive=exclusive(flow))
-    pipe = complete(flow) ? IsoFirstPipe{I,O}(flow.pipe) : OptFirstPipe{I,O}(flow.pipe)
+    dir = flow.order >= 0 ? 1 : -1
+    dir = fn == Fn{:first} ? dir : -dir
+    pipe = complete(flow) ? IsoFirstPipe{I,O}(flow.pipe, dir) : OptFirstPipe{I,O}(flow.pipe, dir)
     return Query(flow, output=output, pipe=pipe)
 end
 
-function compile(::Type{Fn{:first}}, base::Query, flow::Query, size::Query)
+
+compile(fn::Fn(:first, :last), base::Query, flow::AbstractSyntax, op::AbstractSyntax) =
+    let flow = compile(base, flow)
+        compile(fn, base, flow, compile(flow, op))
+    end
+
+function compile(fn::Fn(:first, :last), base::Query, flow::Query, op::Query)
     reqcomposable(base, flow); reqplural(flow)
-    reqcomposable(base, size); reqsingular(size); reqcomplete(size); reqcodomain(Int, size)
+    reqcomposable(flow, op); reqsingular(op); reqcomplete(op)
+    dir = op.order >= 0 ? 1 : -1
+    dir = fn == Fn{:first} ? dir : -dir
+    op = identify(op)
     I = domain(flow)
     O = codomain(flow)
-    output = Output(O, singular=false, complete=false, exclusive=exclusive(flow))
-    pipe = SeqFirstPipe{I,O}(flow.pipe, size.pipe)
+    output = Output(O, singular=true, complete=complete(flow), exclusive=exclusive(flow))
+    pipe = complete(flow) ?
+        FirstByPipe{I,O}(flow.pipe, op.pipe, dir) : OptFirstByPipe{I,O}(flow.pipe, op.pipe, dir)
     return Query(flow, output=output, pipe=pipe)
 end
 
 
-function compile(::Type{Fn{:last}}, base::Query, flow::Query)
-    reqcomposable(base, flow); reqplural(flow)
-    I = domain(flow)
-    O = codomain(flow)
-    output = Output(O, complete=complete(flow), exclusive=exclusive(flow))
-    pipe = complete(flow) ? IsoLastPipe{I,O}(flow.pipe) : OptLastPipe{I,O}(flow.pipe)
-    return Query(flow, output=output, pipe=pipe)
-end
-
-function compile(::Type{Fn{:last}}, base::Query, flow::Query, size::Query)
-    reqcomposable(base, flow); reqplural(flow)
-    reqcomposable(base, size); reqsingular(size); reqcomplete(size); reqcodomain(Int, size)
-    I = domain(flow)
-    O = codomain(flow)
-    output = Output(O, singular=false, complete=false, exclusive=exclusive(flow))
-    pipe = SeqLastPipe{I,O}(flow.pipe, size.pipe)
-    return Query(flow, output=output, pipe=pipe)
-end
-
-
-function compile(::Type{Fn{:take}}, base::Query, flow::Query, size::Query)
+function compile(::Fn(:take), base::Query, flow::Query, size::Query)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(base, size); reqsingular(size); reqcomplete(size); reqcodomain(Int, size)
     I = domain(flow)
@@ -295,7 +274,7 @@ function compile(::Type{Fn{:take}}, base::Query, flow::Query, size::Query)
 end
 
 
-function compile(::Type{Fn{:take}}, base::Query, flow::Query, size::Query, skip::Query)
+function compile(::Fn(:take), base::Query, flow::Query, size::Query, skip::Query)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(base, size, skip); reqsingular(size, skip)
     reqcomplete(size, skip); reqcodomain(Int, size, skip)
@@ -307,7 +286,7 @@ function compile(::Type{Fn{:take}}, base::Query, flow::Query, size::Query, skip:
 end
 
 
-function compile(::Type{Fn{:get}}, base::Query, flow::Query, key::Query)
+function compile(::Fn(:get), base::Query, flow::Query, key::Query)
     reqcomposable(base, flow); reqplural(flow); reqexclusive(flow); reqidentity(flow)
     reqcomposable(base, key); reqsingular(key); reqcomplete(key)
     reqcodomain(codomain(get(flow.identity)), key)
@@ -320,22 +299,22 @@ function compile(::Type{Fn{:get}}, base::Query, flow::Query, key::Query)
 end
 
 
-function compile(::Type{Fn{:asc}}, base::Query, op::Query)
+function compile(::Fn(:asc), base::Query, op::Query)
     return Query(op, order=1)
 end
 
 
-function compile(::Type{Fn{:desc}}, base::Query, op::Query)
+function compile(::Fn(:desc), base::Query, op::Query)
     return Query(op, order=-1)
 end
 
 
-compile(fn::Type{Fn{:sort}}, base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
+compile(fn::Fn(:sort), base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
     let flow = compile(base, flow)
         compile(fn, base, flow, [compile(flow, op) for op in ops]...)
     end
 
-function compile(fn::Type{Fn{:sort}}, base::Query, flow::Query, ops::Query...)
+function compile(fn::Fn(:sort), base::Query, flow::Query, ops::Query...)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
     I = domain(flow)
@@ -359,7 +338,7 @@ function compile(fn::Type{Fn{:sort}}, base::Query, flow::Query, ops::Query...)
 end
 
 
-function compile(::Type{Fn{:unique}}, base::Query, flow::Query)
+function compile(::Fn(:unique), base::Query, flow::Query)
     reqcomposable(base, flow); reqplural(flow)
     I = domain(flow)
     O = codomain(flow)
@@ -379,15 +358,12 @@ function compile(::Type{Fn{:unique}}, base::Query, flow::Query)
 end
 
 
-compile(fn::Union{Type{Fn{:by}}, Type{Fn{:cube_by}}},
-        base::Query, flow::AbstractSyntax, op1::AbstractSyntax, ops::AbstractSyntax...) =
+compile(fn::Fn(:by, :cube_by), base::Query, flow::AbstractSyntax, op1::AbstractSyntax, ops::AbstractSyntax...) =
     let flow = compile(base, flow)
         compile(fn, base, flow, compile(flow, op1), [compile(flow, op) for op in ops]...)
     end
 
-function compile(
-        fn::Union{Type{Fn{:by}}, Type{Fn{:cube_by}}},
-        base::Query, flow::Query, ops::Query...)
+function compile(fn::Fn(:by, :cube_by), base::Query, flow::Query, ops::Query...)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
     iscube = (fn == Fn{:cube_by})
@@ -446,17 +422,17 @@ function compile(
 end
 
 
-function compile(::Type{Fn{:as}}, base::Query, op::AbstractSyntax, ident::AbstractSyntax)
+function compile(::Fn(:as), base::Query, op::AbstractSyntax, ident::AbstractSyntax)
     (isa(ident, ApplySyntax) && isempty(ident.args)) || error("expected an identifier: $ident")
     return Query(compile(base, op), tag=ident.fn)
 end
 
 
-compile(::Type{Fn{:(=>)}}, base::Query, ident::AbstractSyntax, op::AbstractSyntax) =
+compile(::Fn(:(=>)), base::Query, ident::AbstractSyntax, op::AbstractSyntax) =
     compile(Fn{:as}, base, op, ident)
 
 
-compile(fn::Type{Fn{:define}}, base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
+compile(fn::Fn(:define), base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
     let flow = compile(base, flow)
         for op in ops
             flow = compile(fn, base, flow, compile(flow, op))
@@ -465,7 +441,7 @@ compile(fn::Type{Fn{:define}}, base::Query, flow::AbstractSyntax, ops::AbstractS
     end
 
 
-function compile(::Type{Fn{:define}}, base::Query, flow::Query, op::Query)
+function compile(::Fn(:define), base::Query, flow::Query, op::Query)
     reqcomposable(base, flow)
     reqcomposable(flow, op); reqtag(op)
     defs = merge(flow.defs, Dict(get(op.tag) => op))
@@ -473,7 +449,7 @@ function compile(::Type{Fn{:define}}, base::Query, flow::Query, op::Query)
 end
 
 
-function compile(::Type{Fn{:!}}, base::Query, op::Query)
+function compile(::Fn(:!), base::Query, op::Query)
     reqcomposable(base, op); reqsingular(op); reqcodomain(Bool, op)
     scope = empty(base)
     I = codomain(base)
@@ -484,7 +460,7 @@ function compile(::Type{Fn{:!}}, base::Query, op::Query)
 end
 
 
-function compile(::Type{Fn{:&}}, base::Query, op1::Query, op2::Query)
+function compile(::Fn(:&), base::Query, op1::Query, op2::Query)
     reqcomposable(base, op1, op2); reqsingular(op1, op2); reqcodomain(Bool, op1, op2)
     scope = empty(base)
     I = codomain(base)
@@ -496,7 +472,7 @@ function compile(::Type{Fn{:&}}, base::Query, op1::Query, op2::Query)
 end
 
 
-function compile(::Type{Fn{:|}}, base::Query, op1::Query, op2::Query)
+function compile(::Fn(:|), base::Query, op1::Query, op2::Query)
     reqcomposable(base, op1, op2); reqsingular(op1, op2); reqcodomain(Bool, op1, op2)
     scope = empty(base)
     I = codomain(base)
@@ -511,7 +487,7 @@ end
 
 macro compileunaryop(fn, Pipe, T1, T2)
     return esc(quote
-        function compile(::Type{Fn{$fn}}, base::Query, op::Query)
+        function compile(::Fn($fn), base::Query, op::Query)
             reqcomposable(base, op); reqcodomain($T1, op)
             scope = empty(base)
             I = codomain(base)
@@ -527,7 +503,7 @@ end
 
 macro compilebinaryop(fn, Pipe, T1, T2, T3)
     return esc(quote
-        function compile(::Type{Fn{$fn}}, base::Query, op1::Query, op2::Query)
+        function compile(::Fn($fn), base::Query, op1::Query, op2::Query)
             reqcomposable(base, op1, op2); reqcodomain($T1, op1); reqcodomain($T2, op2)
             singular(op1) || reqsingular(op2)
             T = Tuple{$T1,$T2}
@@ -558,7 +534,7 @@ end
 @compilebinaryop(:(/), DivPipe, Int, Int, Int)
 
 
-function compile(fn::Type{Fn{:json}}, base::Query, flow::Query)
+function compile(fn::Fn(:json), base::Query, flow::Query)
     flow = select(flow)
     if !isnull(flow.fields)
         parts = ()

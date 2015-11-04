@@ -92,7 +92,7 @@ function execute{I}(pipe::SeqDataFramePipe, x::I)
 end
 
 
-function compile(::Type{Fn{:dataframe}}, base::Query, flow::Query)
+function compile(::Fn(:dataframe), base::Query, flow::Query)
     flow = select(flow)
     if !isnull(flow.fields)
         fields = mkdffields(flow)

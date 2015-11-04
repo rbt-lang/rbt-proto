@@ -277,34 +277,6 @@ execute{I}(pipe::OptMaxPipe{I}, x::I) =
     end
 
 
-immutable MaxByPipe{I,O} <: IsoPipe{I,O}
-    F::SeqPipe{I,O}
-    val::IsoPipe{O,Int}
-end
-
-show(io::IO, pipe::MaxByPipe) = print(io, "MaxBy(", pipe.F, ", ", pipe.val, ")")
-
-execute{I,O}(pipe::MaxByPipe{I,O}, x::I) =
-    let ys = execute(pipe.F, x)::Vector{O},
-        vs = [execute(pipe.val, y)::Int for y in ys]
-        ys[indmax(vs)]
-    end
-
-
-immutable OptMaxByPipe{I,O} <: OptPipe{I,O}
-    F::SeqPipe{I,O}
-    val::IsoPipe{O,Int}
-end
-
-show(io::IO, pipe::OptMaxByPipe) = print(io, "OptMaxBy(", pipe.F, ", ", pipe.val, ")")
-
-execute{I,O}(pipe::OptMaxByPipe{I,O}, x::I) =
-    let ys = execute(pipe.F, x)::Vector{O},
-        vs = [execute(pipe.val, y)::Int for y in ys]
-        isempty(vs) ? Nullable{O}() : Nullable{O}(ys[indmax(vs)])
-    end
-
-
 immutable TuplePipe{I,O} <: IsoPipe{I,O}
     Fs::Vector{AbstractPipe{I}}
 end
@@ -325,74 +297,70 @@ execute{I}(pipe::SievePipe{I}, x::I) =
     execute(pipe.P, x)::Bool ? Nullable{I}(x) : Nullable{I}()
 
 
-immutable IsoFirstPipe{I,O} <: IsoPipe{I,O}
-    F::SeqPipe{I,O}
+immutable IsoIfNullPipe{I,O} <: IsoPipe{I,O}
+    F::OptPipe{I,O}
+    R::IsoPipe{I,O}
 end
 
-show(io::IO, pipe::IsoFirstPipe) = print(io, "IsoFirst(", pipe.F, ")")
+show(io::IO, pipe::IsoIfNullPipe) = print(io, "IsoIfNullPipe(", pipe.F, ", ", pipe.R, ")")
+
+execute{I,O}(pipe::IsoIfNullPipe{I,O}, x::I) =
+    let y = execute(pipe.F, x)
+        !isnull(y) ? get(y) : execute(pipe.R, x)
+    end
+
+
+immutable IsoFirstPipe{I,O} <: IsoPipe{I,O}
+    F::SeqPipe{I,O}
+    dir::Int
+end
+
+show(io::IO, pipe::IsoFirstPipe) = print(io, "IsoFirst(", pipe.F, ", ", pipe.dir, ")")
 
 execute{I,O}(pipe::IsoFirstPipe{I,O}, x::I) =
-    (execute(pipe.F, x)::Vector{O})[1]::O
+    (execute(pipe.F, x)::Vector{O})[(pipe.dir >= 0 ? 1 : end)]::O
 
 
 immutable OptFirstPipe{I,O} <: OptPipe{I,O}
     F::SeqPipe{I,O}
+    dir::Int
 end
 
-show(io::IO, pipe::OptFirstPipe) = print(io, "OptFirst(", pipe.F, ")")
+show(io::IO, pipe::OptFirstPipe) = print(io, "OptFirst(", pipe.F, ", ", pipe.dir, ")")
 
 execute{I,O}(pipe::OptFirstPipe{I,O}, x::I) =
     let ys = execute(pipe.F, x)::Vector{O}
-        isempty(ys) ? Nullable{O}() : Nullable{O}(ys[1])
+        isempty(ys) ? Nullable{O}() : Nullable{O}(ys[(pipe.dir >= 0 ? 1 : end)])
     end
 
 
-immutable SeqFirstPipe{I,O} <: SeqPipe{I,O}
+immutable IsoFirstByPipe{I,O} <: IsoPipe{I,O}
     F::SeqPipe{I,O}
-    N::IsoPipe{I,Int}
+    val::IsoPipe{O,Int}
+    dir::Int
 end
 
-show(io::IO, pipe::SeqFirstPipe) = print(io, "SeqFirst(", pipe.F, ", ", pipe.N, ")")
+show(io::IO, pipe::IsoFirstByPipe) = print(io, "IsoFirstBy(", pipe.F, ", ", pipe.val, ", ", pipe.dir, ")")
 
-execute{I,O}(pipe::SeqFirstPipe{I,O}, x::I) =
-    let ys = execute(pipe.F, x)::Vector{O}, n = execute(pipe.N, x)::Int
-        n >= 0 ? ys[1:min(end,n)] : ys[1:end+n]
-    end
-
-
-immutable IsoLastPipe{I,O} <: IsoPipe{I,O}
-    F::SeqPipe{I,O}
-end
-
-show(io::IO, pipe::IsoLastPipe) = print(io, "IsoLast(", pipe.F, ")")
-
-execute{I,O}(pipe::IsoLastPipe{I,O}, x::I) =
-    (execute(pipe.F, x)::Vector{O})[end]::O
-
-
-immutable OptLastPipe{I,O} <: OptPipe{I,O}
-    F::SeqPipe{I,O}
-end
-
-show(io::IO, pipe::OptLastPipe) = print(io, "OptLast(", pipe.F, ")")
-
-execute{I,O}(pipe::OptLastPipe{I,O}, x::I) =
-    let ys = execute(pipe.F, x)::Vector{O}
-        isempty(ys) ? Nullable{O}() : Nullable{O}(ys[end])
-    end
-
-
-immutable SeqLastPipe{I,O} <: SeqPipe{I,O}
-    F::SeqPipe{I,O}
-    N::IsoPipe{I,Int}
-end
-
-show(io::IO, pipe::SeqLastPipe) = print(io, "SeqLast(", pipe.F, ", ", pipe.N, ")")
-
-execute{I,O}(pipe::SeqLastPipe{I,O}, x::I) =
+execute{I,O}(pipe::IsoFirstByPipe{I,O}, x::I) =
     let ys = execute(pipe.F, x)::Vector{O},
-        n = execute(pipe.N, x)::Int
-        n >= 0 ? ys[max(1,end-n+1):end] : ys[1-n:end]
+        vs = [execute(pipe.val, y)::Int for y in ys]
+        ys[(pipe.dir >= 0 ? indmax : indmin)(vs)]
+    end
+
+
+immutable OptFirstByPipe{I,O} <: OptPipe{I,O}
+    F::SeqPipe{I,O}
+    val::IsoPipe{O,Int}
+    dir::Int
+end
+
+show(io::IO, pipe::OptFirstByPipe) = print(io, "OptFirstBy(", pipe.F, ", ", pipe.val, ", ", pipe.dir, ")")
+
+execute{I,O}(pipe::OptFirstByPipe{I,O}, x::I) =
+    let ys = execute(pipe.F, x)::Vector{O},
+        vs = [execute(pipe.val, y)::Int for y in ys]
+        isempty(vs) ? Nullable{O}() : Nullable{O}(ys[(pipe.dir >= 0 ? indmax : indmin)(vs)])
     end
 
 
@@ -407,9 +375,11 @@ show(io::IO, pipe::TakePipe) = print(io, "Take(", pipe.F, ", ", pipe.N, ", ", pi
 execute{I,O}(pipe::TakePipe{I,O}, x::I) =
     let ys = execute(pipe.F, x)::Vector{O},
         take = execute(pipe.N, x)::Int,
-        skip = execute(pipe.M, x)::Int,
-        zs = (skip >= 0 ? ys[1+skip:end] : ys[max(1,end+skip+1):end])
-        take >= 0 ? zs[1:min(end,take)] : zs[1:end+take]
+        skip = execute(pipe.M, x)::Int
+        (take >= 0 && skip >= 0) ? ys[1+skip:min(take+skip,end)] :
+        (take >= 0 && skip < 0) ? ys[1:min(take+skip,end)] :
+        (take < 0 && skip >= 0) ? ys[max(end+take-skip+1,1):end-skip] :
+        ys[max(end+take-skip+1,1):end]
     end
 
 
@@ -444,51 +414,51 @@ execute{I,O}(pipe::ReversePipe{I,O}, x::I) =
 
 immutable SortPipe{I,O} <: SeqPipe{I,O}
     F::SeqPipe{I,O}
-    order::Int
+    dir::Int
 end
 
-show(io::IO, pipe::SortPipe) = print(io, "Sort(", pipe.F, ", ", pipe.order, ")")
+show(io::IO, pipe::SortPipe) = print(io, "Sort(", pipe.F, ", ", pipe.dir, ")")
 
 execute{I,O}(pipe::SortPipe{I,O}, x::I) =
-    sort(execute(pipe.F, x)::Vector{O}, rev=(pipe.order<0))
+    sort(execute(pipe.F, x)::Vector{O}, rev=(pipe.dir<0))
 
 
 immutable SortByPipe{I,O,K} <: SeqPipe{I,O}
     F::SeqPipe{I,O}
     key::IsoPipe{O,K}
-    order::Int
+    dir::Int
 end
 
 show(io::IO, pipe::SortByPipe) =
-    print(io, "SortBy(", pipe.F, ", ", pipe.key, ", ", pipe.order, ")")
+    print(io, "SortBy(", pipe.F, ", ", pipe.key, ", ", pipe.dir, ")")
 
 execute{I,O,K}(pipe::SortByPipe{I,O,K}, x::I) =
     sort(
         execute(pipe.F, x)::Vector{O},
         alg=MergeSort,
         by=(y::O -> execute(pipe.key, y)::K),
-        rev=(pipe.order<0))
+        rev=(pipe.dir<0))
 
 
 immutable UniquePipe{I,O} <: SeqPipe{I,O}
     F::SeqPipe{I,O}
-    order::Int
+    dir::Int
 end
 
-show(io::IO, pipe::UniquePipe) = print(io, "Unique(", pipe.F, ", ", pipe.order, ")")
+show(io::IO, pipe::UniquePipe) = print(io, "Unique(", pipe.F, ", ", pipe.dir, ")")
 
 execute{I,O}(pipe::UniquePipe{I,O}, x::I) =
-    sort(unique(execute(pipe.F, x)::Vector{O}), rev=(pipe.order<0))
+    sort(unique(execute(pipe.F, x)::Vector{O}), rev=(pipe.dir<0))
 
 
 immutable UniqueByPipe{I,O,K} <: SeqPipe{I,O}
     F::SeqPipe{I,O}
     key::IsoPipe{O,K}
-    order::Int
+    dir::Int
 end
 
 show(io::IO, pipe::UniqueByPipe) =
-    print(io, "UniqueBy(", pipe.F, ", ", pipe.key, ", ", pipe.order, ")")
+    print(io, "UniqueBy(", pipe.F, ", ", pipe.key, ", ", pipe.dir, ")")
 
 function execute{I,O,K}(pipe::UniqueByPipe{I,O,K}, x::I)
     ys = execute(pipe.F, x)::Vector{O}
@@ -501,7 +471,7 @@ function execute{I,O,K}(pipe::UniqueByPipe{I,O,K}, x::I)
             push!(seen, k)
         end
     end
-    sort!(kys, rev=(pipe.order<0))
+    sort!(kys, rev=(pipe.dir<0))
     return O[y for (k, y) in kys]
 end
 
@@ -510,11 +480,11 @@ immutable GroupByPipe{P,Q,V,K,J} <: SeqPipe{Tuple{P, Vector{V}}, Tuple{Q, Vector
     # Q is Tuple{P..., K}
     ker::IsoPipe{V,K}
     id::IsoPipe{K,J}
-    order::Int
+    dir::Int
 end
 
 show(io::IO, pipe::GroupByPipe) =
-    print(io, "GroupBy(", pipe.ker, ", ", pipe.id, ", ", pipe.order, ")")
+    print(io, "GroupBy(", pipe.ker, ", ", pipe.id, ", ", pipe.dir, ")")
 
 function execute{P,Q,V,K,J}(pipe::GroupByPipe{P,Q,V,K,J}, x::Tuple{P, Vector{V}})
     p, vs = x
@@ -532,7 +502,7 @@ function execute{P,Q,V,K,J}(pipe::GroupByPipe{P,Q,V,K,J}, x::Tuple{P, Vector{V}}
             j2idx[j] = length(js)
         end
     end
-    sort!(js, rev=(pipe.order<0))
+    sort!(js, rev=(pipe.dir<0))
     return Tuple{Q, Vector{V}}[qvs[j2idx[j]] for j in js]
 end
 
@@ -541,11 +511,11 @@ immutable CubeGroupByPipe{P,Q,V,K,J} <: SeqPipe{Tuple{P, Vector{V}}, Tuple{Q, Ve
     # Q is Tuple{P..., Nullable{K}}
     ker::IsoPipe{V,K}
     id::IsoPipe{K,J}
-    order::Int
+    dir::Int
 end
 
 show(io::IO, pipe::CubeGroupByPipe) =
-    print(io, "CubeGroupBy(", pipe.ker, ", ", pipe.id, ", ", pipe.order, ")")
+    print(io, "CubeGroupBy(", pipe.ker, ", ", pipe.id, ", ", pipe.dir, ")")
 
 function execute{P,Q,V,K,J}(pipe::CubeGroupByPipe{P,Q,V,K,J}, x::Tuple{P, Vector{V}})
     p, vs = x
@@ -563,7 +533,7 @@ function execute{P,Q,V,K,J}(pipe::CubeGroupByPipe{P,Q,V,K,J}, x::Tuple{P, Vector
             j2idx[j] = length(js)
         end
     end
-    sort!(js, rev=(pipe.order<0))
+    sort!(js, rev=(pipe.dir<0))
     qvs = Tuple{Q, Vector{V}}[qvs[j2idx[j]] for j in js]
     push!(qvs, ((p..., Nullable{K}()), vs))
     return qvs
