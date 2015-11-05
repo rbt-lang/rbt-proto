@@ -37,10 +37,11 @@ function show(io::IO, a::Arrow)
         push!(features, "inverse of $(classname(a.output.domain)).$(a.inverse)")
         inv = true
     end
-    singular(a.output) != inv || push!(features, "plural")
-    complete(a.output) != inv || push!(features, "partial")
-    exclusive(a.output) == inv || push!(features, "exclusive")
-    reachable(a.output) == inv || push!(features, "reachable")
+    o = a.output
+    singular(o) != inv || push!(features, singular(o) ? "singular" : "plural")
+    complete(o) != inv || push!(features, complete(o) ? "complete" : "partial")
+    exclusive(o) == inv || push!(features, exclusive(o) ? "exclusive" : "inexclusive")
+    reachable(o) == inv || push!(features, reachable(o) ? "reachable" : "unreachable")
     if !isempty(features)
         print(io, " {", join(features, ", "), "}")
     end
@@ -49,29 +50,33 @@ end
 
 immutable Class
     name::Symbol
-    arrows::Dict{Symbol, Arrow}
+    arrows::Tuple{Vararg{Arrow}}
+    name2arrow::Dict{Symbol,Arrow}
     select::SelectType
 end
 
-Class(name::Symbol, as::Arrow...; select=nothing) = Class(name, Dict([a.name => a for a in as]), select)
+Class(name::Symbol, as::Arrow...; select=nothing) =
+    Class(name, as, Dict{Symbol,Arrow}([a.name => a for a in as]), select)
 
 function show(io::IO, c::Class)
     print(io, ucfirst(string(c.name)), ":")
-    for a in values(c.arrows)
+    for a in c.arrows
         print(io, "\n  ", a)
     end
 end
 
 
 immutable Schema
-    classes::Dict{Symbol, Class}
+    classes::Tuple{Vararg{Class}}
+    name2class::Dict{Symbol,Class}
 end
 
-Schema(cs::Class...) = Schema(Dict([c.name => c for c in cs]))
+Schema(cs::Class...) =
+    Schema(cs, Dict{Symbol,Class}([c.name => c for c in cs]))
 
 function show(io::IO, s::Schema)
     fst = true
-    for c in values(s.classes)
+    for c in s.classes
         if !fst
             print(io, "\n")
         end

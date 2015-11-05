@@ -440,6 +440,97 @@ execute{I,O,K}(pipe::SortByPipe{I,O,K}, x::I) =
         rev=(pipe.dir<0))
 
 
+immutable ConnectPipe{I} <: SeqPipe{I,I}
+    F::SeqPipe{I,I}
+    reflexive::Bool
+end
+
+show(io::IO, pipe::ConnectPipe) = print(io, "Connect(", pipe.F, ", ", pipe.reflexive, ")")
+
+function execute{I}(pipe::ConnectPipe{I}, x::I)
+    xs = pipe.reflexive ? I[x] : reverse(execute(pipe.F, x)::Vector{I})
+    out = I[]
+    while !isempty(xs)
+        x = pop!(xs)
+        push!(out, x)
+        append!(xs, reverse(execute(pipe.F, x)::Vector{I}))
+    end
+    return out
+end
+
+
+immutable DepthPipe{I} <: SeqPipe{I,Int}
+    F::SeqPipe{I,I}
+end
+
+show(io::IO, pipe::DepthPipe) = print(io, "Depth(", pipe.F, ")")
+
+function execute{I}(pipe::DepthPipe{I}, x::I)
+    xs = Tuple{I,Int}[(x,0)]
+    max_d = 0
+    k = 1
+    while k <= length(xs)
+        x, d = xs[k]
+        max_d = max(max_d, d)
+        for y in execute(pipe.F, x)
+            push!(xs, (y,d+1))
+        end
+        k = k+1
+    end
+    return max_d
+end
+
+
+immutable TopoSortPipe{I,O,J} <: SeqPipe{I,O}
+    F::SeqPipe{I,O}
+    L::SeqPipe{O,O}
+    id::IsoPipe{O,J}
+end
+
+show(io::IO, pipe::TopoSortPipe) = print(io, "TopoSort(", pipe.F, ", ", pipe.L, ", ", pipe.id, ")")
+
+function execute{I,O,J}(pipe::TopoSortPipe{I,O,J}, x::I)
+    ys = execute(pipe.F, x)::Vector{O}
+    ids = Dict{J,Int}()
+    edges = Vector{Vector{Int}}()
+    weight = Vector{Int}()
+    for (k, y) in enumerate(ys)
+        j = execute(pipe.id, y)::J
+        ids[j] = k
+        push!(edges, [])
+        push!(weight, 0)
+    end
+    for (k, y) in enumerate(ys)
+        for z in execute(pipe.L, y)::Vector{O}
+            j = execute(pipe.id, z)::J
+            if j in keys(ids)
+                m = ids[j]
+                push!(edges[m], k)
+                weight[k] = weight[k]+1
+            end
+        end
+    end
+    out = Vector{O}()
+    stack = Vector{Int}()
+    for k = length(ys):-1:1
+        if weight[k] == 0
+            push!(stack, k)
+        end
+    end
+    while !isempty(stack)
+        m = pop!(stack)
+        push!(out, ys[m])
+        for k in reverse(edges[m])
+            weight[k] = weight[k]-1
+            if weight[k] == 0
+                push!(stack, k)
+            end
+        end
+    end
+    return out
+end
+
+
 immutable UniquePipe{I,O} <: SeqPipe{I,O}
     F::SeqPipe{I,O}
     dir::Int

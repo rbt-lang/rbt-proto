@@ -62,6 +62,8 @@ setdb(citydb)
 @query(department:define(size => count(employee)):filter(size>1000):select(name,size))
 
 @query(employee:filter(salary>reports_to.salary):select(name,surname,position,reports_to))
+@query(department[26].employee:select(name,surname,position,connect(reports_to),count(connect(reported_by))))
+@query(department[26].employee:toposort(reports_to):select(depth(reports_to),name,surname,position))
 
 @query(employee.position:unique)
 @query(employee.position:desc:unique)

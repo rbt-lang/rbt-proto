@@ -10,8 +10,8 @@ root(self::RootScope) = self
 empty(self::RootScope) = EmptyScope(self.db)
 
 function lookup(self::RootScope, name::Symbol)
-    if name in keys(self.db.schema.classes)
-        class = self.db.schema.classes[name]
+    if name in keys(self.db.schema.name2class)
+        class = self.db.schema.name2class[name]
         scope = ClassScope(self.db, name)
         I = UnitType
         O = Entity{name}
@@ -45,7 +45,7 @@ root(self::ClassScope) = RootScope(self.db)
 empty(self::ClassScope) = EmptyScope(self.db)
 
 function lookup(self::ClassScope, name::Symbol)
-    class = self.db.schema.classes[self.name]
+    class = self.db.schema.name2class[self.name]
     if name == :id
         scope = EmptyScope(self.db)
         I = Entity{self.name}
@@ -55,9 +55,9 @@ function lookup(self::ClassScope, name::Symbol)
         tag = NullableSymbol(name)
         syntax = NullableSyntax(ApplySyntax(name, []))
         return NullableQuery(Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax))
-    elseif name in keys(class.arrows)
+    elseif name in keys(class.name2arrow)
         tag = NullableSymbol(name)
-        arrow = class.arrows[name]
+        arrow = class.name2arrow[name]
         map = self.db.instance.maps[(self.name, arrow.name)]
         I = Entity{self.name}
         O = domain(arrow.output)
@@ -73,7 +73,7 @@ function lookup(self::ClassScope, name::Symbol)
         syntax = NullableSyntax(ApplySyntax(name, []))
         if O <: Entity
             targetname = classname(O)
-            targetclass = self.db.schema.classes[targetname]
+            targetclass = self.db.schema.name2class[targetname]
             scope = ClassScope(self.db, targetname)
             query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax)
             selector = mkselector(

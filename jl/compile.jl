@@ -20,6 +20,11 @@ reqcomplete(fs...) =
         complete(f) || error("expected a complete expression: $f")
     end
 
+reqpartial(fs...) =
+    for f in fs
+        !complete(f) || error("expected a partial expression: $f")
+    end
+
 reqexclusive(fs...) =
     for f in fs
         exclusive(f) || error("expected an exclusive expression: $f")
@@ -334,6 +339,46 @@ function compile(fn::Fn(:sort), base::Query, flow::Query, ops::Query...)
             pipe = SortByPipe{I,O,K}(pipe, op.pipe, order)
         end
     end
+    return Query(flow, pipe=pipe)
+end
+
+
+function compile(::Fn(:connect), base::Query, op::Query)
+    reqcomposable(base, op); reqpartial(op); reqcodomain(domain(op), op)
+    I = domain(op)
+    input = Input(I)
+    output = Output(I, singular=false, complete=false)
+    pipe = ConnectPipe{I}(singular(op) ? OptToSeqPipe(op.pipe) : op.pipe, false)
+    return Query(op, input=input, output=output, pipe=pipe)
+end
+
+
+function compile(::Fn(:depth), base::Query, op::Query)
+    reqcomposable(base, op); reqpartial(op); reqcodomain(domain(op), op)
+    scope = empty(base)
+    I = domain(op)
+    input = Input(I)
+    output = Output(Int)
+    pipe = DepthPipe{I}(singular(op) ? OptToSeqPipe(op.pipe) : op.pipe)
+    return Query(scope, input=input, output=output, pipe=pipe)
+end
+
+
+compile(fn::Fn(:toposort), base::Query, flow::AbstractSyntax, op::AbstractSyntax) =
+    let flow = compile(base, flow)
+        compile(fn, base, flow, compile(flow, op))
+    end
+
+function compile(fn::Fn(:toposort), base::Query, flow::Query, op::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    reqcomposable(flow, op); reqpartial(op); reqcodomain(domain(op), op)
+    I = domain(flow)
+    O = codomain(flow)
+    J = !isnull(op.identity) ? codomain(get(op.identity)) : O
+    pipe = TopoSortPipe{I,O,J}(
+        flow.pipe,
+        singular(op) ? OptToSeqPipe(op.pipe) : op.pipe,
+        !isnull(op.identity) ? get(op.identity).pipe : ThisPipe{O}())
     return Query(flow, pipe=pipe)
 end
 
