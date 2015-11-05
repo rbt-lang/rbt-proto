@@ -40,6 +40,11 @@ reqidentity(fs...) =
         !isnull(f.identity) || error("expected an expression with identity: $f")
     end
 
+reqfields(fs...) =
+    for f in fs
+        !isnull(f.fields) && !isempty(get(f.fields)) || error("expected a composite expression: $f")
+    end
+
 reqtag(fs...) =
     for f in fs
         !isnull(f.tag) || error("expected a tagged expression: $f")
@@ -525,6 +530,67 @@ function compile(
 end
 
 
+function compile(::Fn(:mix), base::Query, ops::Query...)
+    reqcomposable(base, ops...); reqtag(ops...)
+    if isempty(ops)
+        scope = empty(base)
+        I = codomain(base)
+        input = Input(I)
+        output = Output(UnitType)
+        pipe = ConstPipe{I,UnitType}(())
+        return Query(scope, input=input, output=output, pipe=pipe)
+    elseif length(ops) == 1
+        op = ops[1]
+        scope = empty(base)
+        I = codomain(op)
+        input = Input(I)
+        output = Output(I, exclusive=true, reachable=true)
+        pipe = ThisPipe{I}()
+        defs = Dict{Symbol,Query}(
+            get(op.tag) => Query(op, input=input, output=output, pipe=pipe))
+        return Query(op, scope=scope, defs=defs)
+    else
+        scope = empty(base)
+        I = codomain(base)
+        O = Tuple{codomain(ops[1]), codomain(ops[2])}
+        pipe = ops[1].pipe * ops[2].pipe
+        field_pipes = Any[
+            IsoItemPipe{O,codomain(ops[1])}(1),
+            IsoItemPipe{O,codomain(ops[2])}(2)]
+        mode = max(comode(ops[1]), comode(ops[2]))
+        for op in ops[3:end]
+            T = O
+            O = Tuple{O, codomain(op)}
+            pipe = pipe * op.pipe
+            for (k, field_pipe) in enumerate(field_pipes)
+                field_pipes[k] = IsoItemPipe{O,T}(1) >> field_pipe
+            end
+            push!(field_pipes, IsoItemPipe{O,codomain(op)}(2))
+            mode = max(mode, comode(op))
+        end
+        input = Input(I)
+        output = Output(O, mode)
+        fields = ()
+        defs = Dict{Symbol,Query}()
+        for (k, op) in enumerate(ops)
+            field = Query(op, input=Input(O), output=Output(codomain(op)), pipe=field_pipes[k])
+            fields = (fields..., field)
+            defs[get(op.tag)] = field
+        end
+        query = Query(scope, input=input, output=output, pipe=pipe, fields=fields, defs=defs)
+        identity = record(query, [identify(field) for field in fields]...)
+        selector = record(query, [select(field) for field in fields]...)
+        return Query(query, identity=identity, selector=selector)
+    end
+end
+
+
+function compile(fn::Fn(:left, :right), base::Query)
+    reqfields(base)
+    return get(base.fields)[fn == Fn{:left} ? 1 : end]
+end
+
+
 function compile(::Fn(:as), base::Query, op::AbstractSyntax, ident::AbstractSyntax)
     (isa(ident, ApplySyntax) && isempty(ident.args)) || error("expected an identifier: $ident")
     return Query(compile(base, op), tag=ident.fn)
@@ -563,27 +629,36 @@ function compile(::Fn(:!), base::Query, op::Query)
 end
 
 
-function compile(::Fn(:&), base::Query, op1::Query, op2::Query)
+function compile(fn::Fn(:&, :|), base::Query, op1::Query, op2::Query)
     reqcomposable(base, op1, op2); reqsingular(op1, op2); reqcodomain(Bool, op1, op2)
     scope = empty(base)
     I = codomain(base)
     input = Input(I)
     output = Output(Bool, complete=complete(op1) && complete(op2))
-    pipe = complete(output) ?
-        IsoAndPipe{I}(op1.pipe, op2.pipe) : OptAndPipe{I}(op1.pipe, op2.pipe)
+    if fn == Fn{:&}
+        pipe = complete(output) ?
+            IsoAndPipe{I}(op1.pipe, op2.pipe) : OptAndPipe{I}(op1.pipe, op2.pipe)
+    else
+        pipe = complete(output) ?
+            IsoOrPipe{I}(op1.pipe, op2.pipe) : OptOrPipe{I}(op1.pipe, op2.pipe)
+    end
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
 
-function compile(::Fn(:|), base::Query, op1::Query, op2::Query)
-    reqcomposable(base, op1, op2); reqsingular(op1, op2); reqcodomain(Bool, op1, op2)
+function compile(fn::Fn(:(==), :(!=)), base::Query, op1::Query, op2::Query)
+    reqcomposable(base, op1, op2); reqcodomain(codomain(op1), op2)
+    singular(op1) || reqsingular(op2)
+    T = codomain(op1)
+    TT = Tuple{T,T}
     scope = empty(base)
     I = codomain(base)
     input = Input(I)
-    output = Output(Bool)
-    output = Output(Bool, complete=complete(op1) && complete(op2))
-    pipe = complete(output) ?
-        IsoOrPipe{I}(op1.pipe, op2.pipe) : OptOrPipe{I}(op1.pipe, op2.pipe)
+    output = Output(Bool, max(comode(op1), comode(op2)))
+    PipeType = (fn == Fn{:(==)}) ? EQPipe : NEPipe
+    pipe = singular(output) && complete(output) ?
+        PipeType{I,T}(op1.pipe, op2.pipe) :
+        (op1.pipe * op2.pipe) >> PipeType{TT,T}(IsoItemPipe{TT,T}(1), IsoItemPipe{TT,T}(2))
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
@@ -627,8 +702,6 @@ end
 
 @compilebinaryop(:(<), LTPipe, Int, Int, Bool)
 @compilebinaryop(:(<=), LEPipe, Int, Int, Bool)
-@compilebinaryop(:(==), EQPipe, Int, Int, Bool)
-@compilebinaryop(:(!=), NEPipe, Int, Int, Bool)
 @compilebinaryop(:(>=), GEPipe, Int, Int, Bool)
 @compilebinaryop(:(>), GTPipe, Int, Int, Bool)
 @compilebinaryop(:(+), AddPipe, Int, Int, Int)

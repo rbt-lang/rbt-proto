@@ -884,6 +884,28 @@ execute{I}(pipe::OptOrPipe{I}, x::I) =
     end
 
 
+immutable EQPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
+    F::IsoPipe{I,T}
+    G::IsoPipe{I,T}
+end
+
+show(io::IO, pipe::EQPipe) = print(io, "(", pipe.F, " == ", pipe.G, ")")
+
+execute{I,T}(pipe::EQPipe{I,T}, x::I) =
+    (execute(pipe.F, x)::T == execute(pipe.G, x)::T)
+
+
+immutable NEPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
+    F::IsoPipe{I,T}
+    G::IsoPipe{I,T}
+end
+
+show(io::IO, pipe::NEPipe) = print(io, "(", pipe.F, " != ", pipe.G, ")")
+
+execute{I,T}(pipe::NEPipe{I,T}, x::I) =
+    (execute(pipe.F, x)::T != execute(pipe.G, x)::T)
+
+
 macro defunarypipe(Name, op, T1, T2)
     return esc(quote
         immutable $Name{I} <: IsoPipe{I,$T2}
@@ -910,8 +932,6 @@ end
 
 @defbinarypipe(LTPipe, (<), Int, Int, Bool)
 @defbinarypipe(LEPipe, (<=), Int, Int, Bool)
-@defbinarypipe(EQPipe, (==), Int, Int, Bool)
-@defbinarypipe(NEPipe, (!=), Int, Int, Bool)
 @defbinarypipe(GEPipe, (>=), Int, Int, Bool)
 @defbinarypipe(GTPipe, (>), Int, Int, Bool)
 @defbinarypipe(AddPipe, (+), Int, Int, Int)

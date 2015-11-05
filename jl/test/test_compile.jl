@@ -116,6 +116,15 @@ setdb(citydb)
         num_pos => count(unique(employee.position)),
         num_empl => count(employee)))
 
+@query(
+    mix(a => range(2,1,10), b => range(2,1,10), c => range(2,1,10))
+    :filter((a <= b) & (b <= c))
+    :select(a, b, c, (a*b)*c))
+@query(
+    mix(department, department)
+    :filter((left.id != right.id) & (left.count(employee)/10 == right.count(employee)/10))
+    :select(left.name, left.count(employee), right.name, right.count(employee)))
+
 @query(department:json)
 @query(department:select(name,head => employee:first(salary)):json)
 @query(employee:dataframe)
