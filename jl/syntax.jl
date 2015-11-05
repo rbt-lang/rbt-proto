@@ -39,7 +39,10 @@ syntax(ex::Union{Symbol,QuoteNode,LiteralType,Expr}) =
 
 ex2syn(ex::Symbol) = ex == :null ? LiteralSyntax(nothing) : ApplySyntax(ex, [])
 ex2syn(ex::QuoteNode) = ApplySyntax(ex.value, [])
-ex2syn(ex::LiteralType) = LiteralSyntax(ex)
+ex2syn(ex::LiteralType) =
+    let ex = isa(ex, AbstractString) ? UTF8String(ex) : ex
+        LiteralSyntax(ex)
+    end
 
 function ex2syn(ex::Expr)
     if ex.head == :(.) && length(ex.args) == 2
@@ -72,6 +75,8 @@ function ex2syn(ex::Expr)
         return ApplySyntax(:(=>), map(ex2syn, ex.args))
     elseif ex.head == :ref
         return ApplySyntax(:get, map(ex2syn, ex.args))
+    elseif ex.head == :vect
+        return ApplySyntax(:array, map(ex2syn, ex.args))
     elseif ex.head == :call
         return ex2syn(pushcall(ex.args[1], ex.args[2:end]))
     elseif ex.head == :comparison && length(ex.args) == 3 && isa(ex.args[2], Symbol)

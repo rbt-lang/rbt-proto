@@ -128,7 +128,8 @@ function mkdffields(flow::Query)
                 field = compile(Fn{:dataframe}, flow, field)
             end
             O = codomain(field)
-            A = singular(field) && !complete(field) ? DataVector{O} : Vector{O}
+            A = !singular(field) ? Vector{DataVector{O}} :
+                singular(field) && !complete(field) ? DataVector{O} : Vector{O}
             F = field.pipe
             fields = (fields..., (name, A, F))
         end

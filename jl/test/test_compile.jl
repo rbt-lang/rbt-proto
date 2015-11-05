@@ -100,6 +100,21 @@ setdb(citydb)
     employee
     :cube_partition(department:take(3))
     :select(department.name, count(unique(employee.position)), count(employee), max(employee.salary)))
+@query(
+    employee
+    :define(salary_bracket => salary/60000*60000)
+    :partition(
+        department:take(3),
+        name => ["ANTHONY", "BRIAN"],
+        salary_bracket => range(0, 60000, max(employee.salary)))
+    :select(
+        dept => department.name,
+        name,
+        low => salary_bracket,
+        high => salary_bracket+59999,
+        pop_position => employee:by(position):first(count(employee)).position,
+        num_pos => count(unique(employee.position)),
+        num_empl => count(employee)))
 
 @query(department:json)
 @query(department:select(name,head => employee:first(salary)):json)

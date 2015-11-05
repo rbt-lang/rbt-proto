@@ -287,6 +287,32 @@ execute{I,O}(pipe::TuplePipe{I,O}, x::I) =
     tuple([execute(F, x) for F in pipe.Fs]...)::O
 
 
+immutable ArrayPipe{I,O} <: SeqPipe{I,O}
+    Fs::Vector{IsoPipe{I,O}}
+end
+
+show(io::IO, pipe::ArrayPipe) = print(io, "Array(", join(pipe.Fs, ", "), ")")
+
+execute{I,O}(pipe::ArrayPipe{I,O}, x::I) =
+    O[execute(F, x)::O for F in pipe.Fs]
+
+
+immutable RangePipe{I} <: SeqPipe{I,Int}
+    start::IsoPipe{I,Int}
+    step::IsoPipe{I,Int}
+    stop::IsoPipe{I,Int}
+end
+
+show(io::IO, pipe::RangePipe) = print(io, "Range(", pipe.start, ", ", pipe.step, ", ", pipe.stop, ")")
+
+execute{I}(pipe::RangePipe{I}, x::I) =
+    let start = execute(pipe.start, x)::Int,
+        step = execute(pipe.step, x)::Int,
+        stop = execute(pipe.stop, x)::Int
+        collect(start:step:stop)::Vector{Int}
+    end
+
+
 immutable SievePipe{I} <: OptPipe{I,I}
     P::IsoPipe{I,Bool}
 end

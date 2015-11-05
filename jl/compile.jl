@@ -192,6 +192,7 @@ function compile(::Fn(:max), base::Query, flow::Query)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
+
 compile(::Fn(:record), base::Query, ops::Query...) = record(base, ops...)
 
 
@@ -236,6 +237,39 @@ function compile(::Fn(:reverse), base::Query, flow::Query)
 end
 
 
+function compile(::Fn(:array), base::Query, op1::Query, ops::Query...)
+    reqcomposable(base, op1, ops...); reqsingular(op1, ops...); reqcomplete(op1, ops...)
+    reqcodomain(codomain(op1), ops...)
+    scope = op1.scope
+    I = domain(op1)
+    O = codomain(op1)
+    input = Input(I)
+    output = Output(O, singular=false)
+    pipe = ArrayPipe{I,O}([op.pipe for op in [op1, ops...]])
+    return Query(scope, input=input, output=output, pipe=pipe)
+end
+
+
+function compile(::Fn(:range), base::Query, start::Query, step::Query, stop::Query)
+    reqcomposable(base, start, step, stop); reqsingular(start, step, stop); reqcodomain(Int, start, step, stop)
+    scope = empty(base)
+    I = codomain(base)
+    input = Input(I)
+    output = Output(Int, singular=false, complete=false)
+    if complete(start) && complete(step) && complete(stop)
+        pipe = RangePipe{I}(start.pipe, step.pipe, stop.pipe)
+    else
+        pipe =
+            (start.pipe * (step.pipe * stop.pipe)) >>
+            RangePipe{Tuple{Int,Tuple{Int,Int}}}(
+                IsoItemPipe{Tuple{Int,Tuple{Int,Int}},Int}(1),
+                IsoItemPipe{Tuple{Int,Tuple{Int,Int}},Tuple{Int,Int}}(2) >> IsoItemPipe{Tuple{Int,Int}}{Int}(1),
+                IsoItemPipe{Tuple{Int,Tuple{Int,Int}},Tuple{Int,Int}}(2) >> IsoItemPipe{Tuple{Int,Int}}{Int}(2))
+    end
+    return Query(scope, input=input, output=output, pipe=pipe)
+end
+
+
 function compile(fn::Fn(:first, :last), base::Query, flow::Query)
     reqcomposable(base, flow); reqplural(flow)
     I = domain(flow)
@@ -263,7 +297,7 @@ function compile(fn::Fn(:first, :last), base::Query, flow::Query, op::Query)
     O = codomain(flow)
     output = Output(O, singular=true, complete=complete(flow), exclusive=exclusive(flow))
     pipe = complete(flow) ?
-        FirstByPipe{I,O}(flow.pipe, op.pipe, dir) : OptFirstByPipe{I,O}(flow.pipe, op.pipe, dir)
+        IsoFirstByPipe{I,O}(flow.pipe, op.pipe, dir) : OptFirstByPipe{I,O}(flow.pipe, op.pipe, dir)
     return Query(flow, output=output, pipe=pipe)
 end
 
@@ -478,7 +512,7 @@ function compile(
         flow,
         input=Input(O),
         output=Output(
-            V, singular=false, complete=!iscube,
+            V, singular=false, complete=!iscube && !ispartition,
             exclusive=(exclusive(flow) && !iscube), reachable=reachable(flow)),
         pipe=SeqItemPipe{O,V}(2))
     if !isnull(flow_field.tag)
