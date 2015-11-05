@@ -408,11 +408,21 @@ compile(fn::Fn(:by, :cube_by), base::Query, flow::AbstractSyntax, op1::AbstractS
         compile(fn, base, flow, compile(flow, op1), [compile(flow, op) for op in ops]...)
     end
 
-function compile(fn::Fn(:by, :cube_by), base::Query, flow::Query, ops::Query...)
+function compile(
+        fn::Fn(:by, :cube_by, :partition, :cube_partition),
+        base::Query, flow::Query, ops::Query...)
+    iscube = (fn == Fn{:cube_by} || fn == Fn{:cube_partition})
+    ispartition = (fn == Fn{:partition} || fn == Fn{:cube_partition})
     reqcomposable(base, flow); reqplural(flow)
-    reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
-    iscube = (fn == Fn{:cube_by})
-    GroupPipe = iscube ? CubeGroupByPipe : GroupByPipe
+    if !ispartition
+        reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
+    else
+        reqcomposable(base, ops...); reqplural(ops...); reqtag(ops...)
+    end
+    GroupPipe =
+        !iscube && !ispartition ? GroupByPipe :
+        !ispartition ? CubeGroupByPipe :
+        !iscube ? PartitionByPipe : CubePartitionByPipe
     scope = empty(base)
     I = domain(flow)
     V = codomain(flow)
@@ -420,6 +430,9 @@ function compile(fn::Fn(:by, :cube_by), base::Query, flow::Query, ops::Query...)
     Q = UnitType
     O = Tuple{Q, Vector{V}}
     pipe = TuplePipe{I, O}([ConstPipe{I,UnitType}(()), flow.pipe])
+    if ispartition
+        pipe = TuplePipe{I, Tuple{I,O}}([ThisPipe{I}(), pipe])
+    end
     for op in ops
         opid = !isnull(op.identity) ? get(op.identity) : compile(Fn{:this}, op)
         P = Tuple{Ps...}
@@ -427,9 +440,20 @@ function compile(fn::Fn(:by, :cube_by), base::Query, flow::Query, ops::Query...)
         J = codomain(opid)
         Ps = (Ps..., (iscube ? Nullable{K} : K))
         Q = Tuple{Ps...}
-        pipe = pipe >> GroupPipe{P,Q,V,K,J}(op.pipe, opid.pipe, op.order)
+        if !ispartition
+            pipe = pipe >> GroupPipe{P,Q,V,K,J}(op.pipe, opid.pipe, op.order)
+        else
+            ker = lookup(flow, get(op.tag))
+            !isnull(ker) || error("undefined attribute $(get(op.tag)): $flow")
+            ker = get(ker)
+            reqsingular(ker); reqcomplete(ker); reqcodomain(K, ker)
+            pipe = pipe >> GroupPipe{I,P,Q,V,K,J}(op.pipe, ker.pipe, opid.pipe, op.order)
+        end
     end
     O = Tuple{Q, Vector{V}}
+    if ispartition
+        pipe = pipe >> IsoItemPipe{Tuple{I, O}, O}(2)
+    end
     input = Input(I)
     output = Output(O, singular=isempty(ops), complete=(complete(flow) || isempty(ops) || iscube))
     query = Query(scope, input=input, output=output, pipe=pipe)

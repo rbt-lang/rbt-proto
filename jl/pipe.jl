@@ -631,6 +631,78 @@ function execute{P,Q,V,K,J}(pipe::CubeGroupByPipe{P,Q,V,K,J}, x::Tuple{P, Vector
 end
 
 
+immutable PartitionByPipe{I,P,Q,V,K,J} <: SeqPipe{Tuple{I, Tuple{P, Vector{V}}}, Tuple{I, Tuple{Q, Vector{V}}}}
+    # Q is Tuple{P..., K}
+    dim::SeqPipe{I,K}
+    ker::IsoPipe{V,K}
+    id::IsoPipe{K,J}
+    dir::Int
+end
+
+show(io::IO, pipe::PartitionByPipe) =
+    print(io, "PartitionBy(", pipe.dim, ", ", pipe.ker, ", ", pipe.id, ", ", pipe.dir, ")")
+
+function execute{I,P,Q,V,K,J}(pipe::PartitionByPipe{I,P,Q,V,K,J}, x::Tuple{I, Tuple{P, Vector{V}}})
+    s, (p, vs) = x
+    js = Vector{J}()
+    qvs = Vector{Tuple{I,Tuple{Q,Vector{V}}}}()
+    j2idx = Dict{J,Int}()
+    for k in execute(pipe.dim, s)::Vector{K}
+        j = execute(pipe.id, k)::J
+        push!(qvs, (s, ((p..., k), V[])))
+        push!(js, j)
+        j2idx[j] = length(js)
+    end
+    for v in vs
+        k = execute(pipe.ker, v)::K
+        j = execute(pipe.id, k)::J
+        if j in keys(j2idx)
+            push!(qvs[j2idx[j]][2][2], v)
+        end
+    end
+    sort!(js, rev=(pipe.dir<0))
+    return Tuple{I, Tuple{Q, Vector{V}}}[qvs[j2idx[j]] for j in js]
+end
+
+
+immutable CubePartitionByPipe{I,P,Q,V,K,J} <: SeqPipe{Tuple{I, Tuple{P, Vector{V}}}, Tuple{I, Tuple{Q, Vector{V}}}}
+    # Q is Tuple{P..., Nullable{K}}
+    dim::SeqPipe{I,K}
+    ker::IsoPipe{V,K}
+    id::IsoPipe{K,J}
+    dir::Int
+end
+
+show(io::IO, pipe::CubePartitionByPipe) =
+    print(io, "CubePartitionBy(", pipe.dim, ", ", pipe.ker, ", ", pipe.id, ", ", pipe.dir, ")")
+
+function execute{I,P,Q,V,K,J}(pipe::CubePartitionByPipe{I,P,Q,V,K,J}, x::Tuple{I, Tuple{P, Vector{V}}})
+    s, (p, vs) = x
+    js = Vector{J}()
+    qvs = Vector{Tuple{I,Tuple{Q,Vector{V}}}}()
+    j2idx = Dict{J,Int}()
+    for k in execute(pipe.dim, s)::Vector{K}
+        j = execute(pipe.id, k)::J
+        push!(qvs, (s, ((p..., Nullable{K}(k)), V[])))
+        push!(js, j)
+        j2idx[j] = length(js)
+    end
+    allvs = Vector{V}()
+    for v in vs
+        k = execute(pipe.ker, v)::K
+        j = execute(pipe.id, k)::J
+        if j in keys(j2idx)
+            push!(qvs[j2idx[j]][2][2], v)
+            push!(allvs, v)
+        end
+    end
+    sort!(js, rev=(pipe.dir<0))
+    qvs = Tuple{I, Tuple{Q, Vector{V}}}[qvs[j2idx[j]] for j in js]
+    push!(qvs, (s, ((p..., Nullable{K}()), allvs)))
+    return qvs
+end
+
+
 immutable IsoFieldPipe{I,O} <: IsoPipe{I,O}
     field::Symbol
 end
