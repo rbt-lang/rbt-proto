@@ -130,6 +130,11 @@ setdb(citydb)
 @query(pack(department, employee).department)
 @query(pack(department, employee).employee)
 @query(pack(department, employee):select(department.name, employee.name))
+@query(employee:take(100):filter(salary>max(unlink(employee).salary)/2))
+@query(
+    employee[10]
+    :define(namesake => link((left.id!=right.id)&(left.name==right.name), employee))
+    :select(name, count(namesake), namesake))
 
 @query(department:json)
 @query(department:select(name,head => employee:first(salary)):json)

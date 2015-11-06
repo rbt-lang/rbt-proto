@@ -175,6 +175,16 @@ function compile(::Fn(:unlink), base::Query, arg::AbstractSyntax)
 end
 
 
+compile(::Fn(:link), base::Query, pred::AbstractSyntax, arg::AbstractSyntax) =
+    let unlink = compile(Fn{:unlink}, base, arg),
+        mix = compile(Fn{:mix}, base, compile(Fn{:this}, base), unlink),
+        condition = compile(mix, pred),
+        filter = compile(Fn{:filter}, base, mix, condition),
+        right = compile(Fn{:right}, mix)
+        filter >> right
+    end
+
+
 function compile(::Fn(:count), base::Query, flow::Query)
     reqcomposable(base, flow); reqplural(flow)
     scope = empty(base)
