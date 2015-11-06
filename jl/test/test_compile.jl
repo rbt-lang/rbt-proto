@@ -69,28 +69,28 @@ setdb(citydb)
 @query(employee.position:desc:unique)
 @query(department:select(name,count(unique(employee.position)),count(employee)))
 
-@query(employee:by(position))
-@query(employee:by(position):select(position,count(employee)))
-@query(employee:by(position):select(position, count(employee)):sort(count(employee):desc))
+@query(employee:group(position))
+@query(employee:group(position):select(position,count(employee)))
+@query(employee:group(position):select(position, count(employee)):sort(count(employee):desc))
 @query(
-    employee:by(position)
+    employee:group(position)
     :define(department => unique(employee.department))
     :filter(count(department)>=5)
     :select(position, department)
     :sort(count(department):desc))
-@query(employee:by(name):select(name, count(employee)):sort(count(employee):desc))
+@query(employee:group(name):select(name, count(employee)):sort(count(employee):desc))
 @query(
-    employee:by(name)
+    employee:group(name)
     :filter(count(employee)>=10)
     :select(name, max(employee.salary))
     :sort(max(employee.salary):desc))
 @query(
     employee
-    :by(department, salary_bracket => salary/10000*10000 :desc)
+    :group(department, salary_bracket => salary/10000*10000 :desc)
     :select(department, salary_bracket, salary_bracket+9999, count(employee)))
 @query(
     employee
-    :cube_by(department, salary_bracket => salary/10000*10000 :desc)
+    :cube_group(department, salary_bracket => salary/10000*10000 :desc)
     :select(department, salary_bracket, salary_bracket+9999, count(employee)))
 @query(
     employee
@@ -112,7 +112,7 @@ setdb(citydb)
         name,
         low => salary_bracket,
         high => salary_bracket+59999,
-        pop_position => employee:by(position):first(count(employee)).position,
+        pop_position => employee:group(position):first(count(employee)).position,
         num_pos => count(unique(employee.position)),
         num_empl => count(employee)))
 
