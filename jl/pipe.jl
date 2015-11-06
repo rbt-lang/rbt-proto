@@ -245,6 +245,52 @@ execute{I,O1,O2}(pipe::SeqProductPipe{I,O1,O2}, x::I) =
     SeqProductPipe{I,O1,O2}(F, G)
 
 
+immutable CoproductPipe{I,U} <: SeqPipe{I,Pair{Symbol,U}}
+    Fs::Vector{Pair{Symbol,SeqPipe}}
+end
+
+show(io::IO, pipe::CoproductPipe) = print(io, "[", join(["$n => $F" for (n,F) in pipe.Fs], " | "), "]")
+
+function execute{I,U}(pipe::CoproductPipe{I,U}, x::I)
+    out = Vector{Pair{Symbol,U}}()
+    for (tag, F) in pipe.Fs
+        for y in execute(F, x)
+            push!(out, Pair{Symbol,U}(tag, y))
+        end
+    end
+    return out
+end
+
+
+immutable IsoLiftPipe{U,V} <: IsoPipe{Pair{Symbol,U},Pair{Symbol,V}}
+    Fs::Dict{Symbol,IsoPipe}
+end
+
+show(io::IO, pipe::IsoLiftPipe) = print(io, "[", join(["$n => $F" for (n,F) in pipe.Fs], " | "), "]")
+
+function execute{U,V}(pipe::IsoLiftPipe{U,V}, x::Pair{Symbol,U})
+    tag, y = x
+    z = execute(pipe.Fs[tag], y)
+    return Pair{Symbol,V}(tag, z)
+end
+
+
+immutable OptUnpackPipe{U,T} <: OptPipe{Pair{Symbol,U},T}
+    Fs::Dict{Symbol,IsoPipe}
+end
+
+show(io::IO, pipe::OptUnpackPipe) = print(io, "[", join(["$n => $F" for (n,F) in pipe.Fs], " | "), "]")
+
+function execute{U,T}(pipe::OptUnpackPipe{U,T}, x::Pair{Symbol,U})
+    tag, y = x
+    if tag in keys(pipe.Fs)
+        z = execute(pipe.Fs[tag], y)::T
+        return Nullable{T}(z)
+    end
+    return Nullable{T}()
+end
+
+
 immutable CountPipe{I,O} <: IsoPipe{I,Int}
     F::SeqPipe{I,O}
 end

@@ -591,6 +591,65 @@ function compile(fn::Fn(:left, :right), base::Query)
 end
 
 
+function compile(::Fn(:pack), base::Query, ops::Query...)
+    reqcomposable(base, ops...); reqtag(ops...)
+    I = codomain(base)
+    Ts = ()
+    Ds = ()
+    Ss = ()
+    Fs = Vector{Pair{Symbol,SeqPipe}}()
+    iscomplete = false
+    identitymap = Dict{Symbol,IsoPipe}()
+    selectormap = Dict{Symbol,IsoPipe}()
+    for op in ops
+        T = codomain(op)
+        tag = get(op.tag)
+        Ts = (Ts..., T)
+        field_pipe =
+            singular(op) && complete(op) ? IsoToSeqPipe{I,T}(op.pipe) :
+            singular(op) ? OptToSeqPipe{I,T}(op.pipe) : op.pipe
+        push!(Fs, Pair{Symbol,SeqPipe}(tag, field_pipe))
+        if complete(op)
+            iscomplete = true
+        end
+        identitymap[tag] =
+            !isnull(op.identity) ? get(op.identity).pipe : ThisPipe{T}()
+        selectormap[tag] =
+            !isnull(op.selector) ? get(op.selector).pipe : ThisPipe{T}()
+        Ds = (Ds..., !isnull(op.identity) ? codomain(get(op.identity)) : T)
+        Ss = (Ss..., !isnull(op.selector) ? codomain(get(op.selector)) : T)
+    end
+    scope = empty(base)
+    input = Input(I)
+    U = Union{Ts...}
+    O = Pair{Symbol, U}
+    output = Output(O, singular=false, complete=iscomplete)
+    pipe = CoproductPipe{I,U}(Fs)
+    identity = Query(
+        scope,
+        input=Input(O),
+        output=Output(Pair{Symbol,Union{Ds...}}),
+        pipe=IsoLiftPipe{U, Union{Ds...}}(identitymap))
+    selector = Query(
+        scope,
+        input=Input(O),
+        output=Output(Pair{Symbol,Union{Ss...}}),
+        pipe=IsoLiftPipe{U, Union{Ss...}}(selectormap))
+    defs = Dict{Symbol,Query}()
+    for op in ops
+        tag = get(op.tag)
+        T = codomain(op)
+        defs[get(op.tag)] =
+            Query(
+                op,
+                input=Input(O),
+                output=Output(T),
+                pipe=OptUnpackPipe{U,T}(Dict{Symbol,IsoPipe}(tag => ThisPipe{T}())))
+    end
+    return Query(scope, input=input, output=output, pipe=pipe, identity=identity, selector=selector, defs=defs)
+end
+
+
 function compile(::Fn(:as), base::Query, op::AbstractSyntax, ident::AbstractSyntax)
     (isa(ident, ApplySyntax) && isempty(ident.args)) || error("expected an identifier: $ident")
     return Query(compile(base, op), tag=ident.fn)
