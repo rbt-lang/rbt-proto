@@ -275,20 +275,14 @@ function execute{U,V}(pipe::IsoLiftPipe{U,V}, x::Pair{Symbol,U})
 end
 
 
-immutable OptUnpackPipe{U,T} <: OptPipe{Pair{Symbol,U},T}
-    Fs::Dict{Symbol,IsoPipe}
+immutable SwitchPipe{U,T} <: OptPipe{Pair{Symbol,U},T}
+    tag::Symbol
 end
 
-show(io::IO, pipe::OptUnpackPipe) = print(io, "[", join(["$n => $F" for (n,F) in pipe.Fs], " | "), "]")
+show(io::IO, pipe::SwitchPipe) = print(io, "Switch(", pipe.tag, ")")
 
-function execute{U,T}(pipe::OptUnpackPipe{U,T}, x::Pair{Symbol,U})
-    tag, y = x
-    if tag in keys(pipe.Fs)
-        z = execute(pipe.Fs[tag], y)::T
-        return Nullable{T}(z)
-    end
-    return Nullable{T}()
-end
+execute{U,T}(pipe::SwitchPipe{U,T}, x::Pair{Symbol,U}) =
+    x[1] == pipe.tag ? Nullable{T}(x[2]) : Nullable{T}()
 
 
 immutable CountPipe{I,O} <: IsoPipe{I,Int}

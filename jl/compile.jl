@@ -644,8 +644,8 @@ function compile(::Fn(:pack), base::Query, ops::Query...)
             Query(
                 op,
                 input=Input(O),
-                output=Output(T),
-                pipe=OptUnpackPipe{U,T}(Dict{Symbol,IsoPipe}(tag => ThisPipe{T}())))
+                output=Output(T, complete=false),
+                pipe=SwitchPipe{U,T}(tag))
     end
     return Query(scope, input=input, output=output, pipe=pipe, identity=identity, selector=selector, defs=defs)
 end
