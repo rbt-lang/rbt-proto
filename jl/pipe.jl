@@ -433,19 +433,19 @@ execute{I,O}(pipe::OptFirstByPipe{I,O}, x::I) =
 immutable TakePipe{I,O} <: SeqPipe{I,O}
     F::SeqPipe{I,O}
     N::IsoPipe{I,Int}
-    M::IsoPipe{I,Int}
+    dir::Int
 end
 
-show(io::IO, pipe::TakePipe) = print(io, "Take(", pipe.F, ", ", pipe.N, ", ", pipe.M, ")")
+show(io::IO, pipe::TakePipe) = print(io, "Take(", pipe.F, ", ", pipe.N, ", ", pipe.dir, ")")
 
 execute{I,O}(pipe::TakePipe{I,O}, x::I) =
     let ys = execute(pipe.F, x)::Vector{O},
-        take = execute(pipe.N, x)::Int,
-        skip = execute(pipe.M, x)::Int
-        (take >= 0 && skip >= 0) ? ys[1+skip:min(take+skip,end)] :
-        (take >= 0 && skip < 0) ? ys[1:min(take+skip,end)] :
-        (take < 0 && skip >= 0) ? ys[max(end+take-skip+1,1):end-skip] :
-        ys[max(end+take-skip+1,1):end]
+        N = execute(pipe.N, x)::Int
+        if pipe.dir >= 0
+            N >= 0 ? ys[1:min(N,end)] : ys[1:N+end]
+        else
+            N >= 0 ? ys[1+N:end] : ys[max(1,1+N+end):end]
+        end
     end
 
 

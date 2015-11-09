@@ -317,25 +317,13 @@ function compile(fn::Fn(:first, :last), base::Query, flow::Query, op::Query)
 end
 
 
-function compile(::Fn(:take), base::Query, flow::Query, size::Query)
+function compile(fn::Fn(:take, :skip), base::Query, flow::Query, size::Query)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(base, size); reqsingular(size); reqcomplete(size); reqcodomain(Int, size)
     I = domain(flow)
     O = codomain(flow)
     output = Output(O, singular=false, complete=false, exclusive=exclusive(flow))
-    pipe = TakePipe{I,O}(flow.pipe, size.pipe, ConstPipe{I,Int}(0))
-    return Query(flow, output=output, pipe=pipe)
-end
-
-
-function compile(::Fn(:take), base::Query, flow::Query, size::Query, skip::Query)
-    reqcomposable(base, flow); reqplural(flow)
-    reqcomposable(base, size, skip); reqsingular(size, skip)
-    reqcomplete(size, skip); reqcodomain(Int, size, skip)
-    I = domain(flow)
-    O = codomain(flow)
-    output = Output(O, singular=false, complete=false, exclusive=exclusive(flow))
-    pipe = TakePipe{I,O}(flow.pipe, size.pipe, skip.pipe)
+    pipe = TakePipe{I,O}(flow.pipe, size.pipe, fn == Fn{:take} ? 1 : -1)
     return Query(flow, output=output, pipe=pipe)
 end
 
