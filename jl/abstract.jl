@@ -184,7 +184,7 @@ typealias NullableSyntax Nullable{AbstractSyntax}
 Query(
     scope::AbstractScope, domain::DataType=UnitType;
     input=Input(domain), output=Output(domain, exclusive=true, reachable=true),
-    pipe=ThisPipe{datatype(domain)}(),
+    pipe=HerePipe{datatype(domain)}(),
     fields=NullableQueries(),
     identity=NullableQuery(),
     selector=NullableQuery(),

@@ -19,7 +19,7 @@ constant combinator always returns the same value::
 
 The identity combinator returns its input unchanged::
 
-    >>> I = This()
+    >>> I = Here()
     >>> I(42)
     42
 

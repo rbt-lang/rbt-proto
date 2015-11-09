@@ -245,11 +245,11 @@ Combinators
 
     .. code-block:: julia
 
-        This() = x -> x
+        Here() = x -> x
 
     .. code-block:: jlcon
 
-        julia> I = This()
+        julia> I = Here()
         julia> I(true), I(42), I([1, 2, 3])
         (true, 42, [1, 2, 3])
 
@@ -308,7 +308,7 @@ A JSON combinator is any function that maps JSON input to JSON output.  Two triv
 examples of JSON combinators are:
 
 * ``Const(val)``, which maps each input to the constant value ``val``.
-* ``This()``, which copies the input to the output.
+* ``Here()``, which copies the input to the output.
 
 In Julia, they could be defined as follows:
 
@@ -318,7 +318,7 @@ In Julia, they could be defined as follows:
 
 .. code-block:: julia
 
-    This() = x -> x
+    Here() = x -> x
 
 We need to distinguish between combinators and combinator constructors.
 ``Const`` is a combinator constructor, a function that returns a combinator.
@@ -343,7 +343,7 @@ unchanged.
 
 .. code-block:: jlcon
 
-    julia> I = This()
+    julia> I = Here()
 
     julia> I(true)
     true
@@ -398,7 +398,7 @@ For comparison, here is an equivalent implementation in Python:
             return val
         return f
 
-    def This():
+    def Here():
         def f(x):
             return x
         return f
@@ -416,7 +416,7 @@ and in Javascript:
         return function (x) { return val; };
     }
 
-    function This() {
+    function Here() {
         return function (x) { return x; };
     }
 
@@ -1244,13 +1244,13 @@ Constructing objects
 
     .. code-block:: jlcon
 
-        julia> L = Count(This())
+        julia> L = Count(Here())
         julia> L([10, 20, 30])
         3
 
     .. code-block:: jlcon
 
-        julia> M = Max(This())
+        julia> M = Max(Here())
         julia> M([10, 20, 30])
         30
 
@@ -1258,7 +1258,7 @@ Constructing objects
 
     .. code-block:: jlcon
 
-        julia> S = Select("len" => Count(This()), "max" => Max(This()))
+        julia> S = Select("len" => Count(Here()), "max" => Max(Here()))
         julia> S([10, 20, 30])
         Dict{ASCIIString,Int64} with 2 entries:
           "len" => 3
@@ -1365,13 +1365,13 @@ that determine the size and the maximum element of the input array:
 
 .. code-block:: jlcon
 
-    julia> L = Count(This())
+    julia> L = Count(Here())
     julia> L([10, 20, 30])
     3
 
 .. code-block:: jlcon
 
-    julia> M = Max(This())
+    julia> M = Max(Here())
     julia> M([10, 20, 30])
     30
 
@@ -1380,7 +1380,7 @@ object:
 
 .. code-block:: jlcon
 
-    julia> S = Select("len" => Count(This()), "max" => Max(This()))
+    julia> S = Select("len" => Count(Here()), "max" => Max(Here()))
     julia> S([10, 20, 30])
     Dict{ASCIIString,Int64} with 2 entries:
       "len" => 3

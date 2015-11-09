@@ -11,7 +11,7 @@ as common functions and operators:
 
 ``Const(val)``
     Always produces ``val``.
-``This()``
+``Here()``
     Identity combinator.
 ``Field(name)``
     Extracts a field value from a JSON object.
@@ -252,7 +252,7 @@ class Const(Combinator):
         return self.value
 
 
-class This(Combinator):
+class Here(Combinator):
 
     def __call__(self, x, ctx={}):
         return x

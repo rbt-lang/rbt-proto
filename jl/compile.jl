@@ -155,11 +155,11 @@ compile{name}(fn::Type{Fn{name}}, base::Query, arg1::AbstractSyntax, args::Abstr
     compile(fn, base, compile(base, arg1), [compile(base, arg) for arg in args]...)
 
 
-function compile(::Fn(:this), base::Query)
+function compile(::Fn(:here), base::Query)
     T = codomain(base)
     input = Input(T)
     output = Output(T, exclusive=true, reachable=true)
-    pipe = ThisPipe{T}()
+    pipe = HerePipe{T}()
     return Query(base, input=input, output=output, pipe=pipe)
 end
 
@@ -177,7 +177,7 @@ end
 
 compile(::Fn(:link), base::Query, pred::AbstractSyntax, arg::AbstractSyntax) =
     let unlink = compile(Fn{:unlink}, base, arg),
-        mix = compile(Fn{:mix}, base, compile(Fn{:this}, base), unlink),
+        mix = compile(Fn{:mix}, base, compile(Fn{:here}, base), unlink),
         condition = compile(mix, pred),
         filter = compile(Fn{:filter}, base, mix, condition),
         right = compile(Fn{:right}, mix)
@@ -415,7 +415,7 @@ function compile(::Fn(:sort_connect), base::Query, flow::Query, op::Query)
     pipe = SortConnectPipe{I,O,J}(
         flow.pipe,
         singular(op) ? OptToSeqPipe(op.pipe) : op.pipe,
-        !isnull(op.identity) ? get(op.identity).pipe : ThisPipe{O}())
+        !isnull(op.identity) ? get(op.identity).pipe : HerePipe{O}())
     return Query(flow, pipe=pipe)
 end
 
@@ -469,10 +469,10 @@ function compile(
     O = Tuple{Q, Vector{V}}
     pipe = TuplePipe{I, O}([ConstPipe{I,UnitType}(()), flow.pipe])
     if ispartition
-        pipe = TuplePipe{I, Tuple{I,O}}([ThisPipe{I}(), pipe])
+        pipe = TuplePipe{I, Tuple{I,O}}([HerePipe{I}(), pipe])
     end
     for op in ops
-        opid = !isnull(op.identity) ? get(op.identity) : compile(Fn{:this}, op)
+        opid = !isnull(op.identity) ? get(op.identity) : compile(Fn{:here}, op)
         P = Tuple{Ps...}
         K = codomain(op)
         J = codomain(opid)
@@ -544,7 +544,7 @@ function compile(::Fn(:mix), base::Query, ops::Query...)
         I = codomain(op)
         input = Input(I)
         output = Output(I, exclusive=true, reachable=true)
-        pipe = ThisPipe{I}()
+        pipe = HerePipe{I}()
         defs = Dict{Symbol,Query}(
             get(op.tag) => Query(op, input=input, output=output, pipe=pipe))
         return Query(op, scope=scope, defs=defs)
@@ -612,9 +612,9 @@ function compile(::Fn(:pack), base::Query, ops::Query...)
             iscomplete = true
         end
         identitymap[tag] =
-            !isnull(op.identity) ? get(op.identity).pipe : ThisPipe{T}()
+            !isnull(op.identity) ? get(op.identity).pipe : HerePipe{T}()
         selectormap[tag] =
-            !isnull(op.selector) ? get(op.selector).pipe : ThisPipe{T}()
+            !isnull(op.selector) ? get(op.selector).pipe : HerePipe{T}()
         Ds = (Ds..., !isnull(op.identity) ? codomain(get(op.identity)) : T)
         Ss = (Ss..., !isnull(op.selector) ? codomain(get(op.selector)) : T)
     end
@@ -731,7 +731,7 @@ macro compileunaryop(fn, Pipe, T1, T2)
             output = Output($T2, comode(op))
             pipe = singular(output) && complete(output) ?
                 $Pipe{I}(op.pipe) :
-                op.pipe >> $Pipe{$T1}(ThisPipe{$T1})
+                op.pipe >> $Pipe{$T1}(HerePipe{$T1})
             return Query(scope, input=input, output=output, pipe=pipe)
         end
     end)

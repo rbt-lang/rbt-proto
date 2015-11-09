@@ -1,10 +1,10 @@
 
-immutable ThisPipe{I} <: IsoPipe{I,I}
+immutable HerePipe{I} <: IsoPipe{I,I}
 end
 
-show(io::IO, pipe::ThisPipe) = print(io, "THIS")
+show(io::IO, pipe::HerePipe) = print(io, "THIS")
 
-execute{I}(::ThisPipe, x::I) = x
+execute{I}(::HerePipe, x::I) = x
 
 
 immutable ConstPipe{I,O} <: IsoPipe{I,O}
