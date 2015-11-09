@@ -401,18 +401,18 @@ function compile(::Fn(:depth), base::Query, op::Query)
 end
 
 
-compile(fn::Fn(:toposort), base::Query, flow::AbstractSyntax, op::AbstractSyntax) =
+compile(fn::Fn(:sort_connect), base::Query, flow::AbstractSyntax, op::AbstractSyntax) =
     let flow = compile(base, flow)
         compile(fn, base, flow, compile(flow, op))
     end
 
-function compile(fn::Fn(:toposort), base::Query, flow::Query, op::Query)
+function compile(::Fn(:sort_connect), base::Query, flow::Query, op::Query)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(flow, op); reqpartial(op); reqcodomain(domain(op), op)
     I = domain(flow)
     O = codomain(flow)
     J = !isnull(op.identity) ? codomain(get(op.identity)) : O
-    pipe = TopoSortPipe{I,O,J}(
+    pipe = SortConnectPipe{I,O,J}(
         flow.pipe,
         singular(op) ? OptToSeqPipe(op.pipe) : op.pipe,
         !isnull(op.identity) ? get(op.identity).pipe : ThisPipe{O}())

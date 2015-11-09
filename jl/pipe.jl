@@ -547,15 +547,15 @@ function execute{I}(pipe::DepthPipe{I}, x::I)
 end
 
 
-immutable TopoSortPipe{I,O,J} <: SeqPipe{I,O}
+immutable SortConnectPipe{I,O,J} <: SeqPipe{I,O}
     F::SeqPipe{I,O}
     L::SeqPipe{O,O}
     id::IsoPipe{O,J}
 end
 
-show(io::IO, pipe::TopoSortPipe) = print(io, "TopoSort(", pipe.F, ", ", pipe.L, ", ", pipe.id, ")")
+show(io::IO, pipe::SortConnectPipe) = print(io, "SortConnect(", pipe.F, ", ", pipe.L, ", ", pipe.id, ")")
 
-function execute{I,O,J}(pipe::TopoSortPipe{I,O,J}, x::I)
+function execute{I,O,J}(pipe::SortConnectPipe{I,O,J}, x::I)
     ys = execute(pipe.F, x)::Vector{O}
     ids = Dict{J,Int}()
     edges = Vector{Vector{Int}}()

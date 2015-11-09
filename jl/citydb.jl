@@ -34,14 +34,14 @@ schema = Schema(
         Arrow(:salary, Int),
         Arrow(:department, select=:name),
         Arrow(
-            :reports_to, :employee,
+            :managed_by, :employee,
             complete=false,
             select=(:name, :surname, :position)),
         Arrow(
-            :reported_by, :employee,
+            :manages, :employee,
             singular=false, complete=false, exclusive=true,
             select=(:name, :surname, :position),
-            inverse=:reports_to),
+            inverse=:managed_by),
         select=(:name, :surname, :department, :position, :salary)))
 
 
@@ -59,8 +59,8 @@ empl_surname = Dict{E, UTF8String}()
 empl_position = Dict{E, UTF8String}()
 empl_salary = Dict{E, Int}()
 empl_dept = Dict{E, D}()
-empl_reports_to = Dict{E, E}()
-empl_reported_by = Dict{E, Vector{E}}()
+empl_managed_by = Dict{E, E}()
+empl_manages = Dict{E, Vector{E}}()
 
 tr_head = nothing
 trs = []
@@ -119,13 +119,13 @@ for i = 1:size(csv, 1)
     end
 end
 
-empl_reported_by[tr_head] = trs
-empl_reported_by[acc_head] = accs
+empl_manages[tr_head] = trs
+empl_manages[acc_head] = accs
 for tr in trs
-    empl_reports_to[tr] = tr_head
+    empl_managed_by[tr] = tr_head
 end
 for acc in accs
-    empl_reports_to[acc] = acc_head
+    empl_managed_by[acc] = acc_head
 end
 
 instance = Instance(
@@ -140,8 +140,8 @@ instance = Instance(
         (:employee, :position) => empl_position,
         (:employee, :salary) => empl_salary,
         (:employee, :department) => empl_dept,
-        (:employee, :reports_to) => empl_reports_to,
-        (:employee, :reported_by) => empl_reported_by))
+        (:employee, :managed_by) => empl_managed_by,
+        (:employee, :manages) => empl_manages))
 
 
 citydb = Database(schema, instance)
