@@ -196,7 +196,7 @@ Query(
     Query(scope, input, output, pipe, fields, identity, selector, defs, order, tag, syntax, origin)
 
 # Initial compiler state.
-Query(db::AbstractDatabase) = Query(scope(db))
+Query(db::AbstractDatabase; params...) = Query(scope(db, Dict{Symbol,Any}(params)))
 
 # Clone constructor.
 Query(
@@ -252,7 +252,7 @@ function show(io::IO, q::Query)
 end
 
 # Compiles the query.
-prepare(base, expr) = prepare(Query(base), syntax(expr))
+prepare(base, expr; params...) = prepare(Query(base; params...), syntax(expr))
 prepare(base::Query, expr::AbstractSyntax) =
     if !isnull(base.origin)
         return prepare(get(base.origin), expr)

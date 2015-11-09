@@ -1,18 +1,22 @@
 
 immutable RootScope <: AbstractScope
     db::Database
+    params::Dict{Symbol,Any}
 end
 
 show(io::IO, ::RootScope) = print(io, "ROOT")
 
 root(self::RootScope) = self
 
-empty(self::RootScope) = EmptyScope(self.db)
+empty(self::RootScope) = EmptyScope(self.db, self.params)
 
 function lookup(self::RootScope, name::Symbol)
+    if name in keys(self.params)
+        return NullableQuery(val2q(self, self.params[name]))
+    end
     if name in keys(self.db.schema.name2class)
         class = self.db.schema.name2class[name]
-        scope = ClassScope(self.db, name)
+        scope = ClassScope(self.db, name, self.params)
         I = UnitType
         O = Entity{name}
         input = Input(I)
@@ -36,18 +40,22 @@ end
 immutable ClassScope <: AbstractScope
     db::Database
     name::Symbol
+    params::Dict{Symbol,Any}
 end
 
 show(io::IO, self::ClassScope) = print(io, "Class(<", self.name, ">)")
 
-root(self::ClassScope) = RootScope(self.db)
+root(self::ClassScope) = RootScope(self.db, self.params)
 
-empty(self::ClassScope) = EmptyScope(self.db)
+empty(self::ClassScope) = EmptyScope(self.db, self.params)
 
 function lookup(self::ClassScope, name::Symbol)
+    if name in keys(self.params)
+        return NullableQuery(val2q(self, self.params[name]))
+    end
     class = self.db.schema.name2class[self.name]
     if name == :id
-        scope = EmptyScope(self.db)
+        scope = EmptyScope(self.db, self.params)
         I = Entity{self.name}
         input = Input(I)
         output = Output(Int, exclusive=true)
@@ -74,7 +82,7 @@ function lookup(self::ClassScope, name::Symbol)
         if O <: Entity
             targetname = classname(O)
             targetclass = self.db.schema.name2class[targetname]
-            scope = ClassScope(self.db, targetname)
+            scope = ClassScope(self.db, targetname, self.params)
             query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax)
             selector = mkselector(
                 query,
@@ -84,7 +92,7 @@ function lookup(self::ClassScope, name::Symbol)
             identity = mkidentity(query, :id)
             query = Query(query, selector=selector, identity=identity)
         else
-            scope = EmptyScope(self.db)
+            scope = EmptyScope(self.db, self.params)
             query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax)
         end
         return NullableQuery(query)
@@ -96,15 +104,19 @@ end
 
 immutable EmptyScope <: AbstractScope
     db::Database
+    params::Dict{Symbol,Any}
 end
 
 show(io::IO, ::EmptyScope) = print(io, "EMPTY")
 
-root(self::EmptyScope) = RootScope(self.db)
+root(self::EmptyScope) = RootScope(self.db, self.params)
 
 empty(self::EmptyScope) = self
 
-lookup(::EmptyScope, ::Symbol) = NullableQuery()
+lookup(self::EmptyScope, name::Symbol) =
+    name in keys(self.params) ?
+        NullableQuery(val2q(self, self.params[name])) :
+        NullableQuery()
 
 
 mkselector(base::Query, spec) = mkcomposite(base, spec, :selector)
@@ -130,6 +142,20 @@ function mkcomposite(base::Query, parts::Tuple, field)
     return record(base, ops...)
 end
 
+function val2q(base::AbstractScope, val)
+    if isa(val, AbstractString)
+        val = UTF8String(val)
+    end
+    scope = empty(base)
+    I = isa(base, ClassScope) ? Entity{base.name} : UnitType
+    O = typeof(val)
+    input = Input(I)
+    output = Output(O, complete=(val != nothing))
+    pipe = val != nothing ? ConstPipe{I,O}(val) : NullVal{I}()
+    return Query(scope, input=input, output=output, pipe=pipe)
+end
 
-scope(db::Database) = RootScope(db)
+scope(db::Database) = RootScope(db, Dict{Symbol,Any}())
+
+scope(db::Database, params::Dict{Symbol,Any}) = RootScope(db, params)
 

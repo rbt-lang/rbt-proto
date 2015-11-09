@@ -38,8 +38,8 @@ function getdb()
 end
 
 
-function query(state, expr)
-    return execute(prepare(state, expr))
+function query(state, expr; params...)
+    return execute(prepare(state, expr; params...))
 end
 
 function query(expr)
@@ -47,15 +47,20 @@ function query(expr)
 end
 
 macro query(args...)
-    @assert 1 <= length(args) <= 2
-    if length(args) == 2
-        db, expr = args
+    L = endof(args)
+    while L > 0 && isa(args[L], Expr) && args[L].head == :kw
+        L = L-1
+    end
+    @assert 1 <= L <= 2
+    if L == 2
+        db, expr = args[1], args[2]
     else
         db, expr = DB, args[1]
     end
     expr = syntax(expr)
+    params = args[L+1:end]
     return quote
-        query($(esc(db)), $expr)
+        query($(esc(db)), $expr; $(params...))
     end
 end
 
@@ -64,8 +69,8 @@ macro q_str(str)
 end
 
 
-function prepare(expr)
-    return prepare(DB, expr)
+function prepare(expr; params...)
+    return prepare(DB, expr; params...)
 end
 
 macro prepare(args...)

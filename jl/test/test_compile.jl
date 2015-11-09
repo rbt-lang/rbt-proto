@@ -143,3 +143,6 @@ setdb(citydb)
 
 @query((max(employee.salary) > 100000) & (max(employee.salary) < 300000))
 
+@query(employee:filter((position==POSITION) & (name==NAME)), POSITION="POLICE OFFICER", NAME="CHARLES")
+@query(department:filter(count(employee)>SIZE):select(name,count(employee)-SIZE), SIZE=1000)
+
