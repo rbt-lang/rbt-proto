@@ -90,7 +90,7 @@ setdb(citydb)
     :select(department, salary_bracket, salary_bracket+9999, count(employee)))
 @query(
     employee
-    :cube_group(department, salary_bracket => salary/10000*10000 :desc)
+    :group_cube(department, salary_bracket => salary/10000*10000 :desc)
     :select(department, salary_bracket, salary_bracket+9999, count(employee)))
 @query(
     employee
@@ -98,7 +98,7 @@ setdb(citydb)
     :select(department.name, count(unique(employee.position)), count(employee), max(employee.salary)))
 @query(
     employee
-    :cube_partition(department:take(3))
+    :partition_cube(department:take(3))
     :select(department.name, count(unique(employee.position)), count(employee), max(employee.salary)))
 @query(
     employee

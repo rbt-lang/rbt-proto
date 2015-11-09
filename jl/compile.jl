@@ -440,17 +440,17 @@ function compile(::Fn(:unique), base::Query, flow::Query)
 end
 
 
-compile(fn::Fn(:group, :cube_group),
+compile(fn::Fn(:group, :group_cube),
         base::Query, flow::AbstractSyntax, op1::AbstractSyntax, ops::AbstractSyntax...) =
     let flow = compile(base, flow)
         compile(fn, base, flow, compile(flow, op1), [compile(flow, op) for op in ops]...)
     end
 
 function compile(
-        fn::Fn(:group, :cube_group, :partition, :cube_partition),
+        fn::Fn(:group, :group_cube, :partition, :partition_cube),
         base::Query, flow::Query, ops::Query...)
-    iscube = (fn == Fn{:cube_group} || fn == Fn{:cube_partition})
-    ispartition = (fn == Fn{:partition} || fn == Fn{:cube_partition})
+    iscube = (fn == Fn{:group_cube} || fn == Fn{:partition_cube})
+    ispartition = (fn == Fn{:partition} || fn == Fn{:partition_cube})
     reqcomposable(base, flow); reqplural(flow)
     if !ispartition
         reqcomposable(flow, ops...); reqsingular(ops...); reqcomplete(ops...)
