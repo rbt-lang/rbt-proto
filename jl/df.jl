@@ -13,7 +13,7 @@ execute{I,O}(pipe::OptToNAPipe{I,O}, x::I) =
 
 
 immutable IsoDataFramePipe{I} <: IsoPipe{I, DataFrame}
-    F::IsoPipe{I}
+    F::AbstractPipe{I}
     fields
 end
 
@@ -35,7 +35,7 @@ end
 
 
 immutable OptDataFramePipe{I} <: IsoPipe{I, DataFrame}
-    F::OptPipe{I}
+    F::AbstractPipe{I}
     fields
 end
 
@@ -59,7 +59,7 @@ end
 
 
 immutable SeqDataFramePipe{I} <: IsoPipe{I, DataFrame}
-    F::SeqPipe{I}
+    F::AbstractPipe{I}
     fields
 end
 

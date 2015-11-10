@@ -117,19 +117,13 @@ datatype(T::DataType) = T
 abstract AbstractPipe{I,O}
 
 # Pipelines classified by the output structure.
-abstract IsoPipe{I,O} <: AbstractPipe{I,O}
-abstract OptPipe{I,O} <: AbstractPipe{I,Nullable{O}}
-abstract SeqPipe{I,O} <: AbstractPipe{I,Vector{O}}
+typealias IsoPipe{I,O} AbstractPipe{I,O}
+typealias OptPipe{I,O} AbstractPipe{I,Nullable{O}}
+typealias SeqPipe{I,O} AbstractPipe{I,Vector{O}}
 
-# Extracts the type of input.
-domain{I,O}(::IsoPipe{I,O}) = I
-domain{I,O}(::OptPipe{I,O}) = I
-domain{I,O}(::SeqPipe{I,O}) = I
-
-# Extracts the type of output.
-codomain{I,O}(::IsoPipe{I,O}) = O
-codomain{I,O}(::OptPipe{I,O}) = O
-codomain{I,O}(::SeqPipe{I,O}) = O
+# Extracts the type of input and output.
+idom{I,O}(::AbstractPipe{I,O}) = I
+odom{I,O}(::AbstractPipe{I,O}) = O
 
 # Executes the pipeline.
 execute{I}(pipe::AbstractPipe, x::I) =

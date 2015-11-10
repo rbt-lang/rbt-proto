@@ -596,10 +596,10 @@ function compile(::Fn(:pack), base::Query, ops::Query...)
     Ts = ()
     Ds = ()
     Ss = ()
-    Fs = Vector{Pair{Symbol,SeqPipe}}()
+    Fs = Vector{Pair{Symbol,AbstractPipe}}()
     iscomplete = false
-    identitymap = Dict{Symbol,IsoPipe}()
-    selectormap = Dict{Symbol,IsoPipe}()
+    identitymap = Dict{Symbol,AbstractPipe}()
+    selectormap = Dict{Symbol,AbstractPipe}()
     for op in ops
         T = codomain(op)
         tag = get(op.tag)
@@ -607,7 +607,7 @@ function compile(::Fn(:pack), base::Query, ops::Query...)
         field_pipe =
             singular(op) && complete(op) ? IsoToSeqPipe{I,T}(op.pipe) :
             singular(op) ? OptToSeqPipe{I,T}(op.pipe) : op.pipe
-        push!(Fs, Pair{Symbol,SeqPipe}(tag, field_pipe))
+        push!(Fs, Pair{Symbol,AbstractPipe}(tag, field_pipe))
         if complete(op)
             iscomplete = true
         end

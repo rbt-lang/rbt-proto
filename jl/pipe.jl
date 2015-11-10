@@ -225,28 +225,28 @@ execute{I,O1,O2}(pipe::SeqProductPipe{I,O1,O2}, x::I) =
     end
 
 
-*{I,O1,O2}(F::IsoPipe{I,O1}, G::IsoPipe{I,O2}) =
-    IsoProductPipe{I,O1,O2}(F, G)
-*{I,O1,O2}(F::IsoPipe{I,O1}, G::OptPipe{I,O2}) =
-    OptProductPipe{I,O1,O2}(IsoToOptPipe{I,O1}(F), G)
+*{I,O1,O2}(F::SeqPipe{I,O1}, G::SeqPipe{I,O2}) =
+    SeqProductPipe{I,O1,O2}(F, G)
+*{I,O1,O2}(F::SeqPipe{I,O1}, G::OptPipe{I,O2}) =
+    SeqProductPipe{I,O1,O2}(F, OptToSeqPipe{I,O2}(G))
+*{I,O1,O2}(F::OptPipe{I,O1}, G::SeqPipe{I,O2}) =
+    SeqProductPipe{I,O1,O2}(OptToSeqPipe{I,O1}(F), G)
+*{I,O1,O2}(F::OptPipe{I,O1}, G::OptPipe{I,O2}) =
+    OptProductPipe{I,O1,O2}(F, G)
+*{I,O1,O2}(F::SeqPipe{I,O1}, G::IsoPipe{I,O2}) =
+    SeqProductPipe{I,O1,O2}(F, IsoToSeqPipe{I,O2}(G))
 *{I,O1,O2}(F::IsoPipe{I,O1}, G::SeqPipe{I,O2}) =
     SeqProductPipe{I,O1,O2}(IsoToSeqPipe{I,O1}(F), G)
 *{I,O1,O2}(F::OptPipe{I,O1}, G::IsoPipe{I,O2}) =
     OptProductPipe{I,O1,O2}(F, IsoToOptPipe{I,O2}(G))
-*{I,O1,O2}(F::OptPipe{I,O1}, G::OptPipe{I,O2}) =
-    OptProductPipe{I,O1,O2}(F, G)
-*{I,O1,O2}(F::OptPipe{I,O1}, G::SeqPipe{I,O2}) =
-    SeqProductPipe{I,O1,O2}(OptToSeqPipe{I,O1}(F), G)
-*{I,O1,O2}(F::SeqPipe{I,O1}, G::IsoPipe{I,O2}) =
-    SeqProductPipe{I,O1,O2}(F, IsoToSeqPipe{I,O2}(G))
-*{I,O1,O2}(F::SeqPipe{I,O1}, G::OptPipe{I,O2}) =
-    SeqProductPipe{I,O1,O2}(F, OptToSeqPipe{I,O2}(G))
-*{I,O1,O2}(F::SeqPipe{I,O1}, G::SeqPipe{I,O2}) =
-    SeqProductPipe{I,O1,O2}(F, G)
+*{I,O1,O2}(F::IsoPipe{I,O1}, G::OptPipe{I,O2}) =
+    OptProductPipe{I,O1,O2}(IsoToOptPipe{I,O1}(F), G)
+*{I,O1,O2}(F::IsoPipe{I,O1}, G::IsoPipe{I,O2}) =
+    IsoProductPipe{I,O1,O2}(F, G)
 
 
 immutable CoproductPipe{I,U} <: SeqPipe{I,Pair{Symbol,U}}
-    Fs::Vector{Pair{Symbol,SeqPipe}}
+    Fs::Vector{Pair{Symbol,AbstractPipe}}
 end
 
 show(io::IO, pipe::CoproductPipe) = print(io, "[", join(["$n => $F" for (n,F) in pipe.Fs], " | "), "]")
@@ -263,7 +263,7 @@ end
 
 
 immutable IsoLiftPipe{U,V} <: IsoPipe{Pair{Symbol,U},Pair{Symbol,V}}
-    Fs::Dict{Symbol,IsoPipe}
+    Fs::Dict{Symbol,AbstractPipe}
 end
 
 show(io::IO, pipe::IsoLiftPipe) = print(io, "[", join(["$n => $F" for (n,F) in pipe.Fs], " | "), "]")
