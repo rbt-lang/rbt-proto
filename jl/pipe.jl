@@ -21,6 +21,8 @@ end
 
 show(io::IO, ::NullPipe) = print(io, "NULL")
 
+execute{I,O}(pipe::NullPipe{I,O}, ::I) = Nullable{O}()
+
 
 immutable SetPipe{I,O} <: SeqPipe{I,O}
     name::Symbol
@@ -64,96 +66,121 @@ execute{I,O}(pipe::SeqMapPipe{I,O}, x::I) =
     x in keys(pipe.map) ? pipe.map[x] : O[]
 
 
-immutable IsoToOptPipe{I,O} <: OptPipe{I,O}
-    F::IsoPipe{I,O}
+immutable LiftPipe{I0,I,O0,O} <: AbstractPipe{I,O}
+    F::AbstractPipe{I0,O0}
 end
 
-show(io::IO, pipe::IsoToOptPipe) = show(io, pipe.F)
+show(io::IO, pipe::LiftPipe) = show(io, pipe.F)
 
-execute{I,O}(pipe::IsoToOptPipe{I,O}, x::I) =
-    Nullable{O}(execute(pipe.F, x))
+execute{I0,I,O0,O}(pipe::LiftPipe{I0,I,O0,O}, x::I) =
+    generated_lift(pipe, x)::O
 
-
-immutable IsoToSeqPipe{I,O} <: SeqPipe{I,O}
-    F::IsoPipe{I,O}
-end
-
-show(io::IO, pipe::IsoToSeqPipe) = show(io, pipe.F)
-
-execute{I,O}(pipe::IsoToSeqPipe{I,O}, x::I) =
-    O[execute(pipe.F, x)]
-
-
-immutable OptToSeqPipe{I,O} <: SeqPipe{I,O}
-    F::OptPipe{I,O}
-end
-
-show(io::IO, pipe::OptToSeqPipe) = show(io, pipe.F)
-
-execute{I,O}(pipe::OptToSeqPipe{I,O}, x::I) =
-    let y = execute(pipe.F, x)
-        isnull(y) ? O[] : O[get(y)]
+@generated function generated_lift{I0,I,O0,O}(pipe::LiftPipe{I0,I,O0,O}, x::I)
+    if I == I0 && O == O0
+        return :(execute(pipe.F, x))
     end
-
-
-immutable IsoComposePipe{I,T,O} <: IsoPipe{I,O}
-    F::IsoPipe{I,T}
-    G::IsoPipe{T,O}
-end
-
-show(io::IO, pipe::IsoComposePipe) = print(io, pipe.F, " >> ", pipe.G)
-
-execute{I,T,O}(pipe::IsoComposePipe{I,T,O}, x::I) =
-    execute(pipe.G, execute(pipe.F, x)::T)::O
-
-
-immutable OptComposePipe{I,T,O} <: OptPipe{I,O}
-    F::OptPipe{I,T}
-    G::OptPipe{T,O}
-end
-
-show(io::IO, pipe::OptComposePipe) = print(io, pipe.F, " >> ", pipe.G)
-
-execute{I,T,O}(pipe::OptComposePipe{I,T,O}, x::I) =
-    let y = execute(pipe.F, x)::Nullable{T}
-        isnull(y) ? Nullable{O}() : execute(pipe.G, get(y))::Nullable{O}
-    end
-
-
-immutable SeqComposePipe{I,T,O} <: SeqPipe{I,O}
-    F::SeqPipe{I,T}
-    G::SeqPipe{T,O}
-end
-
-show(io::IO, pipe::SeqComposePipe) = print(io, pipe.F, " >> ", pipe.G)
-
-execute{I,T,O}(pipe::SeqComposePipe{I,T,O}, x::I) =
-    let y = execute(pipe.F, x)::Vector{T}, z = O[]
-        for yi in y
-            append!(z, execute(pipe.G, yi)::Vector{O})
+    @assert I == I0 || I == Temp{I0} ||
+            I <: Ctx && I.parameters[1] == I0 ||
+            I <: Ctx && I.parameters[1] == Temp{I0} ||
+            I <: Ctx && I0 <: Ctx && I.parameters[1] == I0.parameters[1] ||
+            I <: Ctx && I0 <: Ctx && I.parameters[1] == Temp{I0.parameters[1]}
+    if I == I0
+        body = :(x0 = x)
+    elseif I == Temp{I0}
+        body = :(x0 = x.vals[x.idx])
+    elseif I <: Ctx && I.parameters[1] == I0
+        body = :(x0 = x.val)
+    elseif I <: Ctx && I.parameters[1] == Temp{I0}
+        body = :(x0 = x.val.vals[x.val.idx])
+    elseif I <: Ctx && I0 <: Ctx && I.parameters[1] == I0.parameters[1]
+        (T0, N0, V0) = I0.parameters
+        (T, N, V) = I.parameters
+        js = Int[]
+        for n in N0
+            j = findfirst(N, n)
+            push!(js, j)
         end
-        z
+        body = :(x0 = Ctx{$T0,$N0,$V0}(x.val, tuple($([:(x.ctx[$j]) for j in js]...))))
+    elseif I <: Ctx && I0 <: Ctx && I.parameters[1] == Temp{I0.parameters[1]}
+        (T0, N0, V0) = I0.parameters
+        (T, N, V) = I.parameters
+        js = Int[]
+        for n in N0
+            j = findfirst(N, n)
+            push!(js, j)
+        end
+        body = :(x0 = Ctx{$T0,$N0,$V0}(x.val.vals[x.val.idx], tuple($([:(x.ctx[$j]) for j in js]...))))
     end
+    body = :($body; y0 = execute(pipe.F, x0))
+    @assert O == O0 || O == Opt{O0} || O == Seq{O0} || (O0 <: Opt && O == Seq{O0.parameters[1]})
+    if O == O0
+        body = :($body; y0)
+    elseif O == Opt{O0}
+        body = :($body; Nullable{O0}(y0))
+    elseif O == Seq{O0}
+        body = :($body; O0[y0])
+    elseif O0 <: Opt && O == Seq{O0.parameters[1]}
+        T = O0.parameters[1]
+        body = :($body; isnull(y0) ? $T[] : $T[get(y0)])
+    end
+    return body
+end
 
 
->>{I,T,O}(F::IsoPipe{I,T}, G::IsoPipe{T,O}) =
-    IsoComposePipe{I,T,O}(F, G)
->>{I,T,O}(F::IsoPipe{I,T}, G::OptPipe{T,O}) =
-    OptComposePipe{I,T,O}(IsoToOptPipe{I,T}(F), G)
->>{I,T,O}(F::IsoPipe{I,T}, G::SeqPipe{T,O}) =
-    SeqComposePipe{I,T,O}(IsoToSeqPipe{I,T}(F), G)
->>{I,T,O}(F::OptPipe{I,T}, G::IsoPipe{T,O}) =
-    OptComposePipe{I,T,O}(F, IsoToOptPipe{T,O}(G))
->>{I,T,O}(F::OptPipe{I,T}, G::OptPipe{T,O}) =
-    OptComposePipe{I,T,O}(F, G)
->>{I,T,O}(F::OptPipe{I,T}, G::SeqPipe{T,O}) =
-    SeqComposePipe{I,T,O}(OptToSeqPipe{I,T}(F), G)
->>{I,T,O}(F::SeqPipe{I,T}, G::IsoPipe{T,O}) =
-    SeqComposePipe{I,T,O}(F, IsoToSeqPipe{T,O}(G))
->>{I,T,O}(F::SeqPipe{I,T}, G::OptPipe{T,O}) =
-    SeqComposePipe{I,T,O}(F, OptToSeqPipe{T,O}(G))
->>{I,T,O}(F::SeqPipe{I,T}, G::SeqPipe{T,O}) =
-    SeqComposePipe{I,T,O}(F, G)
+immutable ComposePipe{I1,O1,I2,O2} <: AbstractPipe{I1,O2}
+    F::AbstractPipe{I1,O1}
+    G::AbstractPipe{I2,O2}
+end
+
+show(io::IO, pipe::ComposePipe) = print(io, pipe.F, " >> ", pipe.G)
+
+execute{I1,O1,I2,O2}(pipe::ComposePipe{I1,O1,I2,O2}, x::I1) =
+    generated_compose(pipe, x)::O2
+
+@generated function generated_compose{I1,O1,I2,O2}(pipe::ComposePipe{I1,O1,I2,O2}, x::I1)
+    @assert O1 == I2 || O1 == Opt{I2} || O1 == Seq{I2}
+    if O1 == I2
+        return quote
+            execute(pipe.G, execute(pipe.F, x)::O1)::O2
+        end
+    elseif O1 == Opt{I2}
+        @assert O2 <: Opt
+        return quote
+            let y = execute(pipe.F, x)::Nullable{I2}
+                isnull(y) ? O2() : execute(pipe.G, get(y))::O2
+            end
+        end
+    else
+        @assert O2 <: Seq
+        T = O2.parameters[1]
+        return quote
+            let y = execute(pipe.F, x)::Vector{I2}, z = $T[]
+                for yi in y
+                    append!(z, execute(pipe.G, yi)::O2)
+                end
+                z
+            end
+        end
+    end
+end
+
+function >>{I1,O1,I2,O2}(F::AbstractPipe{I1,O1}, G::AbstractPipe{I2,O2})
+    if O1 == I2 && O2 <: Opt
+        F = LiftPipe{I1,I1,O1,Opt{I2}}(F)
+    elseif O1 == I2 && O2 <: Seq
+        F = LiftPipe{I1,I1,O1,Seq{I2}}(F)
+    elseif O1 == Opt{I2} && O2 <: Seq
+        F = LiftPipe{I1,I1,O1,Seq{I2}}(F)
+    elseif O1 == Opt{I2} && !(O2 <: Opt) && !(O2 <: Seq)
+        G = LiftPipe{I2,I2,O2,Opt{O2}}(G)
+    elseif O1 == Seq{I2} && !(O2 <: Opt) && !(O2 <: Seq)
+        G = LiftPipe{I2,I2,O2,Seq{O2}}(G)
+    elseif O1 == Seq{I2} && O2 <: Opt
+        T = O2.parameters[1]
+        G = LiftPipe{I2,I2,Opt{T},Seq{T}}(G)
+    end
+    return ComposePipe(F, G)
+end
 
 
 immutable AttachPipe{I,O} <: SeqPipe{I,O}
@@ -228,19 +255,19 @@ execute{I,O1,O2}(pipe::SeqProductPipe{I,O1,O2}, x::I) =
 *{I,O1,O2}(F::SeqPipe{I,O1}, G::SeqPipe{I,O2}) =
     SeqProductPipe{I,O1,O2}(F, G)
 *{I,O1,O2}(F::SeqPipe{I,O1}, G::OptPipe{I,O2}) =
-    SeqProductPipe{I,O1,O2}(F, OptToSeqPipe{I,O2}(G))
+    SeqProductPipe{I,O1,O2}(F, LiftPipe{I,I,Opt{O2},Seq{O2}}(G))
 *{I,O1,O2}(F::OptPipe{I,O1}, G::SeqPipe{I,O2}) =
-    SeqProductPipe{I,O1,O2}(OptToSeqPipe{I,O1}(F), G)
+    SeqProductPipe{I,O1,O2}(LiftPipe{I,I,Opt{O1},Seq{O1}}(F), G)
 *{I,O1,O2}(F::OptPipe{I,O1}, G::OptPipe{I,O2}) =
     OptProductPipe{I,O1,O2}(F, G)
 *{I,O1,O2}(F::SeqPipe{I,O1}, G::IsoPipe{I,O2}) =
-    SeqProductPipe{I,O1,O2}(F, IsoToSeqPipe{I,O2}(G))
+    SeqProductPipe{I,O1,O2}(F, LiftPipe{I,I,O2,Seq{O2}}(G))
 *{I,O1,O2}(F::IsoPipe{I,O1}, G::SeqPipe{I,O2}) =
-    SeqProductPipe{I,O1,O2}(IsoToSeqPipe{I,O1}(F), G)
+    SeqProductPipe{I,O1,O2}(LiftPipe{I,I,O1,Seq{O1}}(F), G)
 *{I,O1,O2}(F::OptPipe{I,O1}, G::IsoPipe{I,O2}) =
-    OptProductPipe{I,O1,O2}(F, IsoToOptPipe{I,O2}(G))
+    OptProductPipe{I,O1,O2}(F, LiftPipe{I,I,O2,Opt{O2}}(G))
 *{I,O1,O2}(F::IsoPipe{I,O1}, G::OptPipe{I,O2}) =
-    OptProductPipe{I,O1,O2}(IsoToOptPipe{I,O1}(F), G)
+    OptProductPipe{I,O1,O2}(LiftPipe{I,I,O1,Opt{O1}}(F), G)
 *{I,O1,O2}(F::IsoPipe{I,O1}, G::IsoPipe{I,O2}) =
     IsoProductPipe{I,O1,O2}(F, G)
 
@@ -769,70 +796,26 @@ function execute{I,P,Q,V,K,J}(pipe::CubePartitionByPipe{I,P,Q,V,K,J}, x::Tuple{I
 end
 
 
-immutable IsoFieldPipe{I,O} <: IsoPipe{I,O}
+immutable FieldPipe{I,O} <: AbstractPipe{I,O}
     field::Symbol
 end
 
-show(io::IO, pipe::IsoFieldPipe) =
-    print(io, "IsoField(<", pipe.field, ">)")
+show(io::IO, pipe::FieldPipe) =
+    print(io, "Field(<", pipe.field, ">)")
 
-execute{I,O}(pipe::IsoFieldPipe{I,O}, x::I) =
+execute{I,O}(pipe::FieldPipe{I,O}, x::I) =
     getfield(x, pipe.field)::O
 
 
-immutable OptFieldPipe{I,O} <: OptPipe{I,O}
-    field::Symbol
-end
-
-show(io::IO, pipe::OptFieldPipe) =
-    print(io, "OptField(<", pipe.field, ">)")
-
-execute{I,O}(pipe::OptFieldPipe{I,O}, x::I) =
-    getfield(x, pipe.field)::Nullable{O}
-
-
-immutable SeqFieldPipe{I,O} <: SeqPipe{I,O}
-    field::Symbol
-end
-
-show(io::IO, pipe::SeqFieldPipe) =
-    print(io, "SeqField(<", pipe.field, ">)")
-
-execute{I,O}(pipe::SeqFieldPipe{I,O}, x::I) =
-    getfield(x, pipe.field)::Vector{O}
-
-
-immutable IsoItemPipe{I,O} <: IsoPipe{I,O}
+immutable ItemPipe{I,O} <: AbstractPipe{I,O}
     index::Int
 end
 
-show(io::IO, pipe::IsoItemPipe) =
-    print(io, "IsoItem(", pipe.index, ")")
+show(io::IO, pipe::ItemPipe) =
+    print(io, "Item(", pipe.index, ")")
 
-execute{I,O}(pipe::IsoItemPipe{I,O}, x::I) =
+execute{I,O}(pipe::ItemPipe{I,O}, x::I) =
     x[pipe.index]::O
-
-
-immutable OptItemPipe{I,O} <: OptPipe{I,O}
-    index::Int
-end
-
-show(io::IO, pipe::OptItemPipe) =
-    print(io, "OptItem(", pipe.index, ")")
-
-execute{I,O}(pipe::OptItemPipe{I,O}, x::I) =
-    x[pipe.index]::Nullable{O}
-
-
-immutable SeqItemPipe{I,O} <: SeqPipe{I,O}
-    index::Int
-end
-
-show(io::IO, pipe::SeqItemPipe) =
-    print(io, "SeqItem(", pipe.index, ")")
-
-execute{I,O}(pipe::SeqItemPipe{I,O}, x::I) =
-    x[pipe.index]::Vector{O}
 
 
 immutable IsoNotPipe{I} <: IsoPipe{I,Bool}

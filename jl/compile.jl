@@ -92,8 +92,8 @@ function record(base::Query, ops::Query...)
         field = Query(
             op, input=Input(O),
             pipe=
-                singular(op) && complete(op) ? IsoItemPipe{O,T}(k) :
-                singular(op) ? OptItemPipe{O,T}(k) : SeqItemPipe{O,T}(k))
+                singular(op) && complete(op) ? ItemPipe{O,T}(k) :
+                singular(op) ? ItemPipe{O,Opt{T}}(k) : ItemPipe{O,Seq{T}}(k))
         push!(fields, field)
         if !isnull(field.tag)
             defs[get(field.tag)] = field
@@ -277,9 +277,9 @@ function compile(::Fn(:range), base::Query, start::Query, step::Query, stop::Que
         pipe =
             (start.pipe * (step.pipe * stop.pipe)) >>
             RangePipe{Tuple{Int,Tuple{Int,Int}}}(
-                IsoItemPipe{Tuple{Int,Tuple{Int,Int}},Int}(1),
-                IsoItemPipe{Tuple{Int,Tuple{Int,Int}},Tuple{Int,Int}}(2) >> IsoItemPipe{Tuple{Int,Int}}{Int}(1),
-                IsoItemPipe{Tuple{Int,Tuple{Int,Int}},Tuple{Int,Int}}(2) >> IsoItemPipe{Tuple{Int,Int}}{Int}(2))
+                ItemPipe{Tuple{Int,Tuple{Int,Int}},Int}(1),
+                ItemPipe{Tuple{Int,Tuple{Int,Int}},Tuple{Int,Int}}(2) >> ItemPipe{Tuple{Int,Int}}{Int}(1),
+                ItemPipe{Tuple{Int,Tuple{Int,Int}},Tuple{Int,Int}}(2) >> ItemPipe{Tuple{Int,Int}}{Int}(2))
     end
     return Query(scope, input=input, output=output, pipe=pipe)
 end
@@ -385,7 +385,7 @@ function compile(::Fn(:connect), base::Query, op::Query)
     I = domain(op)
     input = Input(I)
     output = Output(I, singular=false, complete=false)
-    pipe = ConnectPipe{I}(singular(op) ? OptToSeqPipe(op.pipe) : op.pipe, false)
+    pipe = ConnectPipe{I}(singular(op) ? LiftPipe{I,I,Opt{I},Seq{I}}(op.pipe) : op.pipe, false)
     return Query(op, input=input, output=output, pipe=pipe)
 end
 
@@ -396,7 +396,7 @@ function compile(::Fn(:depth), base::Query, op::Query)
     I = domain(op)
     input = Input(I)
     output = Output(Int)
-    pipe = DepthPipe{I}(singular(op) ? OptToSeqPipe(op.pipe) : op.pipe)
+    pipe = DepthPipe{I}(singular(op) ? LiftPipe{I,I,Opt{I},Seq{I}}(op.pipe) : op.pipe)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
@@ -414,7 +414,7 @@ function compile(::Fn(:sort_connect), base::Query, flow::Query, op::Query)
     J = !isnull(op.identity) ? codomain(get(op.identity)) : O
     pipe = SortConnectPipe{I,O,J}(
         flow.pipe,
-        singular(op) ? OptToSeqPipe(op.pipe) : op.pipe,
+        singular(op) ? LiftPipe{O,O,Opt{O},Seq{O}}(op.pipe) : op.pipe,
         !isnull(op.identity) ? get(op.identity).pipe : HerePipe{O}())
     return Query(flow, pipe=pipe)
 end
@@ -490,17 +490,17 @@ function compile(
     end
     O = Tuple{Q, Vector{V}}
     if ispartition
-        pipe = pipe >> IsoItemPipe{Tuple{I, O}, O}(2)
+        pipe = pipe >> ItemPipe{Tuple{I, O}, O}(2)
     end
     input = Input(I)
     output = Output(O, singular=isempty(ops), complete=(complete(flow) || isempty(ops) || iscube))
     query = Query(scope, input=input, output=output, pipe=pipe)
     items = []
     defs = Dict{Symbol, Query}()
-    kernel_pipe = IsoItemPipe{O, Q}(1)
+    kernel_pipe = ItemPipe{O, Q}(1)
     for (k, op) in enumerate(ops)
         T = codomain(op)
-        item_pipe = kernel_pipe >> (iscube ? OptItemPipe : IsoItemPipe){Q, T}(k)
+        item_pipe = kernel_pipe >> (iscube ? ItemPipe{Q,Opt{T}} : ItemPipe{Q,T})(k)
         item = Query(
             op,
             input=Input(O),
@@ -518,7 +518,7 @@ function compile(
         output=Output(
             V, singular=false, complete=!iscube && !ispartition,
             exclusive=(exclusive(flow) && !iscube), reachable=reachable(flow)),
-        pipe=SeqItemPipe{O,V}(2))
+        pipe=ItemPipe{O,Seq{V}}(2))
     if !isnull(flow_field.tag)
         defs[get(flow_field.tag)] = flow_field
     end
@@ -554,17 +554,17 @@ function compile(::Fn(:mix), base::Query, ops::Query...)
         O = Tuple{codomain(ops[1]), codomain(ops[2])}
         pipe = ops[1].pipe * ops[2].pipe
         field_pipes = Any[
-            IsoItemPipe{O,codomain(ops[1])}(1),
-            IsoItemPipe{O,codomain(ops[2])}(2)]
+            ItemPipe{O,codomain(ops[1])}(1),
+            ItemPipe{O,codomain(ops[2])}(2)]
         mode = max(comode(ops[1]), comode(ops[2]))
         for op in ops[3:end]
             T = O
             O = Tuple{O, codomain(op)}
             pipe = pipe * op.pipe
             for (k, field_pipe) in enumerate(field_pipes)
-                field_pipes[k] = IsoItemPipe{O,T}(1) >> field_pipe
+                field_pipes[k] = ItemPipe{O,T}(1) >> field_pipe
             end
-            push!(field_pipes, IsoItemPipe{O,codomain(op)}(2))
+            push!(field_pipes, ItemPipe{O,codomain(op)}(2))
             mode = max(mode, comode(op))
         end
         input = Input(I)
@@ -605,8 +605,8 @@ function compile(::Fn(:pack), base::Query, ops::Query...)
         tag = get(op.tag)
         Ts = (Ts..., T)
         field_pipe =
-            singular(op) && complete(op) ? IsoToSeqPipe{I,T}(op.pipe) :
-            singular(op) ? OptToSeqPipe{I,T}(op.pipe) : op.pipe
+            singular(op) && complete(op) ? LiftPipe{I,I,T,Seq{T}}(op.pipe) :
+            singular(op) ? LiftPipe{I,I,Opt{T},Seq{T}}(op.pipe) : op.pipe
         push!(Fs, Pair{Symbol,AbstractPipe}(tag, field_pipe))
         if complete(op)
             iscomplete = true
@@ -716,7 +716,7 @@ function compile(fn::Fn(:(==), :(!=)), base::Query, op1::Query, op2::Query)
     PipeType = (fn == Fn{:(==)}) ? EQPipe : NEPipe
     pipe = singular(output) && complete(output) ?
         PipeType{I,T}(op1.pipe, op2.pipe) :
-        (op1.pipe * op2.pipe) >> PipeType{TT,T}(IsoItemPipe{TT,T}(1), IsoItemPipe{TT,T}(2))
+        (op1.pipe * op2.pipe) >> PipeType{TT,T}(ItemPipe{TT,T}(1), ItemPipe{TT,T}(2))
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
@@ -749,7 +749,7 @@ macro compilebinaryop(fn, Pipe, T1, T2, T3)
             output = Output($T3, max(comode(op1), comode(op2)))
             pipe = singular(output) && complete(output) ?
                 $Pipe{I}(op1.pipe, op2.pipe) :
-                (op1.pipe * op2.pipe) >> $Pipe{Tuple{$T1,$T2}}(IsoItemPipe{T,$T1}(1), IsoItemPipe{T,$T2}(2))
+                (op1.pipe * op2.pipe) >> $Pipe{Tuple{$T1,$T2}}(ItemPipe{T,$T1}(1), ItemPipe{T,$T2}(2))
             return Query(scope, input=input, output=output, pipe=pipe)
         end
     end)

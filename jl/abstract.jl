@@ -57,11 +57,11 @@ max(mode1::InputMode, mode2::InputMode) =
 
 # Structure and type of input.
 immutable Input
-    domain::DataType
+    domain::Type
     mode::InputMode
 end
 
-Input(T::DataType) = Input(T, InputMode(false, false, ()))
+Input(T::Type) = Input(T, InputMode(false, false, ()))
 
 domain(input::Input) = input.domain
 mode(input::Input) = input.mode
@@ -88,11 +88,11 @@ max(mode1::OutputMode, mode2::OutputMode) =
 
 # Structure and type of output.
 immutable Output
-    domain::DataType
+    domain::Type
     mode::OutputMode
 end
 
-Output(T::DataType; singular=true, complete=true, exclusive=false, reachable=false) =
+Output(T::Type; singular=true, complete=true, exclusive=false, reachable=false) =
     Output(T, OutputMode(singular, complete, exclusive, reachable))
 
 domain(output::Output) = output.domain
@@ -111,28 +111,80 @@ datatype(output::Output) =
         output.mode.singular && output.mode.complete ? T :
         output.mode.singular ? Nullable{T} : Vector{T}
     end
-datatype(T::DataType) = T
+datatype(T::Type) = T
 
 # Query execution pipeline (query plan).
 abstract AbstractPipe{I,O}
 
+# Parameterized input (N and V are names and types of parameters).
+immutable Ctx{I,N,V}
+    val::I
+    ctx::V
+end
+
+convert{I,N,V}(::Type{Ctx{I,N,V}}, val::I, params::Tuple{Symbol,Any}...) =
+    let d = Dict(params),
+        ctx = ([d[n] for n in N]...)::V
+        Ctx{I,N,V}(val, ctx)
+    end
+
+# Time-aware input.
+immutable Temp{I}
+    vals::Vector{I}
+    idx::Int
+end
+
+convert{I}(::Type{Temp{I}}, val::I) =
+    Temp{I}(I[val], 1)
+
+# Partial output.
+typealias Opt{O} Nullable{O}
+
+# Plural output.
+typealias Seq{O} Vector{O}
+
+# Pipelines classified by the input structure.
+typealias CtxPipe{I,N,V,O} AbstractPipe{Ctx{I,N,V},O}
+typealias TempPipe{I,O} AbstractPipe{Temp{I},O}
+typealias CtxTempPipe{I,N,V,O} AbstractPipe{Ctx{Temp{I},N,V},O}
+
 # Pipelines classified by the output structure.
 typealias IsoPipe{I,O} AbstractPipe{I,O}
-typealias OptPipe{I,O} AbstractPipe{I,Nullable{O}}
-typealias SeqPipe{I,O} AbstractPipe{I,Vector{O}}
+typealias OptPipe{I,O} AbstractPipe{I,Opt{O}}
+typealias SeqPipe{I,O} AbstractPipe{I,Seq{O}}
+
+# Combinations.
+typealias CtxOptPipe{I,N,V,O} AbstractPipe{Ctx{I,N,V},Opt{O}}
+typealias CtxSeqPipe{I,N,V,O} AbstractPipe{Ctx{I,N,V},Seq{O}}
+typealias TempOptPipe{I,O} AbstractPipe{Temp{I},Opt{O}}
+typealias TempSeqPipe{I,O} AbstractPipe{Temp{I},Seq{O}}
+typealias CtxTempOptPipe{I,N,V,O} AbstractPipe{Ctx{Temp{I},N,V},Opt{O}}
+typealias CtxTempSeqPipe{I,N,V,O} AbstractPipe{Ctx{Temp{I},N,V},Seq{O}}
 
 # Extracts the type of input and output.
-idom{I,O}(::AbstractPipe{I,O}) = I
-odom{I,O}(::AbstractPipe{I,O}) = O
+idomain{I,O}(::AbstractPipe{I,O}) = I
+odomain{I,O}(::AbstractPipe{I,O}) = O
 
 # Executes the pipeline.
 execute{I}(pipe::AbstractPipe, x::I) =
     error("execute() is not implemented for pipeline $pipe and input of type $I")
-# Executes the pipeline with `()` input.
-execute(pipe::AbstractPipe{UnitType}) =
-    execute(pipe, ())
 # Executes the pipeline by calling it.
-call(pipe::AbstractPipe, args...) = execute(pipe, args...)
+call(pipe::AbstractPipe, args...; kwds...) = execute(pipe, args...; kwds...)
+# Executes the pipeline with unit input.
+execute(pipe::AbstractPipe{UnitType}) = execute(pipe, ())
+# Executes a context-aware or time-aware pipeline.
+execute{I,N,V}(pipe::AbstractPipe{Ctx{Temp{I},N,V}}, x::I; params...) =
+    execute(pipe, Ctx{Temp{I},N,V}(Temp{I}(x), params...))
+execute{I,N,V}(pipe::AbstractPipe{Ctx{I,N,V}}, x::I; params...) =
+    execute(pipe, Ctx{I,N,V}(x, params...))
+execute{I}(pipe::AbstractPipe{Temp{I}}, x::I) =
+    execute(pipe, Temp{I}(x))
+execute{N,V}(pipe::AbstractPipe{Ctx{Temp{UnitType},N,V}}; params...) =
+    execute(pipe, Ctx{Temp{UnitType},N,V}(Temp{UnitType}(()), params...))
+execute{N,V}(pipe::AbstractPipe{Ctx{UnitType,N,V}}; params...) =
+    execute(pipe, Ctx{UnitType,N,V}((), params...))
+execute(pipe::AbstractPipe{Temp{UnitType}}) =
+    execute(pipe, Temp{UnitType}(()))
 
 # Returns an equivalent, but improved pipeline.
 optimize{I,O}(pipe::AbstractPipe{I,O}) = pipe::AbstractPipe{I,O}
@@ -176,7 +228,7 @@ typealias NullableSyntax Nullable{AbstractSyntax}
 
 # Fresh state for the given scope.
 Query(
-    scope::AbstractScope, domain::DataType=UnitType;
+    scope::AbstractScope, domain::Type=UnitType;
     input=Input(domain), output=Output(domain, exclusive=true, reachable=true),
     pipe=HerePipe{datatype(domain)}(),
     fields=NullableQueries(),

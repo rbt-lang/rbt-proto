@@ -19,7 +19,7 @@ immutable Arrow
 end
 
 Arrow(
-    name::Symbol, T::DataType;
+    name::Symbol, T::Type;
     singular=true, complete=true, exclusive=false, reachable=false,
     select=nothing, inverse=nothing) =
     Arrow(name, Output(T, OutputMode(singular, complete, exclusive, reachable)), select, inverse)

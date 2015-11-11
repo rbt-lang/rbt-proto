@@ -59,7 +59,7 @@ function lookup(self::ClassScope, name::Symbol)
         I = Entity{self.name}
         input = Input(I)
         output = Output(Int, exclusive=true)
-        pipe = IsoFieldPipe{I,Int}(:id)
+        pipe = FieldPipe{I,Int}(:id)
         tag = NullableSymbol(name)
         syntax = NullableSyntax(ApplySyntax(name, []))
         return NullableQuery(Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax))
