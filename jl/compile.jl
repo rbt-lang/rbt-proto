@@ -204,6 +204,37 @@ compile(::Fn(:link), base::Query, pred::AbstractSyntax, arg::AbstractSyntax) =
     end
 
 
+function compile(::Fn(:fork), base::Query, ops::Query...)
+    reqcomposable(base, ops...); reqsingular(ops...); reqcomplete(ops...)
+    T = odomain(base)
+    input = Input(T, temporal=true)
+    output = Output(T, singular=false, complete=true)
+    pipe =
+        isempty(ops) ? ForkPipe(T) :
+        length(ops) == 1 ? ForkByPipe(identify(ops[1]).pipe) :
+            ForkByPipe(identify(record(base, ops...)).pipe)
+    return Query(base, input=input, output=output, pipe=pipe)
+end
+
+
+function compile(fn::Fn(:future, :past), base::Query)
+    T = odomain(base)
+    input = Input(T, temporal=true)
+    output = Output(T, singular=false, complete=false)
+    pipe = FuturePipe(T, fn == Fn{:future} ? 1 : -1)
+    return Query(base, input=input, output=output, pipe=pipe)
+end
+
+
+function compile(fn::Fn(:next, :prev), base::Query)
+    T = odomain(base)
+    input = Input(T, temporal=true)
+    output = Output(T, singular=true, complete=false)
+    pipe = NextPipe(T, fn == Fn{:next} ? 1 : -1)
+    return Query(base, input=input, output=output, pipe=pipe)
+end
+
+
 function compile(::Fn(:count), base::Query, flow::Query)
     reqcomposable(base, flow); reqplural(flow)
     scope = empty(base)
@@ -216,13 +247,23 @@ function compile(::Fn(:count), base::Query, flow::Query)
 end
 
 
+function compile(::Fn(:sum), base::Query, flow::Query)
+    reqcomposable(base, flow); reqplural(flow); reqodomain(Int, flow)
+    scope = empty(base)
+    input = flow.input
+    output = Output(Int)
+    pipe = SumPipe(flow.pipe)
+    return Query(scope, input=input, output=output, pipe=pipe)
+end
+
+
 function compile(::Fn(:max), base::Query, flow::Query)
     reqcomposable(base, flow); reqplural(flow); reqodomain(Int, flow)
     scope = empty(base)
     I = ifunctor(flow)
     input = flow.input
     output = Output(Int, complete=complete(flow))
-    pipe = complete(flow) ? MaxPipe{I}(flow.pipe) : OptMaxPipe{I}(flow.pipe)
+    pipe = complete(flow) ? MaxPipe(flow.pipe) : OptMaxPipe(flow.pipe)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
@@ -713,6 +754,17 @@ function compile(fn::Fn(:(==), :(!=)), base::Query, op1::Query, op2::Query)
 end
 
 
+function compile(fn::Fn(:in), base::Query, op1::Query, op2::Query)
+    reqcomposable(base, op1, op2); reqodomain(odomain(op1), op2)
+    reqsingular(op1); reqcomplete(op1); reqplural(op2)
+    scope = empty(base)
+    input = Input(odomain(base), max(imode(op1), imode(op2)))
+    output = Output(Bool)
+    pipe = InPipe(op1.pipe, op2.pipe)
+    return Query(scope, input=input, output=output, pipe=pipe)
+end
+
+
 macro compileunaryop(fn, Pipe, T1, T2)
     return esc(quote
         function compile(::Fn($fn), base::Query, op::Query)
@@ -756,6 +808,13 @@ end
 @compilebinaryop(:(-), SubPipe, Int, Int, Int)
 @compilebinaryop(:(*), MulPipe, Int, Int, Int)
 @compilebinaryop(:(/), DivPipe, Int, Int, Int)
+
+
+compile(fn::Fn(:json), base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
+    let flow = compile(base, flow),
+        ops = [compile(flow, op) for op in ops]
+        isempty(ops) ? compile(fn, base, flow) : compile(fn, base, compile(Fn{:select}, base, flow, ops...))
+    end
 
 
 function compile(fn::Fn(:json), base::Query, flow::Query)

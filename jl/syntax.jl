@@ -79,8 +79,18 @@ function ex2syn(ex::Expr)
         return ApplySyntax(:array, map(ex2syn, ex.args))
     elseif ex.head == :call
         return ex2syn(pushcall(ex.args[1], ex.args[2:end]))
-    elseif ex.head == :comparison && length(ex.args) == 3 && isa(ex.args[2], Symbol)
-        return ApplySyntax(ex.args[2], AbstractSyntax[ex2syn(ex.args[1]), ex2syn(ex.args[3])])
+    elseif ex.head == :comparison && length(ex.args) >= 3 && isa(ex.args[2], Symbol)
+        op = ApplySyntax(ex.args[2], AbstractSyntax[ex2syn(ex.args[1]), ex2syn(ex.args[3])])
+        k = 3
+        while length(ex.args) >= k+2
+            op = ApplySyntax(
+                :(&),
+                AbstractSyntax[
+                    op,
+                    ApplySyntax(ex.args[k+1], AbstractSyntax[ex2syn(ex.args[k]), ex2syn(ex.args[k+2])])])
+            k = k+2
+        end
+        return op
     else
         error("invalid syntax: $ex")
     end

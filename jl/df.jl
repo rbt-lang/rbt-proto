@@ -92,6 +92,13 @@ function apply{I}(pipe::SeqDataFramePipe{I}, X::I)
 end
 
 
+compile(fn::Fn(:dataframe), base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
+    let flow = compile(base, flow),
+        ops = [compile(flow, op) for op in ops]
+        isempty(ops) ? compile(fn, base, flow) : compile(fn, base, compile(Fn{:select}, base, flow, ops...))
+    end
+
+
 function compile(::Fn(:dataframe), base::Query, flow::Query)
     flow = select(flow)
     if !isnull(flow.fields)

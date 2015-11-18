@@ -144,15 +144,19 @@ end
 function param2q(base::AbstractScope, name::Symbol, T::Type)
     if T <: AbstractString
         T = UTF8String
+    elseif T <: Nullable{ASCIIString}
+        T = Nullable{UTF8String}
+    elseif T <: Vector{ASCIIString}
+        T = Vector{UTF8String}
     end
     if T == Void
-        T = Nullable{Any}
+        T = Nullable{Union{}}
     end
     scope = empty(base)
     IT = isa(base, ClassScope) ? Entity{base.name} : Unit
     input = Input(IT, params=(Pair{Symbol,Type}(name, T),))
     if T <: Nullable || T <: Vector
-        output = Output(eltype(T), complete=false)
+        output = Output(eltype(T), singular=(T<:Nullable), complete=false)
     else
         output = Output(T)
     end

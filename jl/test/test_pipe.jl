@@ -80,3 +80,17 @@ XYZ = (X * ((Y * Z) >> RBT.MulPipe(Item1, Item2))) >> RBT.MulPipe(Item1, Item2)
 @test isnull(XY((); x=5, y=Nullable{Int}()))
 @test XYZ((); x=4, y=Nullable(5), z=[1,2,3]) == [20, 40, 60]
 
+primes_next = primes >> RBT.NextPipe(Int, 1)
+primes_next_next = primes_next >> RBT.NextPipe(Int, 1)
+primes_next_prev = primes_next >> RBT.NextPipe(Int, -1)
+primes_future = primes >> RBT.FuturePipe(Int, 1)
+primes_past = primes >> RBT.FuturePipe(Int, -1)
+
+@test primes() == [2, 3, 5, 7, 11]
+@test primes_next() == [3, 5, 7, 11]
+@test primes_next_next() == [5, 7, 11]
+@test primes_next_prev() == [3, 5, 7]
+@test primes_future() == [3,5,7,11,5,7,11,7,11,11]
+@test primes_past() == [2,3,2,5,3,2,7,5,3,2]
+
+

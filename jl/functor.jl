@@ -197,7 +197,7 @@ dup{T}(::Type{Iso{Iso{T}}}, X::Iso{T}) = Iso{Iso{T}}(X)
 dup{T}(::Type{Temp{Iso{T}}}, X::Temp{T}) =
     Temp{Iso{T}}(Iso{T}[Iso{T}(x) for x in X.vals], X.idx)
 dup{T}(::Type{Temp{Temp{T}}}, X::Temp{T}) =
-    Temp{Temp{T}}(Temp{T}[Temp{T}(X.vars, j) for j = 1:length(X.vars)], X.idx)
+    Temp{Temp{T}}(Temp{T}[Temp{T}(X.vals, j) for j = 1:length(X.vals)], X.idx)
 
 dup{Ns,Ps,T}(::Type{Ctx{Ns,Ps,Iso{T}}}, X::Ctx{Ns,Ps,T}) =
     Ctx{Ns,Ps,Iso{T}}(Iso{T}(X.val), X.ctx)
@@ -212,7 +212,7 @@ dup{Ns0,Ps0,Ns,Ps,T}(::Type{Ctx{Ns,Ps,Ctx{Ns0,Ps0,T}}}, X::Ctx{Ns,Ps,T}) =
 dup{Ns,Ps,T}(::Type{CtxTemp{Ns,Ps,Iso{T}}}, X::CtxTemp{Ns,Ps,T}) =
     CtxTemp{Ns,Ps,Iso{T}}(Iso{T}[Iso{T}(x) for x in X.vals], X.idx, X.ctx)
 dup{Ns,Ps,T}(::Type{CtxTemp{Ns,Ps,Temp{T}}}, X::CtxTemp{Ns,Ps,T}) =
-    CtxTemp{Ns,Ps,Temp{T}}(Temp{T}[Temp{T}(X.vars, j) for j = 1:length(X.vars)], X.idx, X.ctx)
+    CtxTemp{Ns,Ps,Temp{T}}(Temp{T}[Temp{T}(X.vals, j) for j = 1:length(X.vals)], X.idx, X.ctx)
 dup{Ns,Ps,T}(::Type{CtxTemp{Ns,Ps,Ctx{Ns,Ps,T}}}, X::CtxTemp{Ns,Ps,T}) =
     let TT = Ctx{Ns,Ps,T}
         CtxTemp{Ns,Ps,TT}(TT[TT(x, X.ctx) for x in X.vals], X.idx, X.ctx)
@@ -225,13 +225,13 @@ dup{Ns0,Ps0,Ns,Ps,T}(::Type{CtxTemp{Ns,Ps,Ctx{Ns0,Ps0,T}}}, X::CtxTemp{Ns,Ps,T})
     end
 dup{Ns,Ps,T}(::Type{CtxTemp{Ns,Ps,CtxTemp{Ns,Ps,T}}}, X::CtxTemp{Ns,Ps,T}) =
     let TT = CtxTemp{Ns,Ps,T}
-        CtxTemp{Ns,Ps,TT}(TT[TT(X.vars, j, X.ctx) for j = 1:length(X.vars)], X.idx, X.ctx)
+        CtxTemp{Ns,Ps,TT}(TT[TT(X.vals, j, X.ctx) for j = 1:length(X.vals)], X.idx, X.ctx)
     end
 dup{Ns0,Ps0,Ns,Ps,T}(::Type{CtxTemp{Ns,Ps,CtxTemp{Ns0,Ps0,T}}}, X::CtxTemp{Ns,Ps,T}) =
     let TT = CtxTemp{Ns0,Ps0,T},
         ps = Dict{Symbol,Any}(params(X)),
         ctx = convert(Ps0, ([ps[n] for n in Ns0]...))
-        CtxTemp{Ns,Ps,TT}(TT[TT(X.vars, j, ctx) for j = 1:length(X.vars)], X.idx, X.ctx)
+        CtxTemp{Ns,Ps,TT}(TT[TT(X.vals, j, ctx) for j = 1:length(X.vals)], X.idx, X.ctx)
     end
 
 # Flattening output.
@@ -308,8 +308,8 @@ dist{T}(X::Temp{Seq{T}}) =
                         idx2 = endof(vals)
                     end
                 end
+                Seq{Temp{T}}(Temp{T}[Temp{T}(vals, idx) for idx = idx1:idx2])
             end
-            Seq{Temp{T}}(Temp{T}[Temp{T}(vals, idx) for idx = idx1:idx2])
         end
     end
 

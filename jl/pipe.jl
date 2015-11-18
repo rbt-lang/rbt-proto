@@ -282,6 +282,16 @@ apply{I,T}(pipe::CountPipe{I,T}, X::I) =
     Iso{Int}(length(apply(pipe.F, X)::Seq{T}))
 
 
+immutable SumPipe{I} <: IsoPipe{I,Int}
+    F::SeqPipe{I,Int}
+end
+
+show(io::IO, pipe::SumPipe) = print(io, "Sum($(self.F))")
+
+apply{I}(pipe::SumPipe{I}, X::I) =
+    Iso{Int}(sum(unwrap(apply(pipe.F, X))::Vector{Int}))
+
+
 immutable MaxPipe{I} <: IsoPipe{I,Int}
     F::SeqPipe{I,Int}
 end
@@ -1158,8 +1168,8 @@ EQPipe{I1,I2,T}(F::IsoPipe{I1,T}, G::IsoPipe{I2,T}) =
 
 show(io::IO, pipe::EQPipe) = print(io, "EQ($(pipe.F), $(pipe.G))")
 
-apply{I,T}(pipe::EQPipe{I,T}, x::I) =
-    Iso(unwrap(apply(pipe.F, x))::T == unwrap(apply(pipe.G, x))::T)
+apply{I,T}(pipe::EQPipe{I,T}, X::I) =
+    Iso(unwrap(apply(pipe.F, X))::T == unwrap(apply(pipe.G, X))::T)
 
 
 immutable NEPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
@@ -1174,8 +1184,24 @@ NEPipe{I1,I2,T}(F::IsoPipe{I1,T}, G::IsoPipe{I2,T}) =
 
 show(io::IO, pipe::NEPipe) = print(io, "NE($(pipe.F), $(pipe.G))")
 
-apply{I,T}(pipe::NEPipe{I,T}, x::I) =
-    Iso(unwrap(apply(pipe.F, x))::T != unwrap(apply(pipe.G, x))::T)
+apply{I,T}(pipe::NEPipe{I,T}, X::I) =
+    Iso(unwrap(apply(pipe.F, X))::T != unwrap(apply(pipe.G, X))::T)
+
+
+immutable InPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
+    F::IsoPipe{I,T}
+    G::SeqPipe{I,T}
+end
+
+InPipe{I1,I2,T}(F::IsoPipe{I1,T}, G::SeqPipe{I2,T}) =
+    let I = max(I1, I2)
+        InPipe{I,T}(I ^ F, I ^ G)
+    end
+
+show(io::IO, pipe::InPipe) = print(io, "In($(pipe.F), $(pipe.G))")
+
+apply{I,T}(pipe::InPipe{I,T}, X::I) =
+    Iso(unwrap(apply(pipe.F, X))::T in unwrap(apply(pipe.G, X))::Vector{T})
 
 
 macro defunarypipe(Name, op, T1, T2)
@@ -1253,6 +1279,8 @@ apply{I}(pipe::DictPipe, X::I) =
 immutable IsoParamPipe{Ns,P,T} <: AbstractPipe{Ctx{Ns,Tuple{P},T}, Iso{P}}
 end
 
+show{Ns,P,T}(io::IO, pipe::IsoParamPipe{Ns,P,T}) = print(io, Ns[1])
+
 IsoParamPipe(IT::Type, name::Symbol, P::Type) = IsoParamPipe{(name,),P,IT}()
 
 apply{Ns,P,T}(pipe::IsoParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{P},T}) =
@@ -1264,6 +1292,8 @@ end
 
 OptParamPipe(IT::Type, name::Symbol, P::Type) = OptParamPipe{(name,),P,IT}()
 
+show{Ns,P,T}(io::IO, pipe::OptParamPipe{Ns,P,T}) = print(io, Ns[1])
+
 apply{Ns,P,T}(pipe::OptParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{Nullable{P}},T}) =
     wrap(Opt{P}, X.ctx[1])
 
@@ -1273,7 +1303,65 @@ end
 
 SeqParamPipe(IT::Type, name::Symbol, P::Type) = SeqParamPipe{(name,),P,IT}()
 
+show{Ns,P,T}(io::IO, pipe::SeqParamPipe{Ns,P,T}) = print(io, Ns[1])
+
 apply{Ns,P,T}(pipe::SeqParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{Vector{P}},T}) =
     wrap(Seq{P}, X.ctx[1])
+
+
+immutable ForkPipe{T} <: AbstractPipe{Temp{T}, Seq{T}}
+end
+
+ForkPipe(T::Type) = ForkPipe{T}()
+
+show(io::IO, pipe::ForkPipe) = print(io, "Fork()")
+
+apply{T}(pipe::ForkPipe{T}, X::Temp{T}) = Seq(X.vals)
+
+
+immutable ForkByPipe{T,K} <: AbstractPipe{Temp{T}, Seq{T}}
+    key::AbstractPipe{Iso{T}, Iso{K}}
+end
+
+show(io::IO, pipe::ForkByPipe) = print(io, "ForkBy($(pipe.dir))")
+
+apply{T,K}(pipe::ForkByPipe{T,K}, X::Temp{T}) =
+    let key = unwrap(apply(pipe.key, Iso(X.vals[X.idx]))),
+        out = T[]
+        for x in X.vals
+            if unwrap(apply(pipe.key, Iso(x))) == key
+                push!(out, x)
+            end
+        end
+        Seq(out)
+    end
+
+
+immutable FuturePipe{T} <: AbstractPipe{Temp{T}, Seq{T}}
+    dir::Int
+end
+
+FuturePipe(T::Type, dir::Int) = FuturePipe{T}(dir)
+
+show(io::IO, pipe::FuturePipe) = print(io, "Future($(pipe.dir))")
+
+apply{T}(pipe::FuturePipe{T}, X::Temp{T}) =
+    Seq(pipe.dir >= 0 ? X.vals[X.idx+1:end] : reverse(X.vals[1:X.idx-1]))
+
+
+immutable NextPipe{T} <: AbstractPipe{Temp{T}, Opt{T}}
+    dir::Int
+end
+
+NextPipe(T::Type, dir::Int) = NextPipe{T}(dir)
+
+show(io::IO, pipe::NextPipe) = print(io, "Next($(pipe.dir))")
+
+apply{T}(pipe::NextPipe{T}, X::Temp{T}) =
+    if pipe.dir >= 0
+        X.idx < endof(X.vals) ? Opt(X.vals[X.idx+1]) : Opt{T}()
+    else
+        X.idx > 1 ? Opt(X.vals[X.idx-1]) : Opt{T}()
+    end
 
 

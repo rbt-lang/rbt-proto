@@ -23,6 +23,7 @@ setdb(citydb)
 @query(count(department.employee))
 @query(max(employee.salary))
 @query(max(department.count(employee)))
+@query(sum(employee.salary))
 
 @query(department:select(name,count(employee)))
 @query(department:select(name,count(employee),max(employee.salary)))
@@ -140,8 +141,10 @@ setdb(citydb)
 
 @query(department:json)
 @query(department:select(name,head => employee:first(salary)):json)
+@query(department:json(name,head => employee:first(salary)))
 @query(employee:dataframe)
 @query(department:select(name,size => count(employee), max_salary => max(employee.salary)):dataframe)
+@query(department:dataframe(name,size => count(employee), max_salary => max(employee.salary)))
 
 @query((max(employee.salary) > 100000) & (max(employee.salary) < 300000))
 
@@ -154,4 +157,17 @@ q(X=5, Y=4, Z=[2,3,4,5])
 
 @query(employee:filter((position==POSITION) & (name==NAME)), POSITION="POLICE OFFICER", NAME="CHARLES")
 @query(department:filter(count(employee)>SIZE):select(name,count(employee)-SIZE), SIZE=1000)
+@query(employee:filter(department.name in DEPTS), DEPTS=["POLICE", "FIRE"])
+
+@query(department:select(name, prev_name => prev.name, next_name => next.name))
+@query(department:select(name, past_names => past.name))
+@query(department:select(1+count(past), name))
+@query(department:define(size => count(employee)):select(name, size, total => size+sum(past.size)))
+@query(department:define(size => count(employee)):filter(size == max(fork.size)):select(name, size))
+@query(
+    employee
+    :filter(department.name == DEPT)
+    :dataframe(
+        name, surname, position, salary, salary_diff => max(fork(position).salary)-salary),
+    DEPT="TREASURER")
 
