@@ -57,8 +57,8 @@ max{T}(X::Type{Iso{T}}, ::Type{Iso{T}}) = X
 max{T}(::Type{Iso{T}}, Y::Type{Opt{T}}) = Y
 max{T}(::Type{Iso{T}}, Y::Type{Seq{T}}) = Y
 max{T}(::Type{Iso{T}}, Y::Type{Temp{T}}) = Y
-max{T}(::Type{Iso{T}}, Y::Type{SomeCtx{T}}) = Y
-max{T}(::Type{Iso{T}}, Y::Type{SomeCtxTemp{T}}) = Y
+max{Ns,Ps,T}(::Type{Iso{T}}, Y::Type{Ctx{Ns,Ps,T}}) = Y
+max{Ns,Ps,T}(::Type{Iso{T}}, Y::Type{CtxTemp{Ns,Ps,T}}) = Y
 
 max{T}(X::Type{Opt{T}}) = X
 max{T}(X::Type{Opt{T}}, ::Type{Iso{T}}) = X
@@ -74,10 +74,10 @@ max{T}(X::Type{Temp{T}}) = X
 max{T}(X::Type{Temp{T}}, ::Type{Iso{T}}) = X
 max{T}(X::Type{Temp{T}}, ::Type{Temp{T}}) = X
 max{Ns,Ps,T}(::Type{Temp{T}}, ::Type{Ctx{Ns,Ps,T}}) = CtxTemp{Ns,Ps,T}
-max{T}(::Type{Temp{T}}, Y::Type{SomeCtxTemp{T}}) = Y
+max{Ns,Ps,T}(::Type{Temp{T}}, Y::Type{CtxTemp{Ns,Ps,T}}) = Y
 
-max{T}(X::Type{SomeCtx{T}}) = X
-max{T}(X::Type{SomeCtx{T}}, ::Type{Iso{T}}) = X
+max{Ns,Ps,T}(X::Type{Ctx{Ns,Ps,T}}) = X
+max{Ns,Ps,T}(X::Type{Ctx{Ns,Ps,T}}, ::Type{Iso{T}}) = X
 max{Ns,Ps,T}(X::Type{Ctx{Ns,Ps,T}}, ::Type{Temp{T}}) = CtxTemp{Ns,Ps,T}
 max{Ns1,Ps1,Ns2,Ps2,T}(X::Type{Ctx{Ns1,Ps1,T}}, Y::Type{Ctx{Ns2,Ps2,T}}) =
     if X == Y
@@ -85,7 +85,7 @@ max{Ns1,Ps1,Ns2,Ps2,T}(X::Type{Ctx{Ns1,Ps1,T}}, Y::Type{Ctx{Ns2,Ps2,T}}) =
     else
         ps1 = Dict{Symbol,Type}(params(X))
         ps2 = Dict{Symbol,Type}(params(Y))
-        Ns = (sort(unique([keys(ps1); keys(ps2)]))...)
+        Ns = (sort(unique([keys(ps1)..., keys(ps2)...]))...)
         Ts = Type[]
         for n in Ns
             T1 = get(ps1, n, Any)
@@ -103,9 +103,9 @@ max{Ns1,Ps1,Ns2,Ps2,T}(X::Type{Ctx{Ns1,Ps1,T}}, Y::Type{CtxTemp{Ns2,Ps2,T}}) =
         CtxTemp(Z.parameters...)
     end
 
-max{T}(X::Type{SomeCtxTemp{T}}) = X
-max{T}(X::Type{SomeCtxTemp{T}}, ::Type{Iso{T}}) = X
-max{T}(X::Type{SomeCtxTemp{T}}, ::Type{Temp{T}}) = X
+max{Ns,Ps,T}(X::Type{CtxTemp{Ns,Ps,T}}) = X
+max{Ns,Ps,T}(X::Type{CtxTemp{Ns,Ps,T}}, ::Type{Iso{T}}) = X
+max{Ns,Ps,T}(X::Type{CtxTemp{Ns,Ps,T}}, ::Type{Temp{T}}) = X
 max{Ns1,Ps1,Ns2,Ps2,T}(::Type{CtxTemp{Ns1,Ps1,T}}, Y::Type{Ctx{Ns2,Ps2,T}}) =
     let Z = max(Ctx{Ns1,Ps1,T}, Y)
         CtxTemp(Z.parameters...)
@@ -156,8 +156,8 @@ unwrap{T}(::Type{Iso{T}}) = T
 unwrap{T}(::Type{Opt{T}}) = Nullable{T}
 unwrap{T}(::Type{Seq{T}}) = Vector{T}
 unwrap{T}(::Type{Temp{T}}) = T
-unwrap{T}(::Type{SomeCtx{T}}) = T
-unwrap{T}(::Type{SomeCtxTemp{T}}) = T
+unwrap{Ns,Ps,T}(::Type{Ctx{Ns,Ps,T}}) = T
+unwrap{Ns,Ps,T}(::Type{CtxTemp{Ns,Ps,T}}) = T
 
 # Converts to a larger (output) or a smaller (input) structure.
 rewrap{Fun<:Functor}(::Type{Fun}, X::Fun) = X
@@ -167,9 +167,11 @@ rewrap{T}(::Type{Opt{T}}, X::Iso{T}) = Opt{T}(unwrap(X))
 rewrap{T}(::Type{Seq{T}}, X::Iso{T}) = Seq{T}(T[unwrap(X)])
 rewrap{T}(::Type{Seq{T}}, X::Opt{T}) = Seq{T}(isnull(X) ? T[] : T[get(X)])
 
-rewrap{T}(::Type{Iso{T}}, X::Union{Temp{T},SomeCtx{T},SomeCtxTemp{T}}) = Iso{T}(unwrap(X))
+rewrap{T}(::Type{Iso{T}}, X::Temp{T}) = Iso{T}(unwrap(X))
+rewrap{Ns,Ps,T}(::Type{Iso{T}}, X::Ctx{Ns,Ps,T}) = Iso{T}(unwrap(X))
+rewrap{Ns,Ps,T}(::Type{Iso{T}}, X::CtxTemp{Ns,Ps,T}) = Iso{T}(unwrap(X))
 
-rewrap{T}(::Type{Temp{T}}, X::SomeCtxTemp{T}) = Temp{T}(X.vals, X.idx)
+rewrap{Ns,Ps,T}(::Type{Temp{T}}, X::CtxTemp{Ns,Ps,T}) = Temp{T}(X.vals, X.idx)
 
 rewrap{Ns0,Ps0,Ns,Ps,T}(::Type{Ctx{Ns0,Ps0,T}}, X::Ctx{Ns,Ps,T}) =
     let ps = Dict{Symbol,Any}(params(X)),
@@ -198,7 +200,7 @@ dup{T}(::Type{Temp{Temp{T}}}, X::Temp{T}) =
     Temp{Temp{T}}(Temp{T}[Temp{T}(X.vars, j) for j = 1:length(X.vars)], X.idx)
 
 dup{Ns,Ps,T}(::Type{Ctx{Ns,Ps,Iso{T}}}, X::Ctx{Ns,Ps,T}) =
-    Ctx{Ns,Ps,Iso{T}}(Iso{X.val}, X.ctx)
+    Ctx{Ns,Ps,Iso{T}}(Iso{T}(X.val), X.ctx)
 dup{Ns,Ps,T}(::Type{Ctx{Ns,Ps,Ctx{Ns,Ps,T}}}, X::Ctx{Ns,Ps,T}) =
     Ctx{Ns,Ps,Ctx{Ns,Ps,T}}(X, X.ctx)
 dup{Ns0,Ps0,Ns,Ps,T}(::Type{Ctx{Ns,Ps,Ctx{Ns0,Ps0,T}}}, X::Ctx{Ns,Ps,T}) =

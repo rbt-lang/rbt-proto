@@ -65,3 +65,18 @@ typealias CtxTempXY{T} CtxTemp{(:x,:y),Tuple{Int,Int},T}
 @test get((sqmap * decmap)(5)) == (25, 4)
 @test (divmap * decmap)(6) == [(2, 5), (3, 5)]
 
+X = RBT.IsoParamPipe(Unit, :x, Int)
+Y = RBT.OptParamPipe(Unit, :y, Int)
+Z = RBT.SeqParamPipe(Unit, :z, Int)
+
+Item1 = RBT.ItemPipe(Tuple{Int,Int}, 1)
+Item2 = RBT.ItemPipe(Tuple{Int,Int}, 2)
+
+XY = (X * Y) >> RBT.MulPipe(Item1, Item2)
+XYZ = (X * ((Y * Z) >> RBT.MulPipe(Item1, Item2))) >> RBT.MulPipe(Item1, Item2)
+
+@test X((); x=5) == 5
+@test get(XY((); x=5, y=Nullable(7))) == 35
+@test isnull(XY((); x=5, y=Nullable{Int}()))
+@test XYZ((); x=4, y=Nullable(5), z=[1,2,3]) == [20, 40, 60]
+

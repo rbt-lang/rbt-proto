@@ -1152,7 +1152,7 @@ immutable EQPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
 end
 
 EQPipe{I1,I2,T}(F::IsoPipe{I1,T}, G::IsoPipe{I2,T}) =
-    let I = max(F, G)
+    let I = max(I1, I2)
         EQPipe{I,T}(I ^ F, I ^ G)
     end
 
@@ -1168,7 +1168,7 @@ immutable NEPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
 end
 
 NEPipe{I1,I2,T}(F::IsoPipe{I1,T}, G::IsoPipe{I2,T}) =
-    let I = max(F, G)
+    let I = max(I1, I2)
         NEPipe{I,T}(I ^ F, I ^ G)
     end
 
@@ -1248,4 +1248,32 @@ apply{I}(pipe::DictPipe, X::I) =
         end
         Iso(d)
     end
+
+
+immutable IsoParamPipe{Ns,P,T} <: AbstractPipe{Ctx{Ns,Tuple{P},T}, Iso{P}}
+end
+
+IsoParamPipe(IT::Type, name::Symbol, P::Type) = IsoParamPipe{(name,),P,IT}()
+
+apply{Ns,P,T}(pipe::IsoParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{P},T}) =
+    wrap(Iso{P}, X.ctx[1])
+
+
+immutable OptParamPipe{Ns,P,T} <: AbstractPipe{Ctx{Ns,Tuple{Nullable{P}},T}, Opt{P}}
+end
+
+OptParamPipe(IT::Type, name::Symbol, P::Type) = OptParamPipe{(name,),P,IT}()
+
+apply{Ns,P,T}(pipe::OptParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{Nullable{P}},T}) =
+    wrap(Opt{P}, X.ctx[1])
+
+
+immutable SeqParamPipe{Ns,P,T} <: AbstractPipe{Ctx{Ns,Tuple{Vector{P}},T}, Seq{P}}
+end
+
+SeqParamPipe(IT::Type, name::Symbol, P::Type) = SeqParamPipe{(name,),P,IT}()
+
+apply{Ns,P,T}(pipe::SeqParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{Vector{P}},T}) =
+    wrap(Seq{P}, X.ctx[1])
+
 

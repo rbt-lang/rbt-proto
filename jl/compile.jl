@@ -251,10 +251,11 @@ compile(fn::Fn(:filter), base::Query, flow::AbstractSyntax, op::AbstractSyntax) 
 function compile(::Fn(:filter), base::Query, flow::Query, op::Query)
     reqcomposable(base, flow); reqplural(flow)
     reqcomposable(flow, op); reqsingular(op); reqodomain(Bool, op)
+    input = Input(idomain(flow), max(imode(flow), imode(op)))
     O = odomain(flow)
     output = Output(O, singular=false, complete=false, exclusive=exclusive(op))
     pipe = flow.pipe >> SievePipe(op.pipe)
-    return Query(flow, output=output, pipe=pipe)
+    return Query(flow, input=input, output=output, pipe=pipe)
 end
 
 
@@ -675,10 +676,9 @@ end
 function compile(::Fn(:!), base::Query, op::Query)
     reqcomposable(base, op); reqsingular(op); reqodomain(Bool, op)
     scope = empty(base)
-    I = odomain(base)
-    input = Input(I)
+    input = op.input
     output = Output(Bool, complete=complete(op))
-    pipe = complete(op) ? IsoNotPipe{I}(op.pipe) : OptNotPipe{I}(op.pipe)
+    pipe = complete(op) ? IsoNotPipe(op.pipe) : OptNotPipe(op.pipe)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
@@ -686,8 +686,7 @@ end
 function compile(fn::Fn(:&, :|), base::Query, op1::Query, op2::Query)
     reqcomposable(base, op1, op2); reqsingular(op1, op2); reqodomain(Bool, op1, op2)
     scope = empty(base)
-    I = odomain(base)
-    input = Input(I)
+    input = Input(odomain(base), max(imode(op1), imode(op2)))
     output = Output(Bool, complete=complete(op1) && complete(op2))
     if fn == Fn{:&}
         pipe = AndPipe(op1.pipe, op2.pipe)
@@ -704,8 +703,7 @@ function compile(fn::Fn(:(==), :(!=)), base::Query, op1::Query, op2::Query)
     T = odomain(op1)
     TT = Tuple{T,T}
     scope = empty(base)
-    I = odomain(base)
-    input = Input(I)
+    input = Input(odomain(base), max(imode(op1), imode(op2)))
     output = Output(Bool, max(omode(op1), omode(op2)))
     PipeType = (fn == Fn{:(==)}) ? EQPipe : NEPipe
     pipe = singular(output) && complete(output) ?
@@ -720,8 +718,7 @@ macro compileunaryop(fn, Pipe, T1, T2)
         function compile(::Fn($fn), base::Query, op::Query)
             reqcomposable(base, op); reqodomain($T1, op)
             scope = empty(base)
-            I = odomain(base)
-            input = Input(I)
+            input = op.input
             output = Output($T2, omode(op))
             pipe = singular(output) && complete(output) ?
                 $Pipe(op.pipe) :
@@ -738,8 +735,7 @@ macro compilebinaryop(fn, Pipe, T1, T2, T3)
             singular(op1) || reqsingular(op2)
             TT = Tuple{$T1,$T2}
             scope = empty(base)
-            IT = odomain(base)
-            input = Input(IT)
+            input = Input(odomain(base), max(imode(op1), imode(op2)))
             output = Output($T3, max(omode(op1), omode(op2)))
             pipe = singular(output) && complete(output) ?
                 $Pipe(op1.pipe, op2.pipe) :

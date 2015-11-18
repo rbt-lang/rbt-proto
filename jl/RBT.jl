@@ -42,11 +42,12 @@ end
 
 
 function query(state, expr; params...)
-    return execute(prepare(state, expr; params...))
+    params_signature = ([(name, typeof(param)) for (name, param) in params]...)
+    return execute(prepare(state, expr; params_signature...); params...)
 end
 
-function query(expr)
-    return query(DB, expr)
+function query(expr; params...)
+    return query(DB, expr; params...)
 end
 
 macro query(args...)
@@ -72,20 +73,25 @@ macro q_str(str)
 end
 
 
-function prepare(expr; params...)
-    return prepare(DB, expr; params...)
+function prepare(expr; params_signature...)
+    return prepare(DB, expr; params_signature...)
 end
 
 macro prepare(args...)
-    @assert 1 <= length(args) <= 2
-    if length(args) == 2
-        db, expr = args
+    L = endof(args)
+    while L > 0 && isa(args[L], Expr) && args[L].head == :kw
+        L = L-1
+    end
+    @assert 1 <= L <= 2
+    if L == 2
+        db, expr = args[1], args[2]
     else
         db, expr = DB, args[1]
     end
     expr = syntax(expr)
+    params = args[L+1:end]
     return quote
-        prepare($(esc(db)), $expr)
+        prepare($(esc(db)), $expr; $(params...))
     end
 end
 

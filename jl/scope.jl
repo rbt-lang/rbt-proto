@@ -1,7 +1,7 @@
 
 immutable RootScope <: AbstractScope
     db::Database
-    params::Dict{Symbol,Any}
+    params::Dict{Symbol,Type}
 end
 
 show(io::IO, ::RootScope) = print(io, "ROOT")
@@ -12,7 +12,7 @@ empty(self::RootScope) = EmptyScope(self.db, self.params)
 
 function lookup(self::RootScope, name::Symbol)
     if name in keys(self.params)
-        return NullableQuery(val2q(self, self.params[name]))
+        return NullableQuery(param2q(self, name, self.params[name]))
     end
     if name in keys(self.db.schema.name2class)
         class = self.db.schema.name2class[name]
@@ -39,7 +39,7 @@ end
 immutable ClassScope <: AbstractScope
     db::Database
     name::Symbol
-    params::Dict{Symbol,Any}
+    params::Dict{Symbol,Type}
 end
 
 show(io::IO, self::ClassScope) = print(io, "Class(<", self.name, ">)")
@@ -50,7 +50,7 @@ empty(self::ClassScope) = EmptyScope(self.db, self.params)
 
 function lookup(self::ClassScope, name::Symbol)
     if name in keys(self.params)
-        return NullableQuery(val2q(self, self.params[name]))
+        return NullableQuery(param2q(self, name, self.params[name]))
     end
     class = self.db.schema.name2class[self.name]
     if name == :id
@@ -103,7 +103,7 @@ end
 
 immutable EmptyScope <: AbstractScope
     db::Database
-    params::Dict{Symbol,Any}
+    params::Dict{Symbol,Type}
 end
 
 show(io::IO, ::EmptyScope) = print(io, "EMPTY")
@@ -114,7 +114,7 @@ empty(self::EmptyScope) = self
 
 lookup(self::EmptyScope, name::Symbol) =
     name in keys(self.params) ?
-        NullableQuery(val2q(self, self.params[name])) :
+        NullableQuery(param2q(self, name, self.params[name])) :
         NullableQuery()
 
 
@@ -141,20 +141,28 @@ function mkcomposite(base::Query, parts::Tuple, field)
     return record(base, ops...)
 end
 
-function val2q(base::AbstractScope, val)
-    if isa(val, AbstractString)
-        val = UTF8String(val)
+function param2q(base::AbstractScope, name::Symbol, T::Type)
+    if T <: AbstractString
+        T = UTF8String
+    end
+    if T == Void
+        T = Nullable{Any}
     end
     scope = empty(base)
     IT = isa(base, ClassScope) ? Entity{base.name} : Unit
-    OT = typeof(val)
-    input = Input(IT)
-    output = Output(OT, complete=(val != nothing))
-    pipe = val != nothing ? ConstPipe(IT, val) : NullVal(IT)
+    input = Input(IT, params=(Pair{Symbol,Type}(name, T),))
+    if T <: Nullable || T <: Vector
+        output = Output(eltype(T), complete=false)
+    else
+        output = Output(T)
+    end
+    pipe =
+        T <: Vector ? SeqParamPipe(IT, name, eltype(T)) :
+        T <: Nullable ? OptParamPipe(IT, name, eltype(T)) : IsoParamPipe(IT, name, T)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 
-scope(db::Database) = RootScope(db, Dict{Symbol,Any}())
+scope(db::Database) = RootScope(db, Dict{Symbol,Type}())
 
-scope(db::Database, params::Dict{Symbol,Any}) = RootScope(db, params)
+scope(db::Database, params::Dict{Symbol,Type}) = RootScope(db, params)
 

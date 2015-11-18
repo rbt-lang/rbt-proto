@@ -145,6 +145,13 @@ setdb(citydb)
 
 @query((max(employee.salary) > 100000) & (max(employee.salary) < 300000))
 
+@query(X*X, X=5)
+@query(X*Y, X=5, Y=Nullable(4))
+@query(X*(Y*Z), X=5, Y=Nullable(4), Z=[2,3,4,5])
+
+q = RBT.@prepare(X*(Y*Z), X=Int, Y=Nullable{Int}, Z=Vector{Int})
+q(X=5, Y=4, Z=[2,3,4,5])
+
 @query(employee:filter((position==POSITION) & (name==NAME)), POSITION="POLICE OFFICER", NAME="CHARLES")
 @query(department:filter(count(employee)>SIZE):select(name,count(employee)-SIZE), SIZE=1000)
 

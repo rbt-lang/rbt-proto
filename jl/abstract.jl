@@ -178,7 +178,6 @@ immutable Ctx{Ns,Ps,T} <: Functor{T}
     val::T
     ctx::Ps
 end
-typealias SomeCtx{T,Ns,Ps} Ctx{Ns,Ps,T}
 
 # Input with past and future values.
 immutable Temp{T} <: Functor{T}
@@ -192,7 +191,6 @@ immutable CtxTemp{Ns,Ps,T} <: Functor{T}
     idx::Int
     ctx::Ps
 end
-typealias SomeCtxTemp{T,Ns,Ps} CtxTemp{Ns,Ps,T}
 
 # Query execution pipeline (query plan).
 abstract AbstractPipe{I<:Functor,O<:Functor}
@@ -272,7 +270,7 @@ Query(
     Query(scope, input, output, pipe, fields, identity, selector, defs, order, tag, syntax, origin)
 
 # Initial compiler state.
-Query(db::AbstractDatabase; params...) = Query(scope(db, Dict{Symbol,Any}(params)))
+Query(db::AbstractDatabase; params...) = Query(scope(db, Dict{Symbol,Type}(params)))
 
 # Clone constructor.
 Query(
@@ -324,7 +322,7 @@ reachable(q::Query) = reachable(q.output)
 function show(io::IO, q::Query)
     print(io, isnull(q.syntax) ? "(?)" : get(q.syntax), " :: ")
     if q.input.domain != Unit || q.input.mode.temporal || !isempty(q.input.mode.params)
-        print(io, q.input.domain == Unit ? "1" : q.input.domain)
+        print(io, q.input.domain == Unit ? "()" : q.input.domain)
         if q.input.mode.temporal
             print(io, "...")
         end
@@ -350,9 +348,9 @@ prepare(base::Query, expr::AbstractSyntax) =
     end
 
 # Executes the query.
-execute(q::Query, args...) =
-    pipe(optimize(select(q)))(args...)
-call(q::Query, args...) = execute(q, args...)
+execute(q::Query, args...; params...) =
+    pipe(optimize(select(q)))(args...; params...)
+call(q::Query, args...; params...) = execute(q, args...; params...)
 
 # Builds initial execution pipeline.
 compile(base::Query, expr::AbstractSyntax) =
@@ -366,6 +364,9 @@ lookup(q::Query, name::Symbol) =
     name in keys(q.defs) ? NullableQuery(q.defs[name]) : lookup(q.scope, name)
 root(q::Query) = root(q.scope)
 empty(q::Query) = empty(q.scope)
+
+# List of parameters.
+params(q::Query) = q.input.mode.params
 
 # For dispatching on the function name.
 immutable Fn{name}
