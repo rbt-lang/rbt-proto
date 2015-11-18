@@ -1,4 +1,6 @@
 
+using Base.Test
+
 push!(LOAD_PATH, "./jl")
 using RBT
 include("../citydb.jl")

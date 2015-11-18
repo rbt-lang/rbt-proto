@@ -17,11 +17,10 @@ function lookup(self::RootScope, name::Symbol)
     if name in keys(self.db.schema.name2class)
         class = self.db.schema.name2class[name]
         scope = ClassScope(self.db, name, self.params)
-        I = UnitType
-        O = Entity{name}
-        input = Input(I)
-        output = Output(O, singular=false, complete=false, exclusive=true, reachable=true)
-        pipe = SetPipe{I, O}(name, self.db.instance.sets[name])
+        T = Entity{name}
+        input = Input(Unit)
+        output = Output(T, singular=false, complete=false, exclusive=true, reachable=true)
+        pipe = SetPipe(name, self.db.instance.sets[name])
         tag = NullableSymbol(name)
         syntax = NullableSyntax(ApplySyntax(name, []))
         query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax)
@@ -56,10 +55,10 @@ function lookup(self::ClassScope, name::Symbol)
     class = self.db.schema.name2class[self.name]
     if name == :id
         scope = EmptyScope(self.db, self.params)
-        I = Entity{self.name}
-        input = Input(I)
+        IT = Entity{self.name}
+        input = Input(IT)
         output = Output(Int, exclusive=true)
-        pipe = FieldPipe{I,Int}(:id)
+        pipe = FieldPipe(IT, :id, Iso{Int})
         tag = NullableSymbol(name)
         syntax = NullableSyntax(ApplySyntax(name, []))
         return NullableQuery(Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax))
@@ -67,20 +66,20 @@ function lookup(self::ClassScope, name::Symbol)
         tag = NullableSymbol(name)
         arrow = class.name2arrow[name]
         map = self.db.instance.maps[(self.name, arrow.name)]
-        I = Entity{self.name}
-        O = domain(arrow.output)
-        input = Input(I)
+        IT = Entity{self.name}
+        OT = domain(arrow.output)
+        input = Input(IT)
         output = arrow.output
         if singular(arrow.output) && complete(arrow.output)
-            pipe = IsoMapPipe{I, O}(name, map)
+            pipe = IsoMapPipe(name, map)
         elseif singular(arrow.output)
-            pipe = OptMapPipe{I, O}(name, map)
+            pipe = OptMapPipe(name, map)
         else
-            pipe = SeqMapPipe{I, O}(name, map)
+            pipe = SeqMapPipe(name, map)
         end
         syntax = NullableSyntax(ApplySyntax(name, []))
-        if O <: Entity
-            targetname = classname(O)
+        if OT <: Entity
+            targetname = classname(OT)
             targetclass = self.db.schema.name2class[targetname]
             scope = ClassScope(self.db, targetname, self.params)
             query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax)
@@ -147,11 +146,11 @@ function val2q(base::AbstractScope, val)
         val = UTF8String(val)
     end
     scope = empty(base)
-    I = isa(base, ClassScope) ? Entity{base.name} : UnitType
-    O = typeof(val)
-    input = Input(I)
-    output = Output(O, complete=(val != nothing))
-    pipe = val != nothing ? ConstPipe{I,O}(val) : NullVal{I}()
+    IT = isa(base, ClassScope) ? Entity{base.name} : Unit
+    OT = typeof(val)
+    input = Input(IT)
+    output = Output(OT, complete=(val != nothing))
+    pipe = val != nothing ? ConstPipe(IT, val) : NullVal(IT)
     return Query(scope, input=input, output=output, pipe=pipe)
 end
 

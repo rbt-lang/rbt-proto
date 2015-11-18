@@ -10,12 +10,15 @@ export
     query,
     @query
 
-import Base: show, call, convert, max, *, >>
+import Base:
+    show, call, convert, get, isnull, isempty, length, eltype,
+    start, next, done, endof, getindex, max, *, >>, ^
 
 
 include("abstract.jl")
 include("database.jl")
 include("syntax.jl")
+include("functor.jl")
 include("pipe.jl")
 include("scope.jl")
 include("compile.jl")

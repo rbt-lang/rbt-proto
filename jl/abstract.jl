@@ -39,21 +39,35 @@ syntax(syntax::AbstractSyntax) = syntax
 # TODO: interface for a pointer inside a syntax tree (for error reporting).
 
 # The unit type.
-typealias UnitType Tuple{}
+typealias Unit Tuple{}
 
 # Structure of input.
 immutable InputMode
-    # Depends on the past input values.
-    sees_past::Bool
-    # Depends on the future input values.
-    sees_future::Bool
-    # For parameterized queries.
-    params::Tuple
+    # Depends on the past and future input values.
+    temporal::Bool
+    # Input is parameterized.
+    params::Tuple{Vararg{Pair{Symbol,Type}}}
 end
 
-# Structure of composition (TODO).
+# Structure of composition.
 max(mode1::InputMode, mode2::InputMode) =
-    InputMode(false, false, ())
+    let temporal = max(mode1.temporal, mode2.temporal),
+        params = mode1.params
+        if params != mode2.params
+            params = ()
+            p1 = Dict(mode1.params)
+            p2 = Dict(mode2.params)
+            names = sort(unique([keys(p1)..., keys(p2)...]))
+            for name in names
+                if name in keys(p1) && name in keys(p2)
+                    @assert p1[name] == p2[name]
+                end
+                T = name in keys(p1) ? p1[name] : p2[name]
+                params = (params..., Pair{Symbol,Type}(name, T))
+            end
+        end
+        InputMode(temporal, params)
+    end
 
 # Structure and type of input.
 immutable Input
@@ -61,7 +75,7 @@ immutable Input
     mode::InputMode
 end
 
-Input(T::Type) = Input(T, InputMode(false, false, ()))
+Input(T::Type; temporal=false, params=()) = Input(T, InputMode(temporal, params))
 
 domain(input::Input) = input.domain
 mode(input::Input) = input.mode
@@ -105,89 +119,105 @@ exclusive(output::Output) = output.mode.exclusive
 reachable(output::Output) = output.mode.reachable
 
 # How the value is represented in the pipeline.
-datatype(input::Input) = datatype(input.domain)
-datatype(output::Output) =
-    let T = datatype(output.domain)
-        output.mode.singular && output.mode.complete ? T :
-        output.mode.singular ? Nullable{T} : Vector{T}
+functor(input::Input) =
+    let T = input.domain
+        if !isempty(input.mode.params)
+            Ns = tuple([n for (n,T) in input.mode.params]...)
+            Ps = Tuple{[T for (n,T) in input.mode.params]...}
+            T = input.mode.temporal ? CtxTemp{Ns,Ps,T} : Ctx{Ns,Ps,T}
+        elseif input.mode.temporal
+            T = Temp{T}
+        else
+            T = Iso{T}
+        end
+        T
     end
-datatype(T::Type) = T
+functor(output::Output) =
+    let T = output.domain
+        output.mode.singular && output.mode.complete ? Iso{T} :
+        output.mode.singular ? Opt{T} : Seq{T}
+    end
 
-# Query execution pipeline (query plan).
-abstract AbstractPipe{I,O}
+# Input or output structure.
+abstract Functor{T}
 
-# Parameterized input (N and V are names and types of parameters).
-immutable Ctx{I,N,V}
-    val::I
-    ctx::V
+show(io::IO, X::Type{Functor}) = print(io, X.name)
+eltype{T}(::Type{Functor{T}}) = T
+
+# Structure-free input or output.
+immutable Iso{T} <: Functor{T}
+    val::T
 end
+Iso{T}(val::T) = Iso{T}(val)
 
-convert{I,N,V}(::Type{Ctx{I,N,V}}, val::I, params::Tuple{Symbol,Any}...) =
-    let d = Dict(params),
-        ctx = ([d[n] for n in N]...)::V
-        Ctx{I,N,V}(val, ctx)
-    end
+# Partial output.
+immutable Opt{T} <: Functor{T}
+    val0::Nullable{T}
+end
+Opt{T}(val::T) = Opt{T}(Nullable{T}(val))
+Opt() = Opt{Union{}}(Nullable())
+convert{T}(::Type{Opt{T}}) = Opt{T}(Nullable{T}())
 
-# Time-aware input.
-immutable Temp{I}
-    vals::Vector{I}
+isnull(X::Opt) = isnull(X.val0)
+get(X::Opt) = get(X.val0)
+get(X::Opt, default) = get(X.val0, default)
+
+# Plural output.
+immutable Seq{T} <: Functor{T}
+    vals::Vector{T}
+end
+Seq{T}(vals::Vector{T}) = Seq{T}(vals)
+
+length(X::Seq) = length(X.vals)
+isempty(X::Seq) = isempty(X.vals)
+endof(X::Seq) = endof(X.vals)
+getindex(X::Seq, keys...) = getindex(X.vals, keys...)
+
+# Parameterized input (Ns and Ps are names and types of parameters).
+immutable Ctx{Ns,Ps,T} <: Functor{T}
+    val::T
+    ctx::Ps
+end
+typealias SomeCtx{T,Ns,Ps} Ctx{Ns,Ps,T}
+
+# Input with past and future values.
+immutable Temp{T} <: Functor{T}
+    vals::Vector{T}
     idx::Int
 end
 
-convert{I}(::Type{Temp{I}}, val::I) =
-    Temp{I}(I[val], 1)
+# Input with past, future and parameters.
+immutable CtxTemp{Ns,Ps,T} <: Functor{T}
+    vals::Vector{T}
+    idx::Int
+    ctx::Ps
+end
+typealias SomeCtxTemp{T,Ns,Ps} CtxTemp{Ns,Ps,T}
 
-# Partial output.
-typealias Opt{O} Nullable{O}
+# Query execution pipeline (query plan).
+abstract AbstractPipe{I<:Functor,O<:Functor}
 
-# Plural output.
-typealias Seq{O} Vector{O}
-
-# Pipelines classified by the input structure.
-typealias CtxPipe{I,N,V,O} AbstractPipe{Ctx{I,N,V},O}
-typealias TempPipe{I,O} AbstractPipe{Temp{I},O}
-typealias CtxTempPipe{I,N,V,O} AbstractPipe{Ctx{Temp{I},N,V},O}
+ifunctor{I,O}(::AbstractPipe{I,O}) = I
+ofunctor{I,O}(::AbstractPipe{I,O}) = O
+itype{I,O}(::AbstractPipe{I,O}) = eltype(I)
+otype{I,O}(::AbstractPipe{I,O}) = eltype(O)
 
 # Pipelines classified by the output structure.
-typealias IsoPipe{I,O} AbstractPipe{I,O}
-typealias OptPipe{I,O} AbstractPipe{I,Opt{O}}
-typealias SeqPipe{I,O} AbstractPipe{I,Seq{O}}
-
-# Combinations.
-typealias CtxOptPipe{I,N,V,O} AbstractPipe{Ctx{I,N,V},Opt{O}}
-typealias CtxSeqPipe{I,N,V,O} AbstractPipe{Ctx{I,N,V},Seq{O}}
-typealias TempOptPipe{I,O} AbstractPipe{Temp{I},Opt{O}}
-typealias TempSeqPipe{I,O} AbstractPipe{Temp{I},Seq{O}}
-typealias CtxTempOptPipe{I,N,V,O} AbstractPipe{Ctx{Temp{I},N,V},Opt{O}}
-typealias CtxTempSeqPipe{I,N,V,O} AbstractPipe{Ctx{Temp{I},N,V},Seq{O}}
-
-# Extracts the type of input and output.
-idomain{I,O}(::AbstractPipe{I,O}) = I
-odomain{I,O}(::AbstractPipe{I,O}) = O
+typealias IsoPipe{I,T} AbstractPipe{I,Iso{T}}
+typealias OptPipe{I,T} AbstractPipe{I,Opt{T}}
+typealias SeqPipe{I,T} AbstractPipe{I,Seq{T}}
 
 # Executes the pipeline.
-execute{I}(pipe::AbstractPipe, x::I) =
-    error("execute() is not implemented for pipeline $pipe and input of type $I")
+apply{I}(pipe::AbstractPipe{I}, ::I) =
+    error("apply() is not implemented for pipeline $pipe and input of type $I")
+apply{I}(pipe::AbstractPipe{I}, X) =
+    apply(pipe, rewrap(I, X))
 # Executes the pipeline by calling it.
-call(pipe::AbstractPipe, args...; kwds...) = execute(pipe, args...; kwds...)
-# Executes the pipeline with unit input.
-execute(pipe::AbstractPipe{UnitType}) = execute(pipe, ())
-# Executes a context-aware or time-aware pipeline.
-execute{I,N,V}(pipe::AbstractPipe{Ctx{Temp{I},N,V}}, x::I; params...) =
-    execute(pipe, Ctx{Temp{I},N,V}(Temp{I}(x), params...))
-execute{I,N,V}(pipe::AbstractPipe{Ctx{I,N,V}}, x::I; params...) =
-    execute(pipe, Ctx{I,N,V}(x, params...))
-execute{I}(pipe::AbstractPipe{Temp{I}}, x::I) =
-    execute(pipe, Temp{I}(x))
-execute{N,V}(pipe::AbstractPipe{Ctx{Temp{UnitType},N,V}}; params...) =
-    execute(pipe, Ctx{Temp{UnitType},N,V}(Temp{UnitType}(()), params...))
-execute{N,V}(pipe::AbstractPipe{Ctx{UnitType,N,V}}; params...) =
-    execute(pipe, Ctx{UnitType,N,V}((), params...))
-execute(pipe::AbstractPipe{Temp{UnitType}}) =
-    execute(pipe, Temp{UnitType}(()))
+call{I,O}(pipe::AbstractPipe{I,O}, x=(); params...) =
+    unwrap(apply(pipe, wrap(I, x, Dict{Symbol,Any}(params))))
 
 # Returns an equivalent, but improved pipeline.
-optimize{I,O}(pipe::AbstractPipe{I,O}) = pipe::AbstractPipe{I,O}
+optimize(pipe::AbstractPipe) = pipe
 
 # Encapsulates the compiler state and the query combinator.
 immutable Query
@@ -228,9 +258,9 @@ typealias NullableSyntax Nullable{AbstractSyntax}
 
 # Fresh state for the given scope.
 Query(
-    scope::AbstractScope, domain::Type=UnitType;
+    scope::AbstractScope, domain::Type=Unit;
     input=Input(domain), output=Output(domain, exclusive=true, reachable=true),
-    pipe=HerePipe{datatype(domain)}(),
+    pipe=HerePipe{domain}(),
     fields=NullableQueries(),
     identity=NullableQuery(),
     selector=NullableQuery(),
@@ -277,10 +307,12 @@ input(q::Query) = q.input
 output(q::Query) = q.output
 
 # Type and structure of input and output.
-domain(q::Query) = domain(q.input)
-mode(q::Query) = mode(q.input)
-codomain(q::Query) = domain(q.output)
-comode(q::Query) = mode(q.output)
+idomain(q::Query) = domain(q.input)
+imode(q::Query) = mode(q.input)
+ifunctor(q::Query) = functor(q.input)
+odomain(q::Query) = domain(q.output)
+omode(q::Query) = mode(q.output)
+ofunctor(q::Query) = functor(q.output)
 
 # Output predicates.
 singular(q::Query) = singular(q.output)
@@ -291,10 +323,20 @@ reachable(q::Query) = reachable(q.output)
 # Displays the query.
 function show(io::IO, q::Query)
     print(io, isnull(q.syntax) ? "(?)" : get(q.syntax), " :: ")
-    if domain(q) != UnitType
-        print(io, datatype(q.input), " -> ")
+    if q.input.domain != Unit || q.input.mode.temporal || !isempty(q.input.mode.params)
+        print(io, q.input.domain == Unit ? "1" : q.input.domain)
+        if q.input.mode.temporal
+            print(io, "...")
+        end
+        for (n, T) in q.input.mode.params
+            print(io, " * (", n, " => ", T, ")")
+        end
+        print(io, " -> ")
     end
-    print(io, datatype(q.output))
+    T = q.output.domain
+    T = q.output.mode.singular && q.output.mode.complete ? T :
+        q.output.mode.singular ? Nullable{T} : Vector{T}
+    print(io, T)
 end
 
 # Compiles the query.
@@ -309,7 +351,7 @@ prepare(base::Query, expr::AbstractSyntax) =
 
 # Executes the query.
 execute(q::Query, args...) =
-    execute(pipe(optimize(select(q))), args...)
+    pipe(optimize(select(q)))(args...)
 call(q::Query, args...) = execute(q, args...)
 
 # Builds initial execution pipeline.

@@ -1,14 +1,14 @@
 
-immutable OptToNAPipe{I,O} <: IsoPipe{I,Union{O,NAtype}}
-    F::OptPipe{I,O}
+immutable OptToNAPipe{I,T} <: IsoPipe{I,Union{T,NAtype}}
+    F::OptPipe{I,T}
 end
 
 show(io::IO, pipe::OptToNAPipe) =
-    print(io, "OptToNA(<", pipe.F, ">)")
+    print(io, "OptToNA($(pipe.F))")
 
-execute{I,O}(pipe::OptToNAPipe{I,O}, x::I) =
-    let y = execute(pipe.F, x)::Nullable{O}
-        isnull(y) ? NA : get(y)
+apply{I,T}(pipe::OptToNAPipe{I,T}, X::I) =
+    let Y = apply(pipe.F, X)::Opt{O}
+        isnull(Y) ? NA : get(Y)
     end
 
 
@@ -18,19 +18,19 @@ immutable IsoDataFramePipe{I} <: IsoPipe{I, DataFrame}
 end
 
 show(io::IO, pipe::IsoDataFramePipe) =
-    print(io, "IsoDataFrame(", pipe.F, ", ", join(pipe.fields, ", "), ")")
+    print(io, "IsoDataFrame($(pipe.F), $(join(pipe.fields, ", ")))")
 
-function execute{I}(pipe::IsoDataFramePipe, x::I)
+function apply{I}(pipe::IsoDataFramePipe{I}, X::I)
     data = Any[]
     names = Symbol[]
-    y = pipe.F(x)
+    Y = apply(pipe.F, X)
     for (name, A, F) in pipe.fields
         push!(names, name)
         a = A()
-        push!(a, F(y))
+        push!(a, unwrap(apply(F, Y)))
         push!(data, a)
     end
-    return DataFrame(data, names)
+    return Iso(DataFrame(data, names))
 end
 
 
@@ -40,21 +40,21 @@ immutable OptDataFramePipe{I} <: IsoPipe{I, DataFrame}
 end
 
 show(io::IO, pipe::OptDataFramePipe) =
-    print(io, "OptDataFrame(", pipe.F, ", ", join(pipe.fields, ", "), ")")
+    print(io, "OptDataFrame($(pipe.F), $(join(pipe.fields, ", ")))")
 
-function execute{I}(pipe::OptDataFramePipe, x::I)
+function apply{I}(pipe::OptDataFramePipe{I}, X::I)
     data = Any[]
     names = Symbol[]
-    y = pipe.F(x)
+    Y = apply(pipe.F, X)
     for (name, A, F) in pipe.fields
         push!(names, name)
         a = A()
         if !isnull(y)
-            push!(a, F(get(y)))
+            push!(a, unwrap(apply(F, Iso(get(y)))))
         end
         push!(data, a)
     end
-    return DataFrame(data, names)
+    return Iso(DataFrame(data, names))
 end
 
 
@@ -64,18 +64,18 @@ immutable SeqDataFramePipe{I} <: IsoPipe{I, DataFrame}
 end
 
 show(io::IO, pipe::SeqDataFramePipe) =
-    print(io, "SeqDataFrame(", pipe.F, ", ", join(pipe.fields, ", "), ")")
+    print(io, "SeqDataFrame($(pipe.F), $(join(pipe.fields, ", ")))")
 
 
-function execute{I}(pipe::SeqDataFramePipe, x::I)
+function apply{I}(pipe::SeqDataFramePipe{I}, X::I)
     data = Any[]
     names = Symbol[]
-    ys = pipe.F(x)
+    Y = apply(pipe.F, X)
     for (name, A, F) in pipe.fields
         push!(names, name)
         a = A([])
-        for y in ys
-            z = F(y)
+        for y in Y
+            z = unwrap(apply(F, Iso(y)))
             if A <: DataVector
                 if isnull(z)
                     push!(a, NA)
@@ -88,7 +88,7 @@ function execute{I}(pipe::SeqDataFramePipe, x::I)
         end
         push!(data, a)
     end
-    return DataFrame(data, names)
+    return Iso(DataFrame(data, names))
 end
 
 
@@ -96,20 +96,17 @@ function compile(::Fn(:dataframe), base::Query, flow::Query)
     flow = select(flow)
     if !isnull(flow.fields)
         fields = mkdffields(flow)
-        I = domain(flow)
         output = Output(DataFrame)
         pipe =
-            singular(flow) && complete(flow) ? IsoDataFramePipe{I}(flow.pipe, fields) :
-            singular(flow) ? OptDataFramePipe{I}(flow.pipe, fields) :
-            SeqDataFramePipe{I}(flow.pipe, fields)
+            singular(flow) && complete(flow) ? IsoDataFramePipe(flow.pipe, fields) :
+            singular(flow) ? OptDataFramePipe(flow.pipe, fields) :
+            SeqDataFramePipe(flow.pipe, fields)
         return Query(empty(flow), input=flow.input, output=output, pipe=pipe)
     else
         flow = select(flow)
         if singular(flow) && !complete(flow)
-            I = domain(flow)
-            O = codomain(flow)
             output = Output(O, exclusive=exclusive(flow), reachable=reachable(flow))
-            pipe = OptToNAPipe{I,O}(flow.pipe)
+            pipe = OptToNAPipe(flow.pipe)
             flow = Query(flow, output=output, pipe=pipe)
         end
     end
@@ -127,7 +124,7 @@ function mkdffields(flow::Query)
             if !singular(field)
                 field = compile(Fn{:dataframe}, flow, field)
             end
-            O = codomain(field)
+            O = odomain(field)
             A = !singular(field) ? Vector{DataVector{O}} :
                 singular(field) && !complete(field) ? DataVector{O} : Vector{O}
             F = field.pipe
