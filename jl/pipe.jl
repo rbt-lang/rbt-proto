@@ -8,6 +8,9 @@ show(io::IO, ::HerePipe) = print(io, "HERE")
 
 apply{T}(::HerePipe{T}, X::Iso{T}) = X
 
+imode(::HerePipe) = InputMode(false, ())
+omode(::HerePipe) = OutputMode(true, true, true, true)
+
 
 immutable ConstPipe{IT,OT} <: AbstractPipe{Iso{IT}, Iso{OT}}
     val::OT
@@ -20,15 +23,21 @@ show(io::IO, pipe::ConstPipe) = print(io, pipe.val)
 
 apply{IT,OT}(pipe::ConstPipe{IT,OT}, ::Iso{IT}) = Iso(pipe.val)
 
+imode(::ConstPipe) = InputMode(false, ())
+omode{IT,OT}(::ConstPipe{IT,OT}) = OutputMode(true, true, IT == Unit, OT == Unit)
 
-immutable NullPipe{IT} <: AbstractPipe{Iso{IT}, Opt{Any}}
+
+immutable NullPipe{IT,OT} <: AbstractPipe{Iso{IT}, Opt{OT}}
 end
 
-NullPipe(IT::Type=Unit) = NullPipe{IT}()
+NullPipe(IT::Type=Unit, OT::Type=Union{}) = NullPipe{IT,OT}()
 
 show(io::IO, ::NullPipe) = print(io, "NULL")
 
-apply{IT}(pipe::NullPipe{IT}, ::Iso{IT}) = Opt{Any}()
+apply{IT,OT}(pipe::NullPipe{IT,OT}, ::Iso{IT}) = Opt{OT}()
+
+imode(::NullPipe) = InputMode(false, ())
+omode(::NullPipe) = OutputMode(true, false, true, OT == Union{})
 
 
 immutable SetPipe{T} <: AbstractPipe{Iso{Unit},Seq{T}}
@@ -40,10 +49,15 @@ show(io::IO, pipe::SetPipe) = print(io, "Set(<$(pipe.name)>)")
 
 apply{T}(pipe::SetPipe{T}, ::Iso{Unit}) = wrap(Seq{T}, pipe.set)
 
+imode(::SetPipe) = InputMode(false, ())
+omode(::SetPipe) = OutputMode(false, false, true, true)
+
 
 immutable IsoMapPipe{IT,OT} <: AbstractPipe{Iso{IT},Iso{OT}}
     name::Symbol
     map::Dict{IT,OT}
+    exclusive::Bool
+    reachable::Bool
 end
 
 show(io::IO, pipe::IsoMapPipe) = print(io, "IsoMap(<$(pipe.name)>)")
@@ -51,10 +65,15 @@ show(io::IO, pipe::IsoMapPipe) = print(io, "IsoMap(<$(pipe.name)>)")
 apply{IT,OT}(pipe::IsoMapPipe{IT,OT}, X::Iso{IT}) =
     wrap(Iso{OT}, pipe.map[unwrap(X)])
 
+imode(::IsoMapPipe) = InputMode(false, ())
+omode(pipe::IsoMapPipe) = OutputMode(true, true, pipe.exclusive, pipe.reachable)
+
 
 immutable OptMapPipe{IT,OT} <: AbstractPipe{Iso{IT},Opt{OT}}
     name::Symbol
     map::Dict{IT,OT}
+    exclusive::Bool
+    reachable::Bool
 end
 
 show(io::IO, pipe::OptMapPipe) = print(io, "OptMap(<$(pipe.name)>)")
@@ -62,16 +81,25 @@ show(io::IO, pipe::OptMapPipe) = print(io, "OptMap(<$(pipe.name)>)")
 apply{IT,OT}(pipe::OptMapPipe{IT,OT}, X::Iso{IT}) =
     wrap(Opt{OT}, get(pipe.map, unwrap(X), nothing))
 
+imode(::OptMapPipe) = InputMode(false, ())
+omode(pipe::OptMapPipe) = OutputMode(true, false, pipe.exclusive, pipe.reachable)
+
 
 immutable SeqMapPipe{IT,OT} <: AbstractPipe{Iso{IT},Seq{OT}}
     name::Symbol
     map::Dict{IT,Vector{OT}}
+    complete::Bool
+    exclusive::Bool
+    reachable::Bool
 end
 
 show(io::IO, pipe::SeqMapPipe) = print(io, "SeqMap(<$(pipe.name)>)")
 
 apply{IT,OT}(pipe::SeqMapPipe{IT,OT}, X::Iso{IT}) =
     wrap(Seq{OT}, get(pipe.map, unwrap(X), OT[]))
+
+imode(::SeqMapPipe) = InputMode(false, ())
+omode(pipe::SeqMapPipe) = OutputMode(false, pipe.complete, pipe.exclusive, pipe.reachable)
 
 
 immutable LiftPipe{I,O,I0,O0} <: AbstractPipe{I,O}
@@ -93,6 +121,9 @@ show(io::IO, pipe::LiftPipe) = show(io, pipe.F)
 
 apply{I,O,I0,O0}(pipe::LiftPipe{I,O,I0,O0}, X::I) =
     rewrap(O, apply(pipe.F, rewrap(I0, X)::I0)::O0)::O
+
+omode{I,O,I0,O0}(pipe::LiftPipe{I,O,I0,O0}) =
+    max(omode(pipe.F), OutputMode(O <: Iso, O <: Iso || O <: Seq, true, true))
 
 
 immutable ComposePipe{I,O,I1,O1,I2,O2} <: AbstractPipe{I,O}
@@ -124,6 +155,9 @@ lapply{I,I1,O1}(F::AbstractPipe{I1,O1}, X::I) =
 rapply{I,I2,O2}(G::AbstractPipe{I2,O2}, YY::I) =
      flat(fmap(G, dist(rewrap(functor(I2, eltype(I)), YY))))
 
+imode(pipe::ComposePipe) = max(imode(pipe.F), imode(pipe.G))
+omode(pipe::ComposePipe) = max(omode(pipe.F), omode(pipe.G))
+
 
 immutable IsoProductPipe{I,T1,T2} <: IsoPipe{I,Tuple{T1,T2}}
     F::IsoPipe{I,T1}
@@ -139,6 +173,12 @@ show(io::IO, pipe::IsoProductPipe) = print(io, "($(pipe.F) * $(pipe.G))")
 
 apply{I,T1,T2}(pipe::IsoProductPipe{I,T1,T2}, X::I) =
     Iso((unwrap(apply(pipe.F, X))::T1, unwrap(apply(pipe.G, X))::T2))
+
+imode(pipe::IsoProductPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(pipe::IsoProductPipe) =
+    let mode1 = omode(pipe.F), mode2 = omode(pipe.G)
+        OutputMode(true, true, mode1.exclusive || mode2.exclusive, false)
+    end
 
 
 immutable OptProductPipe{I,T1,T2} <: OptPipe{I,Tuple{T1,T2}}
@@ -167,6 +207,12 @@ apply{I,T1,T2}(pipe::OptProductPipe{I,T1,T2}, X::I) =
             end
         end
         return Opt{Tuple{T1,T2}}()
+    end
+
+imode(pipe::IsoProductPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(pipe::IsoProductPipe) =
+    let mode1 = omode(pipe.F), mode2 = omode(pipe.G)
+        OutputMode(true, false, mode1.exclusive || mode2.exclusive, false)
     end
 
 
@@ -200,6 +246,12 @@ apply{I,T1,T2}(pipe::SeqProductPipe{I,T1,T2}, X::I) =
             end
         end
         Seq(ys)
+    end
+
+imode(pipe::IsoProductPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(pipe::IsoProductPipe) =
+    let mode1 = omode(pipe.F), mode2 = omode(pipe.G)
+        OutputMode(false, false, mode1.exclusive && mode2.exclusive, false)
     end
 
 
@@ -281,6 +333,9 @@ show(io::IO, pipe::CountPipe) = print(io, "Count($(self.F))")
 apply{I,T}(pipe::CountPipe{I,T}, X::I) =
     Iso{Int}(length(apply(pipe.F, X)::Seq{T}))
 
+imode(pipe::CountPipe) = imode(pipe.F)
+omode(pipe::CountPipe) = OutputMode(true, true, false, false)
+
 
 immutable SumPipe{I} <: IsoPipe{I,Int}
     F::SeqPipe{I,Int}
@@ -291,6 +346,9 @@ show(io::IO, pipe::SumPipe) = print(io, "Sum($(self.F))")
 apply{I}(pipe::SumPipe{I}, X::I) =
     Iso{Int}(sum(unwrap(apply(pipe.F, X))::Vector{Int}))
 
+imode(pipe::SumPipe) = imode(pipe.F)
+omode(pipe::SumPipe) = OutputMode(true, true, false, false)
+
 
 immutable MaxPipe{I} <: IsoPipe{I,Int}
     F::SeqPipe{I,Int}
@@ -300,6 +358,9 @@ show(io::IO, pipe::MaxPipe) = print(io, "Max($(self.F))")
 
 apply{I}(pipe::MaxPipe{I}, X::I) =
     Iso{Int}(maximum(unwrap(apply(pipe.F, X))::Vector{Int}))
+
+imode(pipe::MaxPipe) = imode(pipe.F)
+omode(pipe::MaxPipe) = OutputMode(true, true, false, false)
 
 
 immutable OptMaxPipe{I} <: OptPipe{I,Int}
@@ -312,6 +373,9 @@ apply{I}(pipe::OptMaxPipe{I}, X::I) =
     let y = unwrap(apply(pipe.F, X))::Vector{Int}
         isempty(y) ? Opt{Int}() : Opt{Int}(maximum(y))
     end
+
+imode(pipe::OptMaxPipe) = imode(pipe.F)
+omode(pipe::OptMaxPipe) = OutputMode(true, false, false, false)
 
 
 immutable TuplePipe{I,T} <: IsoPipe{I,T}
@@ -331,6 +395,13 @@ show(io::IO, pipe::TuplePipe) = print(io, "Tuple($(join(pipe.Fs, ", ")))")
 apply{I,T}(pipe::TuplePipe{I,T}, X::I) =
     Iso(([unwrap(apply(F, X)) for F in pipe.Fs]...)::T)
 
+imode(pipe::TuplePipe) =
+    isempty(pipe.Fs) ? InputMode(false, ()) : max([imode(F) for F in pipe.Fs]...)
+omode{I,T}(pipe::TuplePipe{I,T}) =
+    isempty(pipe.Fs) ?
+        OutputMode(true, true, I == Iso{Unit}, true) :
+        OutputMode(true, true, false, false)
+
 
 immutable ArrayPipe{I,T} <: SeqPipe{I,T}
     Fs::Vector{IsoPipe{I,T}}
@@ -346,6 +417,13 @@ show(io::IO, pipe::ArrayPipe) = print(io, "Array($(join(pipe.Fs, ", ")))")
 
 apply{I,T}(pipe::ArrayPipe{I,T}, X::I) =
     Seq(T[unwrap(apply(F, X))::T for F in pipe.Fs])
+
+imode(pipe::ArrayPipe) =
+    isempty(pipe.Fs) ? InputMode(false, ()) : max([imode(F) for F in pipe.Fs]...)
+omode(pipe::ArrayPipe) =
+    isempty(pipe.Fs) ?
+        OutputMode(false, false, true, false) :
+        OutputMode(false, true, false, false)
 
 
 immutable RangePipe{I} <: SeqPipe{I,Int}
@@ -368,6 +446,11 @@ apply{I}(pipe::RangePipe{I}, X::I) =
         Seq(collect(start:step:stop))
     end
 
+imode(pipe::RangePipe) =
+    max(imode(pipe.start), imode(pipe.step), imode(pipe.stop))
+omode(pipe::RangePipe) =
+    OutputMode(false, false, false, false)
+
 
 immutable SievePipe{I,T} <: OptPipe{I,T}
     P::IsoPipe{I,Bool}
@@ -383,6 +466,9 @@ show(io::IO, pipe::SievePipe) = print(io, "Sieve($(pipe.P))")
 
 apply{I,T}(pipe::SievePipe{I,T}, X::I) =
     unwrap(apply(pipe.P, X))::Bool ? Opt{T}(unwrap(X)) : Opt{T}()
+
+imode(pipe::SievePipe) = imode(pipe.P)
+omode(pipe::SievePipe) = OutputMode(true, false, true, false)
 
 
 immutable IsoIfNullPipe{I,T} <: IsoPipe{I,T}
@@ -402,6 +488,12 @@ apply{I,T}(pipe::IsoIfNullPipe{I,T}, X::I) =
         !isnull(Y) ? Iso(get(Y)) : apply(pipe.R, X)
     end
 
+imode(pipe::IsoIfNullPipe) = max(imode(pipe.F), imode(pipe.R))
+omode(pipe::IsoIfNullPipe) =
+    let mode1 = omode(pipe.F), mode2 = omode(pipe.G)
+        OutputMode(true, true, mode1.exclusive && mode2.exclusive, mode1.reachable)
+    end
+
 
 immutable IsoFirstPipe{I,T} <: IsoPipe{I,T}
     F::SeqPipe{I,T}
@@ -412,6 +504,9 @@ show(io::IO, pipe::IsoFirstPipe) = print(io, "IsoFirst($(pipe.F), $(pipe.dir))")
 
 apply{I,T}(pipe::IsoFirstPipe{I,T}, X::I) =
     wrap(Iso{T}, apply(pipe.F, X)[(pipe.dir >= 0 ? 1 : end)]::T)
+
+imode(pipe::IsoFirstPipe) = imode(pipe.F)
+omode(pipe::IsoFirstPipe) = OutputMode(true, true, omode(pipe.F).exclusive, false)
 
 
 immutable OptFirstPipe{I,T} <: OptPipe{I,T}
@@ -425,6 +520,9 @@ apply{I,T}(pipe::OptFirstPipe{I,T}, X::I) =
     let Y = apply(pipe.F, X)::Seq{T}
         isempty(Y) ? Opt{T}() : Opt(Y[(pipe.dir >= 0 ? 1 : end)])
     end
+
+imode(pipe::OptFirstPipe) = imode(pipe.F)
+omode(pipe::OptFirstPipe) = OutputMode(true, false, omode(pipe.F).exclusive, false)
 
 
 immutable IsoFirstByPipe{I,T,J,K} <: IsoPipe{I,T}
@@ -449,6 +547,9 @@ apply{I,T,J,K}(pipe::IsoFirstByPipe{I,T,J,K}, X::I) =
         Iso(ys[j])
     end
 
+imode(pipe::IsoFirstByPipe) = max(imode(pipe.F), imode(pipe.key))
+omode(pipe::IsoFirstByPipe) = OutputMode(true, true, omode(F).exclusive, false)
+
 
 immutable OptFirstByPipe{I,T,J,K} <: OptPipe{I,T}
     F::SeqPipe{I,T}
@@ -470,6 +571,9 @@ apply{I,T,J,K}(pipe::OptFirstByPipe{I,T,J,K}, X::I) =
         weights = unwrap(rapply(pipe.key, YY))
         isempty(ys) ? Opt{T}() : Opt(ys[(pipe.dir >= 0 ? indmax : indmin)(weights)])
     end
+
+imode(pipe::OptFirstByPipe) = max(imode(pipe.F), imode(pipe.key))
+omode(pipe::OptFirstByPipe) = OutputMode(true, false, omode(pipe.F).exclusive, false)
 
 
 immutable TakePipe{I,T} <: SeqPipe{I,T}
@@ -493,6 +597,12 @@ apply{I,T}(pipe::TakePipe{I,T}, X::I) =
         else
             Seq(N >= 0 ? ys[1+N:end] : ys[max(1,1+N+end):end])
         end
+    end
+
+imode(pipe::TakePipe) = max(imode(pipe.F), imode(pipe.N))
+omode(pipe::TakePipe) =
+    let mode = omode(pipe.F)
+        OutputMode(false, false, mode.exclusive, false)
     end
 
 
@@ -525,6 +635,12 @@ function apply{I,T,J,K}(pipe::GetPipe{I,T,J,K}, X::I)
     return Opt{T}()
 end
 
+imode(pipe::GetPipe) = max(imode(pipe.F), imode(pipe.key), imode(pipe.F))
+omode(pipe::GetPipe) =
+    let mode = omode(pipe.F)
+        OutputMode(true, false, mode.exclusive, false)
+    end
+
 
 immutable ReversePipe{I,T} <: SeqPipe{I,T}
     F::SeqPipe{I,T}
@@ -534,6 +650,9 @@ show(io::IO, pipe::ReversePipe) = print(io, "Reverse($(pipe.F))")
 
 apply{I,T}(pipe::ReversePipe{I,T}, X::I) =
     Seq(reverse(unwrap(apply(pipe.F, X))::Vector{T}))
+
+imode(pipe::ReversePipe) = imode(pipe.F)
+omode(pipe::ReversePipe) = omode(pipe.F)
 
 
 immutable SortPipe{I,T} <: SeqPipe{I,T}
@@ -545,6 +664,9 @@ show(io::IO, pipe::SortPipe) = print(io, "Sort($(pipe.F), $(pipe.dir))")
 
 apply{I,T}(pipe::SortPipe{I,T}, X::I) =
     wrap(Seq{T}, sort(unwrap(apply(pipe.F, X))::Vector{T}, rev=(pipe.dir<0)))
+
+imode(pipe::SortPipe) = imode(pipe.F)
+omode(pipe::SortPipe) = omode(pipe.F)
 
 
 immutable SortByPipe{I,T,J,K} <: SeqPipe{I,T}
@@ -582,6 +704,9 @@ apply{I,T}(pipe::SortByPipe{I,T}, X::I) =
         wrap(Seq{T}, T[ys[j] for j in indexes])
     end
 
+imode(pipe::SortByPipe) = max(imode(pipe.F), imode(pipe.key))
+omode(pipe::SortByPipe) = omode(pipe.F)
+
 
 immutable ConnectPipe{I,T} <: SeqPipe{I,T}
     F::SeqPipe{I,T}
@@ -606,6 +731,9 @@ function apply{I,T}(pipe::ConnectPipe{I,T}, X::I)
     end
     return Seq(out)
 end
+
+imode(pipe::ConnectPipe) = imode(pipe.F)
+omode(pipe::ConnectPipe) = OutputMode(false, false, false, false)
 
 
 immutable DepthPipe{I,T} <: IsoPipe{I,Int}
@@ -634,6 +762,9 @@ function apply{I,T}(pipe::DepthPipe{I,T}, X::I)
     end
     return Iso(max_d)
 end
+
+imode(pipe::DepthPipe) = imode(pipe.F)
+omode(pipe::DepthPipe) = OutputMode(true, true, false, false)
 
 
 immutable SortConnectPipe{I,T,J,K} <: SeqPipe{I,T}
@@ -696,6 +827,9 @@ function apply{I,T,J,K}(pipe::SortConnectPipe{I,T,J,K}, X::I)
     return Seq(out)
 end
 
+imode(pipe::SortConnectPipe) = max(imode(pipe.F), imode(pipe.L), imode(pipe.key))
+omode(pipe::SortConnectPipe) = omode(pipe.F)
+
 
 immutable UniquePipe{I,T} <: SeqPipe{I,T}
     F::SeqPipe{I,T}
@@ -706,6 +840,12 @@ show(io::IO, pipe::UniquePipe) = print(io, "Unique($(pipe.F), $(pipe.dir))")
 
 apply{I,T}(pipe::UniquePipe{I,T}, X::I) =
     wrap(Seq{T}, sort(unique(unwrap(apply(pipe.F, X))::Vector{T}), rev=(pipe.dir<0)))
+
+imode(pipe::UniquePipe) = imode(pipe.F)
+omode(pipe::UniquePipe) =
+    let mode = omode(pipe.F)
+        OutputMode(false, mode.complete, true, mode.reachable)
+    end
 
 
 immutable UniqueByPipe{I,T,J,K} <: SeqPipe{I,T}
@@ -740,10 +880,17 @@ function apply{I,T,J,K}(pipe::UniqueByPipe{I,T,J,K}, X::I)
     return Seq(T[y for (k, y) in kys])
 end
 
+imode(pipe::UniqueByPipe) = max(imode(pipe.F), imode(pipe.key))
+omode(pipe::UniqueByPipe) =
+    let mode = omode(pipe.F)
+        OutputMode(false, mode.complete, true, mode.reachable)
+    end
+
 
 immutable GroupStartPipe{I,V,T} <: IsoPipe{I,Tuple{Unit, Vector{V}}}
     F::SeqPipe{I,T}
 end
+
 
 show(io::IO, pipe::GroupStartPipe) = print(io, "GroupStart($(pipe.F))")
 
@@ -751,6 +898,9 @@ apply{I,V,T}(pipe::GroupStartPipe{I,V,T}, X::I) =
     let vs = unwrap(dist(fmap(pipe.F, dup(X))))::Vector{V}
         Iso(((), vs))
     end
+
+imode(pipe::GroupStartPipe) = imode(pipe.F)
+omode(pipe::GroupStartPipe) = OutputMode(true, true, false, false)
 
 
 immutable GroupEndPipe{P,V,T} <: AbstractPipe{Iso{Tuple{P, Vector{V}}}, Iso{Tuple{P, Vector{T}}}}
@@ -764,6 +914,9 @@ apply{P,V,T}(pipe::GroupEndPipe{P,V,T}, X::Iso{Tuple{P, Vector{V}}}) =
         ys = T[unwrap(v) for v in vs]
         Iso((p, ys))
     end
+
+imode(pipe::GroupEndPipe) = InputMode(false, ())
+omode(pipe::GroupEndPipe) = OutputMode(true, true, true, true)
 
 
 immutable GroupByPipe{P,Q,V,R,J,K} <: AbstractPipe{Iso{Tuple{P, Vector{V}}}, Seq{Tuple{Q, Vector{V}}}}
@@ -815,6 +968,9 @@ function apply{P,Q,V,R,J,K}(pipe::GroupByPipe{P,Q,V,R,J,K}, X::Iso{Tuple{P, Vect
     sort!(ks, rev=(pipe.dir<0))
     return Seq(Tuple{Q, Vector{V}}[qYs[k2idx[k]] for k in ks])
 end
+
+imode(pipe::GroupByPipe) = max(imode(pipe.img), imode(pipe.key))
+omode(pipe::GroupByPipe) = OutputMode(false, false, false, false)
 
 
 immutable CubeGroupByPipe{P,Q,V,R,J,K} <: AbstractPipe{Iso{Tuple{P, Vector{V}}}, Seq{Tuple{Q, Vector{V}}}}
@@ -869,6 +1025,9 @@ function apply{P,Q,V,R,J,K}(pipe::CubeGroupByPipe{P,Q,V,R,J,K}, X::Iso{Tuple{P, 
     return Seq(qYs)
 end
 
+imode(pipe::CubeGroupByPipe) = max(imode(pipe.img), imode(pipe.key))
+omode(pipe::CubeGroupByPipe) = OutputMode(false, true, false, false)
+
 
 immutable PartitionStartPipe{I,V,T} <: IsoPipe{I, Tuple{I, Tuple{Unit, Vector{V}}}}
     F::SeqPipe{I,T}
@@ -880,6 +1039,9 @@ apply{I,V,T}(pipe::PartitionStartPipe{I,V,T}, X::I) =
     let vs = unwrap(dist(fmap(pipe.F, dup(X))))::Vector{V}
         Iso((X, ((), vs)))
     end
+
+imode(pipe::PartitionStartPipe) = imode(pipe.F)
+omode(pipe::PartitionStartPipe) = OutputMode(true, true, false, false)
 
 
 immutable PartitionEndPipe{I,P,V,T} <: AbstractPipe{Iso{Tuple{I, Tuple{P, Vector{V}}}}, Iso{Tuple{P, Vector{T}}}}
@@ -894,6 +1056,10 @@ apply{I,P,V,T}(pipe::PartitionEndPipe{I,P,V,T}, X::Iso{Tuple{I, Tuple{P, Vector{
         Iso((p, ys))
     end
 
+imode(pipe::PartitionEndPipe) = InputMode(false, ())
+omode(pipe::PartitionEndPipe) = OutputMode(true, true, true, true)
+
+
 immutable PartitionByPipe{I,P,Q,V,R,J,K} <:
         AbstractPipe{Iso{Tuple{I, Tuple{P, Vector{V}}}}, Seq{Tuple{I, Tuple{Q, Vector{V}}}}}
     dim::SeqPipe{I,R}
@@ -901,6 +1067,7 @@ immutable PartitionByPipe{I,P,Q,V,R,J,K} <:
     key::IsoPipe{J,K}
     dir::Int
 end
+
 
 PartitionByPipe{I0,T}(F::SeqPipe{I0,T}, groups::Tuple...) =
     let groups = ([length(t) == 4 ? t : (t[1], t[2], HerePipe(otype(t[1])), t[3]) for t in groups]...)
@@ -951,6 +1118,9 @@ function apply{I,P,Q,V,R,J,K}(pipe::PartitionByPipe{I,P,Q,V,R,J,K}, X::Iso{Tuple
     sort!(ks, rev=(pipe.dir<0))
     return Seq(Tuple{I, Tuple{Q, Vector{V}}}[qYs[k2idx[k]] for k in ks])
 end
+
+imode(pipe::PartitionByPipe) = max(imode(pipe.dim), imode(pipe.img), imode(pipe.key))
+omode(pipe::PartitionByPipe) = OutputMode(false, false, false, false)
 
 
 immutable CubePartitionByPipe{I,P,Q,V,R,J,K} <:
@@ -1015,31 +1185,52 @@ function apply{I,P,Q,V,R,J,K}(pipe::CubePartitionByPipe{I,P,Q,V,R,J,K}, X::Iso{T
     return Seq(qYs)
 end
 
+imode(pipe::CubePartitionByPipe) = max(imode(pipe.dim), imode(pipe.img), imode(pipe.key))
+omode(pipe::CubePartitionByPipe) = OutputMode(false, true, false, false)
+
 
 immutable FieldPipe{IT,O} <: AbstractPipe{Iso{IT},O}
     field::Symbol
+    singular::Bool
+    complete::Bool
+    exclusive::Bool
+    reachable::Bool
 end
 
-FieldPipe(IT, field, O) = FieldPipe{IT,O}(field)
+FieldPipe(IT, field, O, mode...) = FieldPipe{IT,O}(field, mode...)
 
 show{IT,O}(io::IO, pipe::FieldPipe{IT,O}) = print(io, "[$(pipe.field)]")
 
 apply{IT,O}(pipe::FieldPipe{IT,O}, X::Iso{IT}) =
     wrap(O, getfield(unwrap(X), pipe.field))
 
+imode(::FieldPipe) = InputMode(false, ())
+omode(pipe::FieldPipe) = OutputMode(pipe.singular, pipe.complete, pipe.exclusive, pipe.reachable)
+
 
 immutable ItemPipe{IT,O} <: AbstractPipe{Iso{IT},O}
     index::Int
+    singular::Bool
+    complete::Bool
+    exclusive::Bool
+    reachable::Bool
 end
 
-ItemPipe(IT, index) = ItemPipe{IT, Iso{IT.parameters[index]}}(index)
+ItemPipe(IT, index) = ItemPipe{IT, Iso{IT.parameters[index]}}(index, true, true, false, false)
 ItemPipe(IT, index, O) =
-    ItemPipe{IT, functor(O, O <: Iso? IT.parameters[index] : eltype(IT.parameters[index]))}(index)
+    ItemPipe{IT, functor(O, O <: Iso? IT.parameters[index] : eltype(IT.parameters[index]))}(
+        index, O <: Iso || O <: Opt, O <: Iso, false, false)
+ItemPipe(IT, index, O, singular, complete, exclusive, reachable) =
+    ItemPipe{IT, functor(O, O <: Iso? IT.parameters[index] : eltype(IT.parameters[index]))}(
+        index, singular, complete, exclusive, reachable)
 
-#show{IT,O}(io::IO, pipe::ItemPipe{IT,O}) = print(io, "[$(pipe.index)]")
+show{IT,O}(io::IO, pipe::ItemPipe{IT,O}) = print(io, "[$(pipe.index)]")
 
 apply{IT,O}(pipe::ItemPipe{IT,O}, X::Iso{IT}) =
     wrap(O, unwrap(X)[pipe.index])
+
+imode(::ItemPipe) = InputMode(false, ())
+omode(pipe::ItemPipe) = OutputMode(pipe.singular, pipe.complete, pipe.exclusive, pipe.reachable)
 
 
 immutable IsoNotPipe{I} <: IsoPipe{I,Bool}
@@ -1049,6 +1240,9 @@ end
 show(io::IO, pipe::IsoNotPipe) = print(io, "OptNot($(pipe.F))")
 
 apply{I}(pipe::IsoNotPipe{I}, X::I) = wrap(Iso{Bool}, !unwrap(apply(pipe.F, X)::Iso{Bool}))
+
+imode(pipe::IsoNotPipe) = imode(pipe.F)
+omode(::IsoNotPipe) = OutputMode(true, true, false, false)
 
 
 immutable OptNotPipe{I} <: OptPipe{I,Bool}
@@ -1061,6 +1255,9 @@ apply{I}(pipe::OptNotPipe{I}, X::I) =
     let y = unwrap(apply(pipe.F, X))::Nullable{Bool}
         wrap(Opt{Bool}, !isnull(y) ? Nullable{Bool}(!get(y)) : Nullable{Bool}())
     end
+
+imode(pipe::OptNotPipe) = imode(pipe.F)
+omode(::OptNotPipe) = OutputMode(true, false, false, false)
 
 
 NotPipe(F::AbstractPipe) =
@@ -1081,6 +1278,9 @@ show(io::IO, pipe::IsoAndPipe) = print(io, "IsoAnd($(pipe.F), $(pipe.G))")
 
 apply{I}(pipe::IsoAndPipe{I}, X::I) =
     wrap(Iso{Bool}, unwrap(apply(pipe.F, X))::Bool && unwrap(apply(pipe.G, X))::Bool)
+
+imode(pipe::IsoAndPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(::IsoAndPipe) = OutputMode(true, true, false, false)
 
 
 immutable OptAndPipe{I} <: OptPipe{I,Bool}
@@ -1105,6 +1305,9 @@ apply{I}(pipe::OptAndPipe{I}, X::I) =
         return Opt{Bool}(false)
     end
 
+imode(pipe::OptAndPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(::OptAndPipe) = OutputMode(true, false, false, false)
+
 
 AndPipe{I1,O1,I2,O2}(F::AbstractPipe{I1,O1}, G::AbstractPipe{I2,O2}) =
     let I = max(I1, I2)
@@ -1123,6 +1326,9 @@ show(io::IO, pipe::IsoOrPipe) = print(io, "IsoOr($(pipe.F), $(pipe.G))")
 
 apply{I}(pipe::IsoOrPipe{I}, X::I) =
     wrap(Iso{Bool}, (unwrap(apply(pipe.F, X))::Bool || unwrap(apply(pipe.G, X))::Bool))
+
+imode(pipe::IsoOrPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(::IsoOrPipe) = OutputMode(true, true, false, false)
 
 
 immutable OptOrPipe{I} <: OptPipe{I,Bool}
@@ -1146,6 +1352,9 @@ apply{I}(pipe::OptOrPipe{I}, X::I) =
         end
         return Opt{Bool}(true)
     end
+
+imode(pipe::OptOrPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(::OptOrPipe) = OutputMode(true, false, false, false)
 
 
 OrPipe{I1,O1,I2,O2}(F::AbstractPipe{I1,O1}, G::AbstractPipe{I2,O2}) =
@@ -1171,6 +1380,9 @@ show(io::IO, pipe::EQPipe) = print(io, "EQ($(pipe.F), $(pipe.G))")
 apply{I,T}(pipe::EQPipe{I,T}, X::I) =
     Iso(unwrap(apply(pipe.F, X))::T == unwrap(apply(pipe.G, X))::T)
 
+imode(pipe::EQPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(::EQPipe) = OutputMode(true, true, false, false)
+
 
 immutable NEPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
     F::IsoPipe{I,T}
@@ -1186,6 +1398,9 @@ show(io::IO, pipe::NEPipe) = print(io, "NE($(pipe.F), $(pipe.G))")
 
 apply{I,T}(pipe::NEPipe{I,T}, X::I) =
     Iso(unwrap(apply(pipe.F, X))::T != unwrap(apply(pipe.G, X))::T)
+
+imode(pipe::NEPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(::NEPipe) = OutputMode(true, true, false, false)
 
 
 immutable InPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
@@ -1203,6 +1418,9 @@ show(io::IO, pipe::InPipe) = print(io, "In($(pipe.F), $(pipe.G))")
 apply{I,T}(pipe::InPipe{I,T}, X::I) =
     Iso(unwrap(apply(pipe.F, X))::T in unwrap(apply(pipe.G, X))::Vector{T})
 
+imode(pipe::InPipe) = max(imode(pipe.F), imode(pipe.G))
+omode(::InPipe) = OutputMode(true, true, false, false)
+
 
 macro defunarypipe(Name, op, T1, T2)
     return esc(quote
@@ -1211,6 +1429,8 @@ macro defunarypipe(Name, op, T1, T2)
         end
         show(io::IO, pipe::$Name) = print(io, "(", $op, ")(", pipe.F, ")")
         apply{I}(pipe::$Name, X::I) = wrap(Iso{$T2}, $op(unwrap(apply(pipe.F, X))::$T1)::$T2)
+        imode(pipe::$Name) = imode(pipe.F)
+        omode(::$Name) = OutputMode(true, true, false, false)
     end)
 end
 
@@ -1227,6 +1447,8 @@ macro defbinarypipe(Name, op, T1, T2, T3)
         show(io::IO, pipe::$Name) = print(io, "(", $op, ")(", pipe.F, ", ", pipe.G, ")")
         apply{I}(pipe::$Name, X::I) =
             wrap(Iso{$T3}, $op(unwrap(apply(pipe.F, X))::$T1, unwrap(apply(pipe.G, X))::$T2)::$T3)
+        imode(pipe::$Name) = max(imode(pipe.F), imode(pipe.G))
+        omode(::$Name) = OutputMode(true, true, false, false)
     end)
 end
 
@@ -1254,6 +1476,12 @@ apply{I,T}(pipe::OptToVoidPipe{I,T}, X::I) =
         Iso{Union{T,Void}}(isnull(Y) ? nothing : get(Y))
     end
 
+imode(pipe::OptToVoidPipe) = imode(pipe.F)
+omode(::OptToVoidPipe) =
+    let mode = omode(pipe.F)
+        OutputMode(true, true, mode.exclusive, mode.reachable)
+    end
+
 
 immutable DictPipe{I} <: IsoPipe{I,Dict{Any,Any}}
     fields::Tuple{Vararg{Pair{Symbol}}}
@@ -1274,6 +1502,11 @@ apply{I}(pipe::DictPipe, X::I) =
         end
         Iso(d)
     end
+
+imode(pipe::DictPipe) =
+    isempty(pipe.fields) ? InputMode((), false) : max([imode(F) for (n, F) in pipe.fields]...)
+omode(pipe::DictPipe) =
+    OutputMode(true, true, false, false)
 
 
 immutable IsoParamPipe{Ns,P,T} <: AbstractPipe{Ctx{Ns,Tuple{P},T}, Iso{P}}
@@ -1318,6 +1551,8 @@ show(io::IO, pipe::ForkPipe) = print(io, "Fork()")
 
 apply{T}(pipe::ForkPipe{T}, X::Temp{T}) = Seq(X.vals)
 
+omode(::ForkPipe) = OutputMode(false, true, false, false)
+
 
 immutable ForkByPipe{T,K} <: AbstractPipe{Temp{T}, Seq{T}}
     key::AbstractPipe{Iso{T}, Iso{K}}
@@ -1335,6 +1570,8 @@ apply{T,K}(pipe::ForkByPipe{T,K}, X::Temp{T}) =
         end
         Seq(out)
     end
+
+omode(::ForkByPipe) = OutputMode(false, true, false, false)
 
 
 immutable FuturePipe{T} <: AbstractPipe{Temp{T}, Seq{T}}

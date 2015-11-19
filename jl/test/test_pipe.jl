@@ -23,16 +23,16 @@ primes = RBT.SetPipe(:primes, Int[2,3,5,7,11])
 
 @test primes() == Int[2,3,5,7,11]
 
-sqmap = RBT.IsoMapPipe(:sq, Dict(1=>1,2=>4,3=>9,4=>16,5=>25,6=>36,7=>49,8=>64,9=>81,10=>100,11=>121))
+sqmap = RBT.IsoMapPipe(:sq, Dict(1=>1,2=>4,3=>9,4=>16,5=>25,6=>36,7=>49,8=>64,9=>81,10=>100,11=>121), true, false)
 
 @test sqmap(5) == 25
 
-decmap = RBT.OptMapPipe(:dec, Dict(2=>1,3=>2,4=>3,5=>4,6=>5,7=>6,8=>7,9=>8))
+decmap = RBT.OptMapPipe(:dec, Dict(2=>1,3=>2,4=>3,5=>4,6=>5,7=>6,8=>7,9=>8), true, false)
 
 @test get(decmap(5)) == 4
 @test isnull(decmap(1))
 
-divmap = RBT.SeqMapPipe(:div, Dict(4=>[2],6=>[2,3],8=>[2,4],9=>[3],10=>[2,5]))
+divmap = RBT.SeqMapPipe(:div, Dict(4=>[2],6=>[2,3],8=>[2,4],9=>[3],10=>[2,5]), false, false, false)
 
 @test divmap(6) == Int[2,3]
 @test divmap(3) == Int[]

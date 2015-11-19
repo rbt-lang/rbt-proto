@@ -50,6 +50,7 @@ immutable InputMode
 end
 
 # Structure of composition.
+max(mode::InputMode) = mode
 max(mode1::InputMode, mode2::InputMode) =
     let temporal = max(mode1.temporal, mode2.temporal),
         params = mode1.params
@@ -93,6 +94,7 @@ immutable OutputMode
 end
 
 # Composition.
+max(mode::OutputMode) = mode
 max(mode1::OutputMode, mode2::OutputMode) =
     OutputMode(
         min(mode1.singular, mode2.singular),
@@ -217,14 +219,39 @@ call{I,O}(pipe::AbstractPipe{I,O}, x=(); params...) =
 # Returns an equivalent, but improved pipeline.
 optimize(pipe::AbstractPipe) = pipe
 
+# Structure descriptors.
+input(pipe::AbstractPipe) = Input(idomain(pipe), imode(pipe))
+idomain(pipe::AbstractPipe) = itype(pipe)
+imode{T,O}(pipe::AbstractPipe{Iso{T},O}) =
+    InputMode(false, ())
+imode{T,O}(pipe::AbstractPipe{Temp{T},O}) =
+    InputMode(true, ())
+imode{Ns,Ps,T,O}(pipe::AbstractPipe{Ctx{Ns,Ps,T},O}) =
+    let params = ([Pair{Symbol,Type}(Ns[j], Ps.parameters[j]) for j = 1:length(Ns)]...)
+        InputMode(false, params)
+    end
+imode{Ns,Ps,T,O}(pipe::AbstractPipe{CtxTemp{Ns,Ps,T},O}) =
+    let params = ([Pair{Symbol,Type}(Ns[j], Ps.parameters[j]) for j = 1:length(Ns)]...)
+        InputMode(true, params)
+    end
+
+output(pipe::AbstractPipe) = Output(odomain(pipe), omode(pipe))
+odomain(pipe::AbstractPipe) = otype(pipe)
+omode{I,T}(pipe::AbstractPipe{I,Iso{T}}) =
+    OutputMode(true, true, false, false)
+omode{I,T}(pipe::AbstractPipe{I,Opt{T}}) =
+    OutputMode(true, false, false, false)
+omode{I,T}(pipe::AbstractPipe{I,Seq{T}}) =
+    OutputMode(false, false, false, false)
+
 # Encapsulates the compiler state and the query combinator.
 immutable Query
     # Local namespace.
     scope::AbstractScope
     # The input type of the combinator.
-    input::Input
+    #input::Input
     # The output type of the combinator.
-    output::Output
+    #output::Output
     # Execution pipeline that implements the combinator.
     pipe::AbstractPipe
     # Extractors of individual fields for a record-generating combinator.
@@ -257,7 +284,6 @@ typealias NullableSyntax Nullable{AbstractSyntax}
 # Fresh state for the given scope.
 Query(
     scope::AbstractScope, domain::Type=Unit;
-    input=Input(domain), output=Output(domain, exclusive=true, reachable=true),
     pipe=HerePipe{domain}(),
     fields=NullableQueries(),
     identity=NullableQuery(),
@@ -267,7 +293,7 @@ Query(
     tag=NullableSymbol(),
     syntax=NullableSyntax(),
     origin=NullableQuery()) =
-    Query(scope, input, output, pipe, fields, identity, selector, defs, order, tag, syntax, origin)
+    Query(scope, pipe, fields, identity, selector, defs, order, tag, syntax, origin)
 
 # Initial compiler state.
 Query(db::AbstractDatabase; params...) = Query(scope(db, Dict{Symbol,Type}(params)))
@@ -275,14 +301,14 @@ Query(db::AbstractDatabase; params...) = Query(scope(db, Dict{Symbol,Type}(param
 # Clone constructor.
 Query(
     q::Query;
-    scope=nothing, input=nothing, output=nothing, pipe=nothing,
+    scope=nothing, pipe=nothing,
     fields=nothing, identity=nothing, selector=nothing, defs=nothing,
     order=nothing, tag=nothing,
     syntax=nothing, origin=nothing) =
     Query(
         scope != nothing ? scope : q.scope,
-        input != nothing ? input : q.input,
-        output != nothing ? output : q.output,
+        #input != nothing ? input : q.input,
+        #output != nothing ? output : q.output,
         pipe != nothing ? pipe : q.pipe,
         fields != nothing ? fields : q.fields,
         identity != nothing ? identity : q.identity,
@@ -300,40 +326,42 @@ scope(q::Query) = q.scope
 pipe(q::Query) = q.pipe
 
 # The input type and structure (e.g. `Iso{Int}`).
-input(q::Query) = q.input
+input(q::Query) = input(q.pipe)
 # The output type and structure.
-output(q::Query) = q.output
+output(q::Query) = output(q.pipe)
 
 # Type and structure of input and output.
-idomain(q::Query) = domain(q.input)
-imode(q::Query) = mode(q.input)
-ifunctor(q::Query) = functor(q.input)
-odomain(q::Query) = domain(q.output)
-omode(q::Query) = mode(q.output)
-ofunctor(q::Query) = functor(q.output)
+idomain(q::Query) = idomain(q.pipe)
+imode(q::Query) = imode(q.pipe)
+ifunctor(q::Query) = ifunctor(q.pipe)
+odomain(q::Query) = odomain(q.pipe)
+omode(q::Query) = omode(q.pipe)
+ofunctor(q::Query) = ofunctor(q.pipe)
 
 # Output predicates.
-singular(q::Query) = singular(q.output)
-complete(q::Query) = complete(q.output)
-exclusive(q::Query) = exclusive(q.output)
-reachable(q::Query) = reachable(q.output)
+singular(q::Query) = singular(output(q))
+complete(q::Query) = complete(output(q))
+exclusive(q::Query) = exclusive(output(q))
+reachable(q::Query) = reachable(output(q))
 
 # Displays the query.
 function show(io::IO, q::Query)
     print(io, isnull(q.syntax) ? "(?)" : get(q.syntax), " :: ")
-    if q.input.domain != Unit || q.input.mode.temporal || !isempty(q.input.mode.params)
-        print(io, q.input.domain == Unit ? "()" : q.input.domain)
-        if q.input.mode.temporal
+    i = input(q)
+    o = output(q)
+    if i.domain != Unit || i.mode.temporal || !isempty(i.mode.params)
+        print(io, i.domain == Unit ? "()" : i.domain)
+        if i.mode.temporal
             print(io, "...")
         end
-        for (n, T) in q.input.mode.params
+        for (n, T) in i.mode.params
             print(io, " * (", n, " => ", T, ")")
         end
         print(io, " -> ")
     end
-    T = q.output.domain
-    T = q.output.mode.singular && q.output.mode.complete ? T :
-        q.output.mode.singular ? Nullable{T} : Vector{T}
+    T = o.domain
+    T = o.mode.singular && o.mode.complete ? T :
+        o.mode.singular ? Nullable{T} : Vector{T}
     print(io, T)
 end
 
@@ -366,7 +394,7 @@ root(q::Query) = root(q.scope)
 empty(q::Query) = empty(q.scope)
 
 # List of parameters.
-params(q::Query) = q.input.mode.params
+params(q::Query) = input(q).mode.params
 
 # For dispatching on the function name.
 immutable Fn{name}

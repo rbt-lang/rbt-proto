@@ -18,12 +18,10 @@ function lookup(self::RootScope, name::Symbol)
         class = self.db.schema.name2class[name]
         scope = ClassScope(self.db, name, self.params)
         T = Entity{name}
-        input = Input(Unit)
-        output = Output(T, singular=false, complete=false, exclusive=true, reachable=true)
         pipe = SetPipe(name, self.db.instance.sets[name])
         tag = NullableSymbol(name)
         syntax = NullableSyntax(ApplySyntax(name, []))
-        query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax)
+        query = Query(scope, pipe=pipe, tag=tag, syntax=syntax)
         selector = mkselector(
             query,
             class.select != nothing ? class.select : tuple(keys(class.arrows)...))
@@ -56,33 +54,29 @@ function lookup(self::ClassScope, name::Symbol)
     if name == :id
         scope = EmptyScope(self.db, self.params)
         IT = Entity{self.name}
-        input = Input(IT)
-        output = Output(Int, exclusive=true)
-        pipe = FieldPipe(IT, :id, Iso{Int})
+        pipe = FieldPipe(IT, :id, Iso{Int}, true, true, true, true)
         tag = NullableSymbol(name)
         syntax = NullableSyntax(ApplySyntax(name, []))
-        return NullableQuery(Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax))
+        return NullableQuery(Query(scope, pipe=pipe, tag=tag, syntax=syntax))
     elseif name in keys(class.name2arrow)
         tag = NullableSymbol(name)
         arrow = class.name2arrow[name]
         map = self.db.instance.maps[(self.name, arrow.name)]
         IT = Entity{self.name}
         OT = domain(arrow.output)
-        input = Input(IT)
-        output = arrow.output
         if singular(arrow.output) && complete(arrow.output)
-            pipe = IsoMapPipe(name, map)
+            pipe = IsoMapPipe(name, map, exclusive(arrow.output), reachable(arrow.output))
         elseif singular(arrow.output)
-            pipe = OptMapPipe(name, map)
+            pipe = OptMapPipe(name, map, exclusive(arrow.output), reachable(arrow.output))
         else
-            pipe = SeqMapPipe(name, map)
+            pipe = SeqMapPipe(name, map, complete(arrow.output), exclusive(arrow.output), reachable(arrow.output))
         end
         syntax = NullableSyntax(ApplySyntax(name, []))
         if OT <: Entity
             targetname = classname(OT)
             targetclass = self.db.schema.name2class[targetname]
             scope = ClassScope(self.db, targetname, self.params)
-            query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax)
+            query = Query(scope, pipe=pipe, tag=tag, syntax=syntax)
             selector = mkselector(
                 query,
                 arrow.select != nothing ? arrow.select :
@@ -92,7 +86,7 @@ function lookup(self::ClassScope, name::Symbol)
             query = Query(query, selector=selector, identity=identity)
         else
             scope = EmptyScope(self.db, self.params)
-            query = Query(scope, input=input, output=output, pipe=pipe, tag=tag, syntax=syntax)
+            query = Query(scope, pipe=pipe, tag=tag, syntax=syntax)
         end
         return NullableQuery(query)
     else
@@ -154,16 +148,10 @@ function param2q(base::AbstractScope, name::Symbol, T::Type)
     end
     scope = empty(base)
     IT = isa(base, ClassScope) ? Entity{base.name} : Unit
-    input = Input(IT, params=(Pair{Symbol,Type}(name, T),))
-    if T <: Nullable || T <: Vector
-        output = Output(eltype(T), singular=(T<:Nullable), complete=false)
-    else
-        output = Output(T)
-    end
     pipe =
         T <: Vector ? SeqParamPipe(IT, name, eltype(T)) :
         T <: Nullable ? OptParamPipe(IT, name, eltype(T)) : IsoParamPipe(IT, name, T)
-    return Query(scope, input=input, output=output, pipe=pipe)
+    return Query(scope, pipe=pipe)
 end
 
 scope(db::Database) = RootScope(db, Dict{Symbol,Type}())

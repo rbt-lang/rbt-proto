@@ -103,18 +103,16 @@ function compile(::Fn(:dataframe), base::Query, flow::Query)
     flow = select(flow)
     if !isnull(flow.fields)
         fields = mkdffields(flow)
-        output = Output(DataFrame)
         pipe =
             singular(flow) && complete(flow) ? IsoDataFramePipe(flow.pipe, fields) :
             singular(flow) ? OptDataFramePipe(flow.pipe, fields) :
             SeqDataFramePipe(flow.pipe, fields)
-        return Query(empty(flow), input=flow.input, output=output, pipe=pipe)
+        return Query(empty(flow), pipe=pipe)
     else
         flow = select(flow)
         if singular(flow) && !complete(flow)
-            output = Output(O, exclusive=exclusive(flow), reachable=reachable(flow))
             pipe = OptToNAPipe(flow.pipe)
-            flow = Query(flow, output=output, pipe=pipe)
+            flow = Query(flow, pipe=pipe)
         end
     end
     return flow
