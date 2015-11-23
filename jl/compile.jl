@@ -215,8 +215,37 @@ compile(fn::Fn(:select), base::Query, flow::AbstractSyntax, ops::AbstractSyntax.
 function compile(::Fn(:select), base::Query, flow::Query, ops::Query...)
     reqcomposable(base, flow)
     reqcomposable(flow, ops...)
-    selector = record(flow, [select(op) for op in ops]...)
-    return Query(flow, selector=selector)
+    left = record(flow, ops...)
+    right = Query(flow, pipe=HerePipe(odomain(flow)))
+    scope = empty(base)
+    I = odomain(base)
+    O = Tuple{odomain(left), odomain(right)}
+    pipe = left.pipe * right.pipe
+    left_field = ItemPipe(O, 1)
+    right_field = ItemPipe(O, 2)
+    defs = Dict{Symbol,Query}()
+    for (k, op) in enumerate(ops)
+        if !isnull(op.tag)
+            field = Query(op, pipe=left_field >> ItemPipe(odomain(left), k, ofunctor(op)))
+            defs[get(op.tag)] = field
+        end
+    end
+    if !isnull(flow.tag)
+        defs[get(flow.tag)] = Query(flow, pipe=right_field)
+    end
+    if !isnull(flow.identity)
+        identity = get(flow.identity)
+        identity = Query(identity, pipe=right_field >> identity.pipe)
+    else
+        identity = Query(flow, pipe=right_field)
+    end
+    if !isnull(left.selector)
+        selector = get(left.selector)
+        selector = Query(selector, pipe=left_field >> selector.pipe)
+    else
+        selector = Query(left, pipe=left_field)
+    end
+    return flow >> Query(scope, pipe=pipe, defs=defs, identity=identity, selector=selector)
 end
 
 
