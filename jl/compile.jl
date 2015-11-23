@@ -2,7 +2,7 @@
 
 reqcomposable(f, gs...) =
     for g in gs
-        odomain(f) == idomain(g) || error("expected composable expressions: $f and $g")
+        odomain(f) <: idomain(g) || error("expected composable expressions: $f and $g")
     end
 
 reqsingular(fs...) =
@@ -164,27 +164,15 @@ compile(::Fn(:link), base::Query, pred::AbstractSyntax, arg::AbstractSyntax) =
     end
 
 
-function compile(::Fn(:fork), base::Query, ops::Query...)
+function compile(fn::Fn(:before, :and_before, :after, :and_after, :around, :and_around), base::Query, ops::Query...)
     reqcomposable(base, ops...); reqsingular(ops...); reqcomplete(ops...)
     T = odomain(base)
+    dir = fn in (Fn{:before}, Fn{:and_before}) ? -1 : fn in (Fn{:after}, Fn{:and_after}) ? 1 : 0
+    reflexive = fn in (Fn{:and_before}, Fn{:and_after}, Fn{:and_around})
     pipe =
-        isempty(ops) ? ForkPipe(T) :
-        length(ops) == 1 ? ForkByPipe(identify(ops[1]).pipe) :
-            ForkByPipe(identify(record(base, ops...)).pipe)
-    return Query(base, pipe=pipe)
-end
-
-
-function compile(fn::Fn(:future, :past), base::Query)
-    T = odomain(base)
-    pipe = FuturePipe(T, fn == Fn{:future} ? 1 : -1)
-    return Query(base, pipe=pipe)
-end
-
-
-function compile(fn::Fn(:next, :prev), base::Query)
-    T = odomain(base)
-    pipe = NextPipe(T, fn == Fn{:next} ? 1 : -1)
+        isempty(ops) ? AroundPipe(T, dir, reflexive) :
+        length(ops) == 1 ? AroundByPipe(identify(ops[1]).pipe, dir, reflexive) :
+            AroundByPipe(identify(record(base, ops...)).pipe, dir, reflexive)
     return Query(base, pipe=pipe)
 end
 
@@ -363,10 +351,10 @@ function compile(fn::Fn(:sort), base::Query, flow::Query, ops::Query...)
 end
 
 
-function compile(::Fn(:connect), base::Query, op::Query)
+function compile(fn::Fn(:connect, :and_connect), base::Query, op::Query)
     reqcomposable(base, op); reqpartial(op); reqodomain(idomain(op), op)
     I = idomain(op)
-    pipe = ConnectPipe(op.pipe, false)
+    pipe = ConnectPipe(op.pipe, fn == Fn{:and_connect})
     return Query(op, pipe=pipe)
 end
 

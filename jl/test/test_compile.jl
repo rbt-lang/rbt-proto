@@ -159,15 +159,15 @@ q(X=5, Y=4, Z=[2,3,4,5])
 @query(department:filter(count(employee)>SIZE):select(name,count(employee)-SIZE), SIZE=1000)
 @query(employee:filter(department.name in DEPTS), DEPTS=["POLICE", "FIRE"])
 
-@query(department:select(name, prev_name => prev.name, next_name => next.name))
-@query(department:select(name, past_names => past.name))
-@query(department:select(1+count(past), name))
-@query(department:define(size => count(employee)):select(name, size, total => size+sum(past.size)))
-@query(department:define(size => count(employee)):filter(size == max(fork.size)):select(name, size))
+@query(department:select(name, previous_name => first(before).name, next_name => first(after).name))
+@query(department:select(name, past_names => before.name))
+@query(department:select(1+count(before), name))
+@query(department:define(size => count(employee)):select(name, size, total => sum(and_before.size)))
+@query(department:define(size => count(employee)):filter(size == max(and_around.size)):select(name, size))
 @query(
     employee
     :filter(department.name == DEPT)
     :dataframe(
-        name, surname, position, salary, salary_diff => max(fork(position).salary)-salary),
+        name, surname, position, salary, salary_diff => max(and_around(position).salary)-salary),
     DEPT="TREASURER")
 

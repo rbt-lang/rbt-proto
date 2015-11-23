@@ -1542,63 +1542,60 @@ apply{Ns,P,T}(pipe::SeqParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{Vector{P}},T}) =
     wrap(Seq{P}, X.ctx[1])
 
 
-immutable ForkPipe{T} <: AbstractPipe{Temp{T}, Seq{T}}
+immutable AroundPipe{T} <: AbstractPipe{Temp{T}, Seq{T}}
+    dir::Int
+    reflexive::Bool
 end
 
-ForkPipe(T::Type) = ForkPipe{T}()
+AroundPipe(T::Type, dir, reflexive) = AroundPipe{T}(dir, reflexive)
 
-show(io::IO, pipe::ForkPipe) = print(io, "Fork()")
+show(io::IO, pipe::AroundPipe) = print(io, "Around($(pipe.dir), $(pipe.reflexive))")
 
-apply{T}(pipe::ForkPipe{T}, X::Temp{T}) = Seq(X.vals)
+apply{T}(pipe::AroundPipe{T}, X::Temp{T}) =
+    if pipe.dir < 0
+        pipe.reflexive ? Seq(X.vals[1:X.idx]) : Seq(X.vals[1:X.idx-1])
+    elseif pipe.dir > 0
+        pipe.reflexive ? Seq(X.vals[X.idx:end]) : Seq(X.vals[X.idx+1:end])
+    else
+        pipe.reflexive ? Seq(X.vals) : Seq(T[X.vals[1:X.idx-1]; X.vals[X.idx+1:end]])
+    end
 
-omode(::ForkPipe) = OutputMode(false, true, false, false)
+omode(pipe::AroundPipe) = OutputMode(false, pipe.reflexive, false, false)
 
 
-immutable ForkByPipe{T,K} <: AbstractPipe{Temp{T}, Seq{T}}
+immutable AroundByPipe{T,K} <: AbstractPipe{Temp{T}, Seq{T}}
     key::AbstractPipe{Iso{T}, Iso{K}}
+    dir::Int
+    reflexive::Bool
 end
 
-show(io::IO, pipe::ForkByPipe) = print(io, "ForkBy($(pipe.dir))")
+show(io::IO, pipe::AroundByPipe) = print(io, "AroundBy($(pipe.dir), $(pipe.reflexive))")
 
-apply{T,K}(pipe::ForkByPipe{T,K}, X::Temp{T}) =
+apply{T,K}(pipe::AroundByPipe{T,K}, X::Temp{T}) =
     let key = unwrap(apply(pipe.key, Iso(X.vals[X.idx]))),
         out = T[]
-        for x in X.vals
-            if unwrap(apply(pipe.key, Iso(x))) == key
-                push!(out, x)
+        if pipe.dir <= 0
+            for j = 1:X.idx-1
+                x = X.vals[j]
+                if unwrap(apply(pipe.key, Iso(x))) == key
+                    push!(out, x)
+                end
+            end
+        end
+        if pipe.reflexive
+            push!(out, X.vals[X.idx])
+        end
+        if pipe.dir >= 0
+            for j = X.idx+1:length(X.vals)
+                x = X.vals[j]
+                if unwrap(apply(pipe.key, Iso(x))) == key
+                    push!(out, x)
+                end
             end
         end
         Seq(out)
     end
 
-omode(::ForkByPipe) = OutputMode(false, true, false, false)
-
-
-immutable FuturePipe{T} <: AbstractPipe{Temp{T}, Seq{T}}
-    dir::Int
-end
-
-FuturePipe(T::Type, dir::Int) = FuturePipe{T}(dir)
-
-show(io::IO, pipe::FuturePipe) = print(io, "Future($(pipe.dir))")
-
-apply{T}(pipe::FuturePipe{T}, X::Temp{T}) =
-    Seq(pipe.dir >= 0 ? X.vals[X.idx+1:end] : reverse(X.vals[1:X.idx-1]))
-
-
-immutable NextPipe{T} <: AbstractPipe{Temp{T}, Opt{T}}
-    dir::Int
-end
-
-NextPipe(T::Type, dir::Int) = NextPipe{T}(dir)
-
-show(io::IO, pipe::NextPipe) = print(io, "Next($(pipe.dir))")
-
-apply{T}(pipe::NextPipe{T}, X::Temp{T}) =
-    if pipe.dir >= 0
-        X.idx < endof(X.vals) ? Opt(X.vals[X.idx+1]) : Opt{T}()
-    else
-        X.idx > 1 ? Opt(X.vals[X.idx-1]) : Opt{T}()
-    end
+omode(pipe::AroundByPipe) = OutputMode(false, pipe.reflexive, false, false)
 
 
