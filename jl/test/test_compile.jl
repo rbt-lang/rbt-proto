@@ -7,6 +7,17 @@ include("../citydb.jl")
 
 setdb(citydb)
 
+function RBT.query(state, expr; params...)
+    params_signature = ([(name, typeof(param)) for (name, param) in params]...)
+    q = RBT.prepare(state, expr; params_signature...)
+    println(repr(q))
+    println(repr(q.pipe))
+    r = RBT.execute(q; params...)
+    #display(r)
+    #println()
+    return r
+end
+
 @query(6*(3+4))
 @query(department)
 @query(department.name)

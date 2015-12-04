@@ -1,27 +1,47 @@
+#
+# Syntax tree and parsing.
+#
 
-const LiteralType = Union{Void,Int,Float64,AbstractString}
 
-immutable LiteralSyntax{T<:LiteralType} <: AbstractSyntax
-    val::T
+# Parsed query.
+abstract AbstractSyntax
+
+# Parse a query.
+syntax(syntax::AbstractSyntax) = syntax
+
+# Literal node.
+typealias Scalar Union{Void,Int,Float64,AbstractString}
+
+immutable LiteralSyntax <: AbstractSyntax
+    val::Scalar
 end
 
-show(io::IO, ::LiteralSyntax{Void}) = print(io, "null")
-show(io::IO, syntax::LiteralSyntax) = show(io, syntax.val)
+show(io::IO, syntax::LiteralSyntax) = print(io, syntax.val == nothing ? "null" : syntax.val)
 
-
+# Combinator constructor.
 immutable ApplySyntax <: AbstractSyntax
     fn::Symbol
     args::Vector{AbstractSyntax}
+    postfix::Bool
 end
+
+ApplySyntax(fn) = ApplySyntax(fn, [], false)
+ApplySyntax(fn, args) = ApplySyntax(fn, args, false)
 
 show(io::IO, syntax::ApplySyntax) =
     if isempty(syntax.args)
         print(io, syntax.fn)
+    elseif syntax.postfix
+        if length(syntax.args) == 1
+            print(io, syntax.args[1], ":", syntax.fn)
+        else
+            print(io, syntax.args[1], ":", syntax.fn, "(", join(syntax.args[2:end], ","), ")")
+        end
     else
         print(io, syntax.fn, "(", join(syntax.args, ","), ")")
     end
 
-
+# Composition of combinators.
 immutable ComposeSyntax <: AbstractSyntax
     f::AbstractSyntax
     g::AbstractSyntax
@@ -29,17 +49,15 @@ end
 
 show(io::IO, syntax::ComposeSyntax) = print(io, syntax.f, ".", syntax.g)
 
-
+# Parsing.
 syntax(str::AbstractString) =
     ex2syn(parse(string("(", str, ")")))
-
-syntax(ex::Union{Symbol,QuoteNode,LiteralType,Expr}) =
+syntax(ex::Union{Symbol,QuoteNode,Scalar,Expr}) =
     ex2syn(parse(string("(", ex, ")")))
-
 
 ex2syn(ex::Symbol) = ex == :null ? LiteralSyntax(nothing) : ApplySyntax(ex, [])
 ex2syn(ex::QuoteNode) = ApplySyntax(ex.value, [])
-ex2syn(ex::LiteralType) =
+ex2syn(ex::Scalar) =
     let ex = isa(ex, AbstractString) ? UTF8String(ex) : ex
         LiteralSyntax(ex)
     end
@@ -56,13 +74,13 @@ function ex2syn(ex::Expr)
                 ex = ex.args[1]
             end
             if isa(ex, Symbol)
-                syn = ApplySyntax(ex, [syn])
+                syn = ApplySyntax(ex, [syn], true)
             elseif isa(ex, Expr) && ex.head == :call && isa(ex.args[1], Symbol)
                 args = AbstractSyntax[syn]
                 append!(args, map(ex2syn, ex.args[2:end]))
-                syn = ApplySyntax(ex.args[1], args)
+                syn = ApplySyntax(ex.args[1], args, true)
             else
-                error("invalid postfix notation: $ex")
+                error("invalid query postfix notation: $ex")
             end
             if tail != nothing
                 syn = ComposeSyntax(syn, tail)
@@ -92,7 +110,7 @@ function ex2syn(ex::Expr)
         end
         return op
     else
-        error("invalid syntax: $ex")
+        error("invalid query notation: $ex")
     end
 end
 
@@ -103,5 +121,5 @@ pushcall(ex::Expr, args) =
     Expr(ex.head, ex.args[1:end-1]..., pushcall(ex.args[end], args))
 
 pushcall(ex, args) =
-    error("invalid call syntax: $ex")
+    error("invalid query call notation: $ex")
 

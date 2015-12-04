@@ -1,1601 +1,2248 @@
-
-immutable HerePipe{T} <: AbstractPipe{Iso{T}, Iso{T}}
-end
-
-HerePipe(T::Type=Any) = HerePipe{T}()
-
-show(io::IO, ::HerePipe) = print(io, "HERE")
-
-apply{T}(::HerePipe{T}, X::Iso{T}) = X
-
-imode(::HerePipe) = InputMode(false, ())
-omode(::HerePipe) = OutputMode(true, true, true, true)
+#
+# A library of combinators.
+#
 
 
-immutable ConstPipe{IT,OT} <: AbstractPipe{Iso{IT}, Iso{OT}}
-    val::OT
-end
+#
+# Combinator interface.
+#
 
-ConstPipe(IT::Type, val) = ConstPipe{IT,typeof(val)}(val)
-ConstPipe(val) = ConstPipe(Unit, val)
+abstract AbstractPipe
 
-show(io::IO, pipe::ConstPipe) = print(io, pipe.val)
+showall(io::IO, pipe::AbstractPipe) =
+    print(io, "$pipe :: $(mapping(pipe))")
 
-apply{IT,OT}(pipe::ConstPipe{IT,OT}, ::Iso{IT}) = Iso(pipe.val)
+# Input and output.
+input(pipe::AbstractPipe) = pipe.input
+output(pipe::AbstractPipe) = pipe.output
 
-imode(::ConstPipe) = InputMode(false, ())
-omode{IT,OT}(::ConstPipe{IT,OT}) = OutputMode(true, true, IT == Unit, OT == Unit)
+# Examines structure.
+arms(::AbstractPipe) = AbstractPipe[]
+getindex(pipe::AbstractPipe, idx) = arms(pipe)[idx]
+length(pipe::AbstractPipe) = length(arms(pipe))
 
-
-immutable NullPipe{IT,OT} <: AbstractPipe{Iso{IT}, Opt{OT}}
-end
-
-NullPipe(IT::Type=Unit, OT::Type=Union{}) = NullPipe{IT,OT}()
-
-show(io::IO, ::NullPipe) = print(io, "NULL")
-
-apply{IT,OT}(pipe::NullPipe{IT,OT}, ::Iso{IT}) = Opt{OT}()
-
-imode(::NullPipe) = InputMode(false, ())
-omode(::NullPipe) = OutputMode(true, false, true, OT == Union{})
-
-
-immutable SetPipe{T} <: AbstractPipe{Iso{Unit},Seq{T}}
-    name::Symbol
-    set::Vector{T}
-end
-
-show(io::IO, pipe::SetPipe) = print(io, "Set(<$(pipe.name)>)")
-
-apply{T}(pipe::SetPipe{T}, ::Iso{Unit}) = wrap(Seq{T}, pipe.set)
-
-imode(::SetPipe) = InputMode(false, ())
-omode(::SetPipe) = OutputMode(false, false, true, true)
-
-
-immutable IsoMapPipe{IT,OT} <: AbstractPipe{Iso{IT},Iso{OT}}
-    name::Symbol
-    map::Dict{IT,OT}
-    exclusive::Bool
-    reachable::Bool
-end
-
-show(io::IO, pipe::IsoMapPipe) = print(io, "IsoMap(<$(pipe.name)>)")
-
-apply{IT,OT}(pipe::IsoMapPipe{IT,OT}, X::Iso{IT}) =
-    wrap(Iso{OT}, pipe.map[unwrap(X)])
-
-imode(::IsoMapPipe) = InputMode(false, ())
-omode(pipe::IsoMapPipe) = OutputMode(true, true, pipe.exclusive, pipe.reachable)
-
-
-immutable OptMapPipe{IT,OT} <: AbstractPipe{Iso{IT},Opt{OT}}
-    name::Symbol
-    map::Dict{IT,OT}
-    exclusive::Bool
-    reachable::Bool
-end
-
-show(io::IO, pipe::OptMapPipe) = print(io, "OptMap(<$(pipe.name)>)")
-
-apply{IT,OT}(pipe::OptMapPipe{IT,OT}, X::Iso{IT}) =
-    wrap(Opt{OT}, get(pipe.map, unwrap(X), nothing))
-
-imode(::OptMapPipe) = InputMode(false, ())
-omode(pipe::OptMapPipe) = OutputMode(true, false, pipe.exclusive, pipe.reachable)
-
-
-immutable SeqMapPipe{IT,OT} <: AbstractPipe{Iso{IT},Seq{OT}}
-    name::Symbol
-    map::Dict{IT,Vector{OT}}
-    complete::Bool
-    exclusive::Bool
-    reachable::Bool
-end
-
-show(io::IO, pipe::SeqMapPipe) = print(io, "SeqMap(<$(pipe.name)>)")
-
-apply{IT,OT}(pipe::SeqMapPipe{IT,OT}, X::Iso{IT}) =
-    wrap(Seq{OT}, get(pipe.map, unwrap(X), OT[]))
-
-imode(::SeqMapPipe) = InputMode(false, ())
-omode(pipe::SeqMapPipe) = OutputMode(false, pipe.complete, pipe.exclusive, pipe.reachable)
-
-
-immutable LiftPipe{I,O,I0,O0} <: AbstractPipe{I,O}
-    F::AbstractPipe{I0,O0}
-end
-
-LiftPipe{I0,O0}(I, F::AbstractPipe{I0,O0}, O) =
-    let I = functor(I), O = functor(O)
-        I = eltype(I) == Any ? functor(I, eltype(I0)) : I
-        O = eltype(O) == Any ? functor(O, eltype(O0)) : O
-        I == I0 && O == O0 ? F : LiftPipe{I, O, I0, O0}(F)
+foreach(f, pipe::AbstractPipe) =
+    begin
+        f(pipe)
+        for arm in arms(pipe)
+            foreach(f, arm)
+        end
+        nothing
     end
-LiftPipe{I0,O0}(I::Union{Type,Input}, F::AbstractPipe{I0,O0}) = LiftPipe(I, F, O0)
-LiftPipe{I0,O0}(F::AbstractPipe{I0,O0}, O::Union{Type,Output}) = LiftPipe(I0, F, O)
-^(I::Union{Type,Input}, F::AbstractPipe) = LiftPipe(I, F)
-^(F::AbstractPipe, O::Union{Type,Input}) = LiftPipe(F, O)
 
-show(io::IO, pipe::LiftPipe) = show(io, pipe.F)
+# Executes the combinator.
+call(pipe::AbstractPipe, args...; params...) =
+    let plan = plan(pipe),
+        X = convert(ikind(pipe), args...; params...),
+        Y = plan(X)
+        data(Y)
+    end
 
-apply{I,O,I0,O0}(pipe::LiftPipe{I,O,I0,O0}, X::I) =
-    rewrap(O, apply(pipe.F, rewrap(I0, X)::I0)::O0)::O
+# Generates execution context.
 
-omode{I,O,I0,O0}(pipe::LiftPipe{I,O,I0,O0}) =
-    max(omode(pipe.F), OutputMode(O <: Iso, O <: Iso || O <: Seq, true, true))
+ctxgen(pipe::AbstractPipe) = Pair{Symbol,Any}[]
+
+# Generates a Julia function that runs the combinator.
+
+codegen(pipe::AbstractPipe) = codegen(pipe, gensym(:X), ikind(pipe))
+
+codegen{I<:Kind}(pipe::AbstractPipe, X, ::Type{I}) =
+    let I0 = ikind(pipe)
+        if I <: I0
+            codegen(pipe, X)
+        else
+            codegen(pipe, :( lift($I0, $X) ))
+        end
+    end
+
+codegen_compose{I<:Kind,I2<:Kind,O2<:Kind}(G, ::Type{I2}, ::Type{O2}, F::AbstractPipe, X, ::Type{I}) =
+    codegen_compose(G, I2, O2, F, ikind(F), okind(F), X, I)
+
+codegen_compose{I<:Kind}(G::AbstractPipe, F::AbstractPipe, X, ::Type{I}) =
+    codegen_compose(G, ikind(G), okind(G), F, ikind(F), okind(F), X, I)
+
+codegen_map{KK<:Kind}(F::AbstractPipe, XX, ::Type{KK}) =
+    codegen_map(F, ikind(F), okind(F), XX, KK)
 
 
-immutable ComposePipe{I,O,I1,O1,I2,O2} <: AbstractPipe{I,O}
-    F::AbstractPipe{I1,O1}
-    G::AbstractPipe{I2,O2}
+abstract AbstractPlan
+
+const CACHED_PLANS = ObjectIdDict()
+
+plan(pipe::AbstractPipe) =
+    begin
+        if pipe in keys(CACHED_PLANS)
+            return CACHED_PLANS[pipe]
+        end
+        ctx = Dict{Symbol,Any}()
+        foreach(pipe) do pipe
+            for (attr, val) in ctxgen(pipe)
+                ctx[attr] = val
+            end
+        end
+        X = gensym(:X)
+        code = codegen(pipe, X, ikind(pipe))
+        name = gensym(:Plan)
+        sig = Any[]
+        args = ()
+        for attr in sort(collect(keys(ctx)))
+            val = ctx[attr]
+            push!(sig, :( $(attr)::$(typeof(val)) ))
+            args = (args..., val)
+        end
+        typedef = Expr(:type, false, Expr(:(<:), name, AbstractPlan), Expr(:block, sig...))
+        I = ikind(pipe)
+        showdef = Expr(:quote, :( (_::$name, $X::$I) -> $code ))
+        def = quote
+            $typedef
+            show(io::IO, _::$name) = show(io, $showdef)
+            call(_::$name, $X::$I) = $code
+            $name
+        end
+        Plan = eval(def)
+        plan = Plan(args...)
+        CACHED_PLANS[pipe] = plan
+        return plan
+    end
+
+
+#
+# Identity combinator maps any input to itself.
+#
+#   Here :: T -> T
+#   Here = x -> x
+#
+
+immutable HerePipe <: AbstractPipe
+    domain::Type
 end
 
-ComposePipe{I1,O1,I2,O2}(F::AbstractPipe{I1,O1}, G::AbstractPipe{I2,O2}) =
-    let I = max(I1, functor(I2, eltype(I1))),
-        O = max(O2, functor(O1, eltype(O2)))
-        @assert eltype(O1) == eltype(I2) "$F >> $G"
-        ComposePipe{I,O,I1,O1,I2,O2}(F, G)
+show(io::IO, ::HerePipe) = print(io, "Here")
+
+input(pipe::HerePipe) = Input(pipe.domain)
+output(pipe::HerePipe) = Output(pipe.domain, typemin(OutputMode))
+
+codegen(pipe::HerePipe, X) = X
+
+
+#
+# Universal combinator Unit maps any input to the canonical singleton object.
+#
+#   Unit :: I -> Unit
+#   Unit = x -> unit
+#
+# We use Unit = Void, unit = nothing.
+#
+
+immutable UnitPipe <: AbstractPipe
+    domain::Type
+end
+
+
+show(io::IO, ::UnitPipe) = print(io, "Unit")
+
+input(pipe::UnitPipe) = Input(pipe.domain)
+output(pipe::UnitPipe) =
+    Output(
+        Unit,
+        runique=(iszero(pipe.domain) || isunit(pipe.domain)),
+        rtotal=!iszero(pipe.domain))
+
+codegen(::UnitPipe, X) =
+    quote
+        Iso{Unit}(Unit())
     end
+
+
+#
+# Universal combinator Zero maps the empty set to the output.
+#
+#   Zero :: Zero -> O
+#
+
+immutable ZeroPipe <: AbstractPipe
+    domain::Type
+end
+
+show(io::IO, ::ZeroPipe) = print(io, "Zero")
+
+input(::ZeroPipe) = Input(Zero)
+output(pipe::ZeroPipe) =
+    Output(
+        pipe.domain,
+        runique=true,
+        rtotal=iszero(pipe.domain))
+
+
+#
+# Constant combinator maps the singleton to a constant value.
+#
+#   Const(val) :: Unit -> O
+#   Const(val) = x -> val
+#
+
+immutable ConstPipe <: AbstractPipe
+    val
+end
+
+ConstPipe(T, val) =
+    T <: Unit ? ConstPipe(val) : UnitPipe(T) >> ConstPipe(val)
+
+show(io::IO, pipe::ConstPipe) = print(io, "Const($(pipe.val))")
+
+input(::ConstPipe) = Input(Unit)
+output(pipe::ConstPipe) =
+    Output(
+        typeof(pipe.val),
+        runique=true,
+        rtotal=isunit(typeof(pipe.val)))
+
+codegen(pipe::ConstPipe, X) =
+    let C = pipe.val,
+        T = typeof(C)
+        quote
+            Iso{$T}($C)
+        end
+    end
+
+
+#
+# Null combinator maps the singleton to a NULL value (that is, Nullable{Union{}}()).
+#
+#   Null :: Unit -> Zero?
+#   Null = unit -> null
+#
+
+immutable NullPipe <: AbstractPipe
+end
+
+NullPipe(T) =
+    T <: Unit ? NullPipe() : UnitPipe(T) >> NullPipe()
+
+show(io::IO, ::NullPipe) = print(io, "Null")
+
+input(::NullPipe) = Input(Unit)
+output(pipe::NullPipe) =
+    Output(
+        Zero,
+        lunique=true,
+        ltotal=false,
+        runique=true,
+        rtotal=true)
+
+codegen(::NullPipe, X) =
+    quote
+        Opt{$Zero}()
+    end
+
+
+#
+# Empty combinator maps the singleton to an empty sequence of values.
+#
+#   Empty :: Unit -> Zero*
+#   Empty = unit -> []
+#
+
+immutable EmptyPipe <: AbstractPipe
+end
+
+EmptyPipe(T) =
+    T <: Unit ? EmptyPipe() : UnitPipe(T) >> EmptyPipe()
+
+show(io::IO, ::EmptyPipe) = print(io, "Empty")
+
+input(::EmptyPipe) = Input(Unit)
+output(pipe::EmptyPipe) =
+    Output(
+        Zero,
+        lunique=false,
+        ltotal=false,
+        runique=true,
+        rtotal=true)
+
+codegen(::EmptyPipe, X) =
+    quote
+        Seq{$Zero}($Zero[])
+    end
+
+
+#
+# Set combinator maps the singleton to a constant sequence.
+#
+#   Set(set) :: Unit -> O*
+#   Set(set) = unit -> [set...]
+#
+
+immutable SetPipe <: AbstractPipe
+    tag::Symbol
+    set::Vector
+    isnonempty::Bool
+    ismonic::Bool
+    iscovering::Bool
+end
+
+SetPipe(tag::Symbol, set::Vector; isnonempty::Bool=false, ismonic::Bool=false, iscovering::Bool=false) =
+    SetPipe(tag, set, isnonempty, ismonic, iscovering)
+
+show(io::IO, pipe::SetPipe) = print(io, "Set(<$(pipe.tag)>)")
+
+input(::SetPipe) = Input(Unit)
+output(pipe::SetPipe) =
+    Output(
+        eltype(pipe.set),
+        lunique=false,
+        ltotal=pipe.isnonempty,
+        runique=pipe.ismonic,
+        rtotal=pipe.iscovering)
+
+ctxgen(pipe::SetPipe) =
+    let set = symbol("#set#", pipe.tag)
+        [Pair{Symbol,Any}(set, pipe.set)]
+    end
+
+codegen(pipe::SetPipe, X) =
+    let set = symbol("#set#", pipe.tag),
+        T = eltype(pipe.set)
+        quote
+            Seq{$T}(_.$set)
+        end
+    end
+
+
+#
+# IsoMap makes a function from a dictionary of input/output pairs.
+#
+#   IsoMap(map) :: I -> O
+#   IsoMap(map) = x -> map[x]
+#
+# The dictionary must contain all possible input keys.
+#
+
+immutable IsoMapPipe <: AbstractPipe
+    tag::Symbol
+    map::Dict
+    ismonic::Bool
+    iscovering::Bool
+end
+
+IsoMapPipe(tag::Symbol, map::Dict; ismonic::Bool=false, iscovering::Bool=false) =
+    IsoMapPipe(tag, map, ismonic, iscovering)
+
+show(io::IO, pipe::IsoMapPipe) = print(io, "IsoMap(<$(pipe.tag)>)")
+
+input(pipe::IsoMapPipe) = Input(keytype(pipe.map))
+output(pipe::IsoMapPipe) =
+    Output(
+        valtype(pipe.map),
+        runique=pipe.ismonic,
+        rtotal=pipe.iscovering)
+
+ctxgen(pipe::IsoMapPipe) =
+    let map = symbol("#map#", pipe.tag)
+        [Pair{Symbol,Any}(map, pipe.map)]
+    end
+
+codegen(pipe::IsoMapPipe, X) =
+    let map = symbol("#map#", pipe.tag),
+        T = valtype(pipe.map)
+        quote
+            Iso{$T}(_.$map[data($X)])
+        end
+    end
+
+
+#
+# OptMap makes a partial mapping from a dictionary of input/output pairs.
+#
+#   OptMap(map) :: I -> O?
+#   OptMap(map) = x -> x in keys(map) ? map[x] : null
+#
+
+immutable OptMapPipe <: AbstractPipe
+    tag::Symbol
+    map::Dict
+    ismonic::Bool
+    iscovering::Bool
+end
+
+OptMapPipe(tag::Symbol, map::Dict; ismonic::Bool=false, iscovering::Bool=false) =
+    OptMapPipe(tag, map, ismonic, iscovering)
+
+show(io::IO, pipe::OptMapPipe) = print(io, "OptMap(<$(pipe.tag)>)")
+
+input(pipe::OptMapPipe) = Input(keytype(pipe.map))
+output(pipe::OptMapPipe) =
+    Output(
+        valtype(pipe.map),
+        lunique=true,
+        ltotal=false,
+        runique=pipe.ismonic,
+        rtotal=pipe.iscovering)
+
+ctxgen(pipe::OptMapPipe) =
+    let map = symbol("#map#", pipe.tag)
+        [Pair{Symbol,Any}(map, pipe.map)]
+    end
+
+codegen(pipe::OptMapPipe, X) =
+    let map = symbol("#map#", pipe.tag),
+        S = keytype(pipe.map),
+        T = valtype(pipe.map),
+        x = gensym(:x)
+        quote
+            let $x = data($X)::$S
+                haskey(_.$map, $x) ? Opt{$T}(_.$map[$x]) : Opt{$T}()
+            end
+        end
+    end
+
+
+#
+# SeqMap makes a plural mapping from a dictionary of input/output pairs.
+#
+#   SeqMap(map) :: I -> O*
+#   SeqMap(map) = x -> x in keys(map) ? [map[x]...] : []
+#
+# The dictionary must map an input key to a vector of output values.
+#
+
+immutable SeqMapPipe <: AbstractPipe
+    tag::Symbol
+    map::Dict
+    isnonempty::Bool
+    ismonic::Bool
+    iscovering::Bool
+end
+
+SeqMapPipe(tag::Symbol, map::Dict; isnonempty::Bool=false, ismonic::Bool=false, iscovering::Bool=false) =
+    SeqMapPipe(tag, map, isnonempty, ismonic, iscovering)
+
+show(io::IO, pipe::SeqMapPipe) = print(io, "SeqMap(<$(pipe.tag)>)")
+
+input(pipe::SeqMapPipe) = Input(keytype(pipe.map))
+output(pipe::SeqMapPipe) =
+    Output(
+        eltype(valtype(pipe.map)),
+        lunique=false,
+        ltotal=pipe.isnonempty,
+        runique=pipe.ismonic,
+        rtotal=pipe.iscovering)
+
+ctxgen(pipe::SeqMapPipe) =
+    let map = symbol("#map#", pipe.tag)
+        [Pair{Symbol,Any}(map, pipe.map)]
+    end
+
+codegen(pipe::SeqMapPipe, X) =
+    let map = symbol("#map#", pipe.tag),
+        S = keytype(pipe.map),
+        T = eltype(valtype(pipe.map)),
+        x = gensym(:x)
+        quote
+            let $x = data($X)::$S
+                haskey(_.$map, $x) ? Seq{$T}(_.$map[$x]) : Seq{$T}($T[])
+            end
+        end
+    end
+
+
+#
+# Adapts a combinator to a different output structure.
+#
+
+# Converts any combinator to a plain function.  Expects the combinator to
+# emit one output value on any input; raises an error otherwise.
+
+immutable IsoPipe <: AbstractPipe
+    F::AbstractPipe
+    input::Input
+    output::Output
+
+    IsoPipe(F::AbstractPipe) =
+        if isplain(F)
+            F
+        else
+            new(F, input(F), Output(output(F), lunique=true, ltotal=true))
+        end
+end
+
+show(io::IO, pipe::IsoPipe) = print(io, "Iso($(pipe.F))")
+
+arms(pipe::IsoPipe) = AbstractPipe[pipe.F]
+
+codegen(pipe::IsoPipe, X, I) =
+    let T = odomain(pipe)
+        @gensym Y
+        if isplural(pipe.F)
+            quote
+                $Y = $(codegen(pipe.F, X, I))
+                @assert length($Y) == 1
+                Iso{$T}($Y[1])
+            end
+        elseif ispartial(pipe.F)
+            quote
+                $Y = $(codegen(pipe.F, X, I))
+                @assert !isnull($Y)
+                Iso{$T}(get($Y))
+            end
+        end
+    end
+
+# Converts any combinator to a partial mapping.  Expect the combinator
+# to produce no more than one output value on any input; raises an error
+# otherwise.
+
+immutable OptPipe <: AbstractPipe
+    F::AbstractPipe
+    input::Input
+    output::Output
+
+    OptPipe(F::AbstractPipe) =
+        if ispartial(F)
+            F
+        else
+            new(F, input(F), Output(output(F), lunique=true, ltotal=false))
+        end
+end
+
+show(io::IO, pipe::OptPipe) = print(io, "Opt($(pipe.F))")
+
+arms(pipe::OptPipe) = AbstractPipe[pipe.F]
+
+codegen(pipe::OptPipe, X, I) =
+    let T = odomain(pipe)
+        @gensym Y
+        if isplural(pipe.F)
+            quote
+                $Y = $(codegen(pipe.F, X, I))
+                @assert length($Y) <= 1
+                !isempty($Y) ? Opt{$T}($Y[1]) : Opt{$T}()
+            end
+        elseif isplain(pipe.F)
+            quote
+                lift(Opt{$T}, $(codegen(pipe.F, X, I)))
+            end
+        end
+    end
+
+# Converts any combinator to a plural mapping.
+
+immutable SeqPipe <: AbstractPipe
+    F::AbstractPipe
+    input::Input
+    output::Output
+
+    SeqPipe(F::AbstractPipe) =
+        if isplural(F)
+            F
+        else
+            new(F, input(F), Output(output(F), lunique=false))
+        end
+end
+
+show(io::IO, pipe::SeqPipe) = print(io, "Seq($(pipe.F))")
+
+arms(pipe::SeqPipe) = AbstractPipe[pipe.F]
+
+codegen(pipe::SeqPipe, X, I) =
+    let T = odomain(pipe)
+        quote
+            lift(Seq{$T}, $(codegen(pipe.F, X, I)))
+        end
+    end
+
+
+#
+# (F >> G) composes combinators F and G by sending the output of F
+# to the input of G.
+#
+#   (F >> G) :: W{I} -> M{O}
+#   where
+#       F :: W{I} -> M{T}
+#       G :: W{T} -> M{O}
+#   for some comonad W and monad M.
+#
+# For plain functions F :: I -> T and G :: T -> O, combinator (F >> G) is
+# a regular function composition.
+#
+#   (F >> G) = x -> G(F(x))
+#
+# In general case, given F :: W_1{I} -> M_1{T} and G :: W_2{T} -> M_2{O},
+# composition (F >> G) :: W{I} -> M{O} is defined by:
+#
+#   (F >> G) = x -> flat(G(dist(F(dup(x)))))
+#
+#          dup                  W_2{F}
+#   W{I} -------> W_2{W_1{I}} ----------> W_2{M_1{T}}
+#
+#
+#                 dist                  M_1{G}                  flat
+#   W_2{M_1{T}} --------> M_1{W_2{T}} ----------> M_1{M_2{O}} --------> M{O}
+#
+# Here, W = max(W_1, W_2), M = max(M_1, M_2), flat and dup are (co)monadic
+# (co)joins, and dist is a mixed distributive law.
+#
+
+immutable ComposePipe <: AbstractPipe
+    F::AbstractPipe
+    G::AbstractPipe
+    input::Input
+    output::Output
+
+    ComposePipe(F::AbstractPipe, G::AbstractPipe) =
+        begin
+            @assert(
+                odomain(F) <: idomain(G),
+                "$(repr(F)) and $(repr(G)) are not composable")
+            input = Input(idomain(F), max(imode(F), imode(G)))
+            output = Output(odomain(G), max(omode(F), omode(G)))
+            if !(idomain(G) <: odomain(F))
+                output = Output(output, rtotal=false)
+            end
+            return new(F, G, input, output)
+        end
+end
+
 >>(F::AbstractPipe, G::AbstractPipe) = ComposePipe(F, G)
 
-show(io::IO, pipe::ComposePipe) = print(io, pipe.F, " >> ", pipe.G)
+show(io::IO, pipe::ComposePipe) = print(io, "$(pipe.F) >> $(pipe.G)")
 
-# Given F :: W_1{A} -> M_1{B} and G :: W_2{B} -> M_2{C}, composition
-# F.G :: W{A} -> M{C} is defined by:
-#   W{A} --dup--> W{W_1{A}} --F--> W{M_1{B}} --rewrap--> W_2{M_1{B}}
-#   --dist--> M_1{W_2{B}} --G--> M_1{M_2{C}} --flat--> M{C}.
-# Here, W = max(W_1, W_2), M = max(M_1, M_2).
-apply{I,O}(pipe::ComposePipe{I,O}, X::I) =
-    rapply(pipe.G, lapply(pipe.F, X))::O
+arms(pipe::ComposePipe) = AbstractPipe[pipe.F, pipe.G]
 
-lapply{I,I1,O1}(F::AbstractPipe{I1,O1}, X::I) =
-    fmap(F, dup(functor(I, I1), X))
-
-rapply{I,I2,O2}(G::AbstractPipe{I2,O2}, YY::I) =
-     flat(fmap(G, dist(rewrap(functor(I2, eltype(I)), YY))))
-
-imode(pipe::ComposePipe) = max(imode(pipe.F), imode(pipe.G))
-omode(pipe::ComposePipe) = max(omode(pipe.F), omode(pipe.G))
+codegen(pipe::ComposePipe, X, I) =
+    codegen_compose(pipe.G, pipe.F, X, I)
 
 
-immutable IsoProductPipe{I,T1,T2} <: IsoPipe{I,Tuple{T1,T2}}
-    F::IsoPipe{I,T1}
-    G::IsoPipe{I,T2}
-end
+#
+# Generates a tuple.
+# 
+#   Tuple(F_1, F_2, ...) :: I -> Tuple{O_1, O_2, ...}
+#   Tuple(F_1, F_2, ...) = X -> tuple(F_1(X), F_2(X), ...)
+#   where
+#       F_1 :: I -> O_1
+#       F_2 :: I -> O_2
+#       ...
+#
+# Partial and plural field constructors generate fields of Nullable and
+# Vector types respectively.
+#
 
-IsoProductPipe{I1,T1,I2,T2}(F::IsoPipe{I1,T1}, G::IsoPipe{I2,T2}) =
-    let I = max(I1, I2)
-        IsoProductPipe{I,T1,T2}(I ^ F, I ^ G)
-    end
+immutable TuplePipe <: AbstractPipe
+    Fs::Vector{AbstractPipe}
+    input::Input
+    output::Output
 
-show(io::IO, pipe::IsoProductPipe) = print(io, "($(pipe.F) * $(pipe.G))")
-
-apply{I,T1,T2}(pipe::IsoProductPipe{I,T1,T2}, X::I) =
-    Iso((unwrap(apply(pipe.F, X))::T1, unwrap(apply(pipe.G, X))::T2))
-
-imode(pipe::IsoProductPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(pipe::IsoProductPipe) =
-    let mode1 = omode(pipe.F), mode2 = omode(pipe.G)
-        OutputMode(true, true, mode1.exclusive || mode2.exclusive, false)
-    end
-
-
-immutable OptProductPipe{I,T1,T2} <: OptPipe{I,Tuple{T1,T2}}
-    F::OptPipe{I,T1}
-    G::OptPipe{I,T2}
-end
-
-OptProductPipe{I1,T1,I2,T2}(F::OptPipe{I1,T1}, G::OptPipe{I2,T2}) =
-    let I = max(I1, I2)
-        OptProductPipe{I,T1,T2}(I ^ F, I ^ G)
-    end
-OptProductPipe{I1,T1,I2,T2}(F::OptPipe{I1,T1}, G::IsoPipe{I2,T2}) =
-    OptProductPipe(F, G ^ Opt)
-OptProductPipe{I1,T1,I2,T2}(F::IsoPipe{I1,T1}, G::OptPipe{I2,T2}) =
-    OptProductPipe(F ^ Opt, G)
-
-show(io::IO, pipe::OptProductPipe) = print(io, "($(pipe.F) * $(pipe.G))")
-
-apply{I,T1,T2}(pipe::OptProductPipe{I,T1,T2}, X::I) =
-    let Y1 = apply(pipe.F, X)::Opt{T1}
-        if !isnull(Y1)
-            let Y2 = apply(pipe.G, X)::Opt{T2}
-                if !isnull(Y2)
-                    return Opt((get(Y1), get(Y2)))
-                end
+    TuplePipe(Fs::Vector{AbstractPipe}) =
+        begin
+            if isempty(Fs)
+                return ConstPipe(Any, ())
             end
+            input = maximum(map(RBT.input, Fs))
+            odomain = Tuple{map(odata, Fs)...}
+            runique =
+                iszero(input.domain) ||
+                isunit(input.domain) ||
+                any(F -> isplain(F) && ismonic(F), Fs)
+            rtotal =
+                length(Fs) == 1 && isplain(Fs[1]) && iscovering(Fs[1])
+            output = Output(odomain, runique=runique, rtotal=rtotal)
+            return new(Fs, input, output)
         end
-        return Opt{Tuple{T1,T2}}()
-    end
-
-imode(pipe::IsoProductPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(pipe::IsoProductPipe) =
-    let mode1 = omode(pipe.F), mode2 = omode(pipe.G)
-        OutputMode(true, false, mode1.exclusive || mode2.exclusive, false)
-    end
-
-
-immutable SeqProductPipe{I,T1,T2} <: SeqPipe{I,Tuple{T1,T2}}
-    F::SeqPipe{I,T1}
-    G::SeqPipe{I,T2}
 end
 
-SeqProductPipe{I1,T1,I2,T2}(F::SeqPipe{I1,T1}, G::SeqPipe{I2,T2}) =
-    let I = max(I1, I2)
-        SeqProductPipe{I, T1, T2}(I ^ F, I ^ G)
-    end
-SeqProductPipe{I1,T1,I2,T2}(F::SeqPipe{I1,T1}, G::IsoPipe{I2,T2}) =
-    SeqProductPipe(F, G ^ Seq)
-SeqProductPipe{I1,T1,I2,T2}(F::SeqPipe{I1,T1}, G::OptPipe{I2,T2}) =
-    SeqProductPipe(F, G ^ Seq)
-SeqProductPipe{I1,T1,I2,T2}(F::IsoPipe{I1,T1}, G::SeqPipe{I2,T2}) =
-    SeqProductPipe(F ^ Seq, G)
-SeqProductPipe{I1,T1,I2,T2}(F::OptPipe{I1,T1}, G::SeqPipe{I2,T2}) =
-    SeqProductPipe(F ^ Seq, G)
-
-show(io::IO, pipe::SeqProductPipe) = print(io, "($(pipe.F) * $(pipe.G))")
-
-apply{I,T1,T2}(pipe::SeqProductPipe{I,T1,T2}, X::I) =
-    let Y1 = apply(pipe.F, X)::Seq{T1},
-        Y2 = !isempty(Y1) ? apply(pipe.G, X)::Seq{T2} : Seq(T2[]),
-        ys = Tuple{T1,T2}[]
-        for y1 in Y1
-            for y2 in Y2
-                push!(ys, (y1, y2))
-            end
-        end
-        Seq(ys)
-    end
-
-imode(pipe::IsoProductPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(pipe::IsoProductPipe) =
-    let mode1 = omode(pipe.F), mode2 = omode(pipe.G)
-        OutputMode(false, false, mode1.exclusive && mode2.exclusive, false)
-    end
-
-
-*{I1,T1,I2,T2}(F::IsoPipe{I1,T1}, G::IsoPipe{I2,T2}) = IsoProductPipe(F, G)
-*{I1,T1,I2,T2}(F::IsoPipe{I1,T1}, G::OptPipe{I2,T2}) = OptProductPipe(F, G)
-*{I1,T1,I2,T2}(F::IsoPipe{I1,T1}, G::SeqPipe{I2,T2}) = SeqProductPipe(F, G)
-*{I1,T1,I2,T2}(F::OptPipe{I1,T1}, G::IsoPipe{I2,T2}) = OptProductPipe(F, G)
-*{I1,T1,I2,T2}(F::OptPipe{I1,T1}, G::OptPipe{I2,T2}) = OptProductPipe(F, G)
-*{I1,T1,I2,T2}(F::OptPipe{I1,T1}, G::SeqPipe{I2,T2}) = SeqProductPipe(F, G)
-*{I1,T1,I2,T2}(F::SeqPipe{I1,T1}, G::IsoPipe{I2,T2}) = SeqProductPipe(F, G)
-*{I1,T1,I2,T2}(F::SeqPipe{I1,T1}, G::OptPipe{I2,T2}) = SeqProductPipe(F, G)
-*{I1,T1,I2,T2}(F::SeqPipe{I1,T1}, G::SeqPipe{I2,T2}) = SeqProductPipe(F, G)
-
-
-immutable CoproductPipe{I,U} <: SeqPipe{I,Pair{Symbol,U}}
-    Fs::Vector{Pair{Symbol,AbstractPipe}}
-end
-
-CoproductPipe(pairs::Pair{Symbol,AbstractPipe}...) =
-    let I = max([ifunctor(F) for (n, F) in pairs]...),
-        U = Union{[otype(F) for (n, F) in pairs]...}
-        CoproductPipe{I,U}([Pair{Symbol,AbstractPipe}(n, I ^ (F ^ Seq)) for (n, F) in pairs])
-    end
-
-
-show(io::IO, pipe::CoproductPipe) = print(io, "[", join(["$n => $F" for (n,F) in pipe.Fs], " | "), "]")
-
-function apply{I,U}(pipe::CoproductPipe{I,U}, X::I)
-    out = Vector{Pair{Symbol,U}}()
-    for (tag, F) in pipe.Fs
-        for y in apply(F, X)
-            push!(out, Pair{Symbol,U}(tag, y))
-        end
-    end
-    return Seq(out)
-end
-
-
-immutable CoproductMapPipe{U,V} <: AbstractPipe{Iso{Pair{Symbol,U}},Iso{Pair{Symbol,V}}}
-    Fs::Dict{Symbol,AbstractPipe}
-end
-
-CoproductMapPipe(pairs::Pair{Symbol,AbstractPipe}...) =
-    let U = Union{[itype(F) for (n, F) in pairs]...},
-        V = Union{[otype(F) for (n, F) in pairs]...}
-        CoproductMapPipe{U,V}(Dict(pairs))
-    end
-
-show(io::IO, pipe::CoproductMapPipe) = print(io, "[", join(["$n => $F" for (n,F) in pipe.Fs], " | "), "]")
-
-function apply{U,V}(pipe::CoproductMapPipe{U,V}, X::Iso{Pair{Symbol,U}})
-    tag, y = unwrap(X)
-    z = unwrap(apply(pipe.Fs[tag], Iso(y)))
-    return Iso(Pair{Symbol,V}(tag, z))
-end
-
-
-immutable SwitchPipe{U,T} <: AbstractPipe{Iso{Pair{Symbol,U}},Opt{T}}
-    tag::Symbol
-end
-
-SwitchPipe(U, T, tag) = SwitchPipe{U,T}(tag)
-
-show(io::IO, pipe::SwitchPipe) = print(io, "Switch($(pipe.tag))")
-
-apply{U,T}(pipe::SwitchPipe{U,T}, X::Iso{Pair{Symbol,U}}) =
-    begin
-        (tag, x) = unwrap(X)
-        tag == pipe.tag ? Opt{T}(x) : Opt{T}()
-    end
-
-
-immutable CountPipe{I,T} <: IsoPipe{I,Int}
-    F::SeqPipe{I,T}
-end
-
-show(io::IO, pipe::CountPipe) = print(io, "Count($(self.F))")
-
-apply{I,T}(pipe::CountPipe{I,T}, X::I) =
-    Iso{Int}(length(apply(pipe.F, X)::Seq{T}))
-
-imode(pipe::CountPipe) = imode(pipe.F)
-omode(pipe::CountPipe) = OutputMode(true, true, false, false)
-
-
-immutable SumPipe{I} <: IsoPipe{I,Int}
-    F::SeqPipe{I,Int}
-end
-
-show(io::IO, pipe::SumPipe) = print(io, "Sum($(self.F))")
-
-apply{I}(pipe::SumPipe{I}, X::I) =
-    Iso{Int}(sum(unwrap(apply(pipe.F, X))::Vector{Int}))
-
-imode(pipe::SumPipe) = imode(pipe.F)
-omode(pipe::SumPipe) = OutputMode(true, true, false, false)
-
-
-immutable MaxPipe{I} <: IsoPipe{I,Int}
-    F::SeqPipe{I,Int}
-end
-
-show(io::IO, pipe::MaxPipe) = print(io, "Max($(self.F))")
-
-apply{I}(pipe::MaxPipe{I}, X::I) =
-    Iso{Int}(maximum(unwrap(apply(pipe.F, X))::Vector{Int}))
-
-imode(pipe::MaxPipe) = imode(pipe.F)
-omode(pipe::MaxPipe) = OutputMode(true, true, false, false)
-
-
-immutable OptMaxPipe{I} <: OptPipe{I,Int}
-    F::SeqPipe{I,Int}
-end
-
-show(io::IO, pipe::OptMaxPipe) = print(io, "OptMax($(self.F))")
-
-apply{I}(pipe::OptMaxPipe{I}, X::I) =
-    let y = unwrap(apply(pipe.F, X))::Vector{Int}
-        isempty(y) ? Opt{Int}() : Opt{Int}(maximum(y))
-    end
-
-imode(pipe::OptMaxPipe) = imode(pipe.F)
-omode(pipe::OptMaxPipe) = OutputMode(true, false, false, false)
-
-
-immutable TuplePipe{I,T} <: IsoPipe{I,T}
-    Fs::Vector{AbstractPipe{I}}
-end
-
-TuplePipe() = TuplePipe{Iso{Any},Tuple{}}()
-TuplePipe(F1::AbstractPipe, Fs::AbstractPipe...) =
-    let Fs = (F1, Fs...),
-        I = max([ifunctor(F) for F in Fs]...),
-        T = Tuple{[unwrap(ofunctor(F)) for F in Fs]...}
-        TuplePipe{I,T}(AbstractPipe{I}[I ^ F for F in Fs])
-    end
+TuplePipe(Fs) = TuplePipe(collect(AbstractPipe, Fs))
+TuplePipe(Fs::AbstractPipe...) = TuplePipe(collect(AbstractPipe, Fs))
 
 show(io::IO, pipe::TuplePipe) = print(io, "Tuple($(join(pipe.Fs, ", ")))")
 
-apply{I,T}(pipe::TuplePipe{I,T}, X::I) =
-    Iso(([unwrap(apply(F, X)) for F in pipe.Fs]...)::T)
+arms(pipe::TuplePipe) = pipe.Fs
 
-imode(pipe::TuplePipe) =
-    isempty(pipe.Fs) ? InputMode(false, ()) : max([imode(F) for F in pipe.Fs]...)
-omode{I,T}(pipe::TuplePipe{I,T}) =
-    isempty(pipe.Fs) ?
-        OutputMode(true, true, I == Iso{Unit}, true) :
-        OutputMode(true, true, false, false)
-
-
-immutable ArrayPipe{I,T} <: SeqPipe{I,T}
-    Fs::Vector{IsoPipe{I,T}}
-end
-
-ArrayPipe(Fs::AbstractPipe...) =
-    let I = max([ifunctor(F) for F in Fs]...),
-        T = otype(Fs[1])
-        ArrayPipe{I,T}([I ^ F for F in Fs])
+codegen(pipe::TuplePipe, X, I) =
+    let O = odomain(pipe)
+        @gensym X0
+        items = [:( data($(codegen(F, X0, I))) ) for F in pipe.Fs]
+        quote
+            $X0 = $X
+            Iso{$O}(tuple($(items...)))
+        end
     end
 
-show(io::IO, pipe::ArrayPipe) = print(io, "Array($(join(pipe.Fs, ", ")))")
 
-apply{I,T}(pipe::ArrayPipe{I,T}, X::I) =
-    Seq(T[unwrap(apply(F, X))::T for F in pipe.Fs])
+#
+# Extracts an element from a tuple.
+#
 
-imode(pipe::ArrayPipe) =
-    isempty(pipe.Fs) ? InputMode(false, ()) : max([imode(F) for F in pipe.Fs]...)
-omode(pipe::ArrayPipe) =
-    isempty(pipe.Fs) ?
-        OutputMode(false, false, true, false) :
-        OutputMode(false, true, false, false)
+immutable ItemPipe <: AbstractPipe
+    domain::Type
+    idx::Int
+    mode::OutputMode
 
-
-immutable RangePipe{I} <: SeqPipe{I,Int}
-    start::IsoPipe{I,Int}
-    step::IsoPipe{I,Int}
-    stop::IsoPipe{I,Int}
+    ItemPipe(domain::Type, idx::Int, mode::OutputMode) =
+        begin
+            Ts = domain <: Tuple ? domain.parameters : domain.types
+            @assert(1 <= idx <= length(Ts), "index is out of range")
+            T = Ts[idx]
+            @assert(
+                (!isplural(mode) || T <: Vector) && (!ispartial(mode) || T <: Nullable),
+                "incompatible output mode")
+            return new(domain, idx, mode)
+        end
 end
 
-RangePipe{I1,I2,I3}(start::IsoPipe{I1,Int}, step::IsoPipe{I2,Int}, stop::IsoPipe{I3,Int}) =
-    let I = max(I1, I2, I3)
-        RangePipe{I}(I ^ start, I ^ step, I ^ stop)
+ItemPipe(domain::Type, idx::Symbol; lunique::Bool=true, ltotal::Bool=true, runique::Bool=false, rtotal::Bool=false) =
+    ItemPipe(domain, findfirst(fieldnames(domain), idx), OutputMode(lunique, ltotal, runique, rtotal))
+ItemPipe(domain::Type, idx::Int; lunique::Bool=true, ltotal::Bool=true, runique::Bool=false, rtotal::Bool=false) =
+    ItemPipe(domain, idx, OutputMode(lunique, ltotal, runique, rtotal))
+ItemPipe(pipe::TuplePipe, idx) =
+    let mode = omode(pipe.Fs[idx])
+        ItemPipe(
+            odomain(pipe), idx,
+            lunique=mode.lunique, ltotal=mode.ltotal,
+            runique=(length(pipe.Fs) == 1), rtotal=(length(pipe.Fs) == 1))
     end
+
+show(io::IO, pipe::ItemPipe) = print(io, "Item($(pipe.idx))")
+
+input(pipe::ItemPipe) = Input(pipe.domain)
+output(pipe::ItemPipe) =
+    let T = (pipe.domain <: Tuple ? pipe.domain.parameters : pipe.domain.types)[pipe.idx]
+        Output(isplain(pipe.mode) ? T : eltype(T), pipe.mode)
+    end
+
+codegen(pipe::ItemPipe, X) =
+    let O = okind(pipe)
+        if pipe.domain <: Tuple
+            quote
+                $O(data($X)[$(pipe.idx)])
+            end
+        else
+            field = fieldnames(pipe.domain)[pipe.idx]
+            quote
+                $O(data($X).$field)
+            end
+        end
+    end
+
+
+#
+# Generates a vector.
+#
+#   Vector(F_1, F_2, ...) :: I -> O*
+#   Vector(F_1, F_2, ...) = x -> [F_1(x), F_2(x), ...]
+#   where
+#       F_1 :: I -> O
+#       F_2 :: I -> O
+#       ...
+#
+# Partial or plural F_1, F_2, ... have all their output values added
+# to the output.
+#
+
+immutable VectorPipe <: AbstractPipe
+    Fs::Vector{AbstractPipe}
+    input::Input
+    output::Output
+
+    VectorPipe(Fs::Vector{AbstractPipe}) =
+        begin
+            if isempty(Fs)
+                return EmptyPipe(Any)
+            elseif length(Fs) == 1
+                return SeqPipe(Fs[1])
+            end
+            input = maximum(map(RBT.input, Fs))
+            output = maximum(map(RBT.output, Fs))
+            output = Output(
+                output.domain,
+                lunique=false,
+                ltotal=any(isnonempty, Fs),
+                runique=false,
+                rtotal=any(F -> output.domain <: odomain(F) && iscovering(F), Fs))
+            return new(Fs, input, output)
+        end
+end
+
+VectorPipe(Fs) = VectorPipe(collect(AbstractPipe, Fs))
+VectorPipe(Fs::AbstractPipe...) = VectorPipe(collect(AbstractPipe, Fs))
+
+show(io::IO, pipe::VectorPipe) = print(io, "Vector($(join(pipe.Fs, ", ")))")
+
+arms(pipe::VectorPipe) = pipe.Fs
+
+codegen(pipe::VectorPipe, X, I) =
+    begin
+        O = odomain(pipe)
+        @gensym X0 ys
+        body = quote
+            $X0 = $X
+        end
+        for (n, F) in enumerate(pipe.Fs)
+            Y = codegen(F, X0, I)
+            if isplural(F)
+                body = quote
+                    $body
+                    append!($ys, data($Y))
+                end
+            elseif ispartial(F)
+                @gensym y
+                body = quote
+                    $body
+                    $y = data($Y)
+                    if !isnull($y)
+                        push!($ys, get($y))
+                    end
+                end
+            else
+                body = quote
+                    $body
+                    push!($ys, data($Y))
+                end
+            end
+        end
+        return quote
+            let $ys = $O[]
+                $body
+                Seq{$O}($ys)
+            end
+        end
+    end
+
+
+#
+# Evaluates an arbitrary scalar Julia function.
+#
+#   Op(op, F_1, F_2, ...) :: I -> O
+#   Op(op, F_1, F_2, ...) = x -> op(F_1(x), F_2(x), ...)
+#   where
+#       op is a scalar function {I_1, I_2, ...} -> O
+#       F_1 :: I_1 -> O
+#       F_2 :: I_2 -> O
+#       ...
+#
+# Produces plural output if any of F_1, F_2, ... is plural, or
+# partial output if any of F_1, F_2, ... is partial.
+#
+
+immutable OpPipe <: AbstractPipe
+    op::Function
+    itypes::Vector{Type}
+    otype::Type
+    Fs::Vector{AbstractPipe}
+    input::Input
+    output::Output
+
+    OpPipe(op::Function, itypes::Vector{Type}, otype::Type, Fs::Vector{AbstractPipe}) =
+        begin
+            @assert length(itypes) == length(Fs) "$Fs and $itypes differ in length"
+            for (itype, F) in zip(itypes, Fs)
+                @assert odomain(F) <: itype "$(repr(F)) is not of type $itype"
+            end
+            input = isempty(Fs) ? typemin(Input) : maximum(map(RBT.input, Fs))
+            output = Output(otype, lunique=all(issingular, Fs), ltotal=all(isnonempty, Fs))
+            return new(op, itypes, otype, Fs, input, output)
+        end
+end
+
+OpPipe(op, itypes, otype, Fs) =
+    OpPipe(op, collect(Type, itypes), otype, collect(AbstractPipe, Fs))
+OpPipe(op, itypes, otype, Fs::AbstractPipe...) =
+    OpPipe(op, collect(Type, itypes), otype, collect(AbstractPipe, Fs))
+
+.==(F::AbstractPipe, G::AbstractPipe) = OpPipe(==, [odomain(F), odomain(G)], Bool, [F, G])
+.!=(F::AbstractPipe, G::AbstractPipe) = OpPipe(!=, [odomain(F), odomain(G)], Bool, [F, G])
+.<(F::AbstractPipe, G::AbstractPipe) = OpPipe(<, [odomain(F), odomain(G)], Bool, [F, G])
+.<=(F::AbstractPipe, G::AbstractPipe) = OpPipe(<=, [odomain(F), odomain(G)], Bool, [F, G])
+.>(F::AbstractPipe, G::AbstractPipe) = OpPipe(>, [odomain(F), odomain(G)], Bool, [F, G])
+.>=(F::AbstractPipe, G::AbstractPipe) = OpPipe(>=, [odomain(F), odomain(G)], Bool, [F, G])
+
+(~)(F::AbstractPipe) = OpPipe(!, [Bool], Bool, [F])
+(&)(F::AbstractPipe, G::AbstractPipe) = OpPipe(&, [Bool, Bool], Bool, [F, G])
+(|)(F::AbstractPipe, G::AbstractPipe) = OpPipe(|, [Bool, Bool], Bool, [F, G])
+
+show(io::IO, pipe::OpPipe) = print(io, "($(pipe.op))($(join(pipe.Fs, ", ")))")
+
+arms(pipe::OpPipe) = pipe.Fs
+
+codegen(pipe::OpPipe, X, I) =
+    begin
+        T = odomain(pipe)
+        N = length(pipe.itypes)
+        @gensym X0 Z
+        Ys = [gensym(symbol(:Y, n)) for n = 1:N]
+        ys = [gensym(symbol(:y, n)) for n = 1:N]
+        body =
+            isplural(pipe) ? :( push!(data($Z), $(pipe.op)($(ys...))) ) :
+            ispartial(pipe) ? :( $Z = Opt{$T}($(pipe.op)($(ys...))) ) :
+            :( $Z = Iso{$T}($(pipe.op)($(ys...))) )
+        for n = N:-1:1
+            F = pipe.Fs[n]
+            Y = Ys[n]
+            y = ys[n]
+            body =
+                isplural(F) ? :( for $y in $Y; $body; end ) :
+                ispartial(F) ? :( $y = get($Y); $body ) :
+               :( $y = data($Y); $body )
+        end
+        for n = N:-1:1
+            F = pipe.Fs[n]
+            Y = Ys[n]
+            y = ys[n]
+            body =
+                isplural(F) ? :( $Y = $(codegen(F, X0, I)); if !isempty($Y); $body; end ) :
+                ispartial(F) ? :( $Y = $(codegen(F, X0, I)); if !isnull($Y); $body; end ) :
+                :( $Y = $(codegen(F, X0, I)); $body )
+        end
+        body =
+            isplural(pipe) ? :( $X0 = $X; $Z = Seq{$T}($T[]); $body; $Z ) :
+            ispartial(pipe) ? :( $X0 = $X; $Z = Opt{$T}(); $body; $Z ) :
+            :( $X0 = $X; $body; $Z )
+        return body
+    end
+
+
+#
+# AggregateOp(op, F) evaluates an aggregate function op on the output array
+# produced by F.
+#
+#   AggregateOp(op, F) :: I -> O
+#   where
+#       F :: I -> T*
+#       op :: T* -> O
+#
+
+immutable AggregateOpPipe <: AbstractPipe
+    op::Function
+    itype::Type
+    otype::Type
+    haszero::Bool
+    F::AbstractPipe
+    input::Input
+    output::Output
+
+    AggregateOpPipe(op::Function, itype::Type, otype::Type, haszero::Bool, F::AbstractPipe) =
+        begin
+            @assert odomain(F) <: itype "$(repr(F)) is not of type $itype"
+            F = SeqPipe(F)
+            input = RBT.input(F)
+            output = Output(otype, ltotal=(haszero || isnonempty(F)))
+            return new(op, itype, otype, haszero, F, input, output)
+        end
+end
+
+AnyPipe(F::AbstractPipe) =
+    isplain(F) && odomain(F) <: Bool ? F : AggregateOpPipe(any, Bool, Bool, true, F)
+AllPipe(F::AbstractPipe) =
+    isplain(F) && odomain(F) <: Bool ? F : AggregateOpPipe(all, Bool, Bool, true, F)
+CountPipe(F::AbstractPipe) =
+    AggregateOpPipe(length, Any, Int, true, F)
+IntMaxPipe(F::AbstractPipe) =
+    issingular(F) && odomain(F) <: Int ? F : AggregateOpPipe(maximum, Int, Int, false, F)
+IntMinPipe(F::AbstractPipe) =
+    issingular(F) && odomain(F) <: Int ? F : AggregateOpPipe(minimum, Int, Int, false, F)
+IntSumPipe(F::AbstractPipe) =
+    isplain(F) && odomain(F) <: Int ? F : AggregateOpPipe(sum, Int, Int, true, F)
+IntMeanPipe(F::AbstractPipe) =
+    AggregateOpPipe(mean, Int, Float64, false, F)
+FirstPipe(F::AbstractPipe, rev::Bool=false) =
+    issingular(F) ? F : AggregateOpPipe(!rev ? first : last, Any, odomain(F), false, F)
+
+show(io::IO, pipe::AggregateOpPipe) = print(io, "($(pipe.op))($(pipe.F))")
+
+arms(pipe::AggregateOpPipe) = AbstractPipe[pipe.F]
+
+codegen(pipe::AggregateOpPipe, X, I) =
+    let T = pipe.otype,
+        Y = codegen(pipe.F, X, I)
+        if ispartial(pipe)
+            @gensym y
+            quote
+                $y = data($Y)
+                isempty($y) ? Opt{$T}() : Opt{$T}($(pipe.op)($y))
+            end
+        else
+            quote
+                Iso{$T}($(pipe.op)(data($Y)))
+            end
+        end
+    end
+
+
+#
+# Tests if a value is in an array.
+#
+
+immutable InPipe <: AbstractPipe
+    F::AbstractPipe
+    G::AbstractPipe
+    input::Input
+    output::Output
+
+    InPipe(F::AbstractPipe, G::AbstractPipe) =
+        begin
+            F = IsoPipe(F)
+            G = SeqPipe(G)
+            @assert odomain(G) <: odomain(F) "$(repr(F)) and $(repr(G)) are not comparable"
+            input = max(RBT.input(F), RBT.input(G))
+            output = Output(Bool)
+            return new(F, G, input, output)
+        end
+end
+
+show(io::IO, pipe::InPipe) = print(io, "In($(pipe.F), $(pipe.G))")
+
+arms(pipe::InPipe) = AbstractPipe[pipe.F, pipe.G]
+
+codegen(pipe::InPipe, X, I) =
+    begin
+        @gensym X0
+        return quote
+            $X0 = $X
+            Iso{Bool}(data($(codegen(pipe.F, X0, I))) in data($(codegen(pipe.G, X0, I))))
+        end
+    end
+
+
+#
+# Generates a sequence start:step:stop.
+#
+
+immutable RangePipe <: AbstractPipe
+    start::AbstractPipe
+    step::AbstractPipe
+    stop::AbstractPipe
+    input::Input
+    output::Output
+
+    RangePipe(start::AbstractPipe, step::AbstractPipe, stop::AbstractPipe) =
+        begin
+            for F in [start, step, stop]
+                @assert isplain(F) && odomain(F) <: Int "$(repr(F)) is not of type $Int"
+            end
+            input = maximum(map(RBT.input, [start, step, stop]))
+            output = Output(Int, lunique=false, ltotal=false, runique=true, rtotal=false)
+            new(start, step, stop, input, output)
+        end
+end
+
+RangePipe(start::AbstractPipe, stop::AbstractPipe) =
+    RangePipe(start, ConstPipe(typeintersect(idomain(start), idomain(stop)), 1), stop)
 
 show(io::IO, pipe::RangePipe) = print(io, "Range($(pipe.start), $(pipe.step), $(pipe.stop))")
 
-apply{I}(pipe::RangePipe{I}, X::I) =
-    let start = unwrap(apply(pipe.start, X))::Int,
-        step = unwrap(apply(pipe.step, X))::Int,
-        stop = unwrap(apply(pipe.stop, X))::Int
-        Seq(collect(start:step:stop))
+arms(pipe::RangePipe) = AbstractPipe[pipe.start, pipe.step, pipe.stop]
+
+codegen(pipe::RangePipe, X, I) =
+    begin
+        @gensym X0
+        start = codegen(pipe.start, X, I)
+        step = codegen(pipe.step, X, I)
+        stop = codegen(pipe.stop, X, I)
+        return quote
+            $X0 = $X
+            Seq{Int}(collect(Int, data($start):data($step):data($stop)))
+        end
     end
 
-imode(pipe::RangePipe) =
-    max(imode(pipe.start), imode(pipe.step), imode(pipe.stop))
-omode(pipe::RangePipe) =
-    OutputMode(false, false, false, false)
+
+#
+# Generates a Cartesian product.
+#
+
+MixPipe(Fs::Vector{AbstractPipe}) =
+    if isempty(Fs)
+        ConstPipe(Any, ())
+    else
+        itypes = Type[odomain(F) for F in Fs]
+        otype = Tuple{itypes...}
+        OpPipe(tuple, itypes, otype, Fs)
+    end
+MixPipe(Fs) = MixPipe(collect(AbstractPipe, Fs))
+MixPipe(Fs::AbstractPipe...) = MixPipe(collect(AbstractPipe, Fs))
+
+(*)(F1::AbstractPipe, F2::AbstractPipe, Fs::AbstractPipe...) = MixPipe(F1, F2, Fs...)
 
 
-immutable SievePipe{I,T} <: OptPipe{I,T}
-    P::IsoPipe{I,Bool}
+#
+# Tags a value.
+#
+
+immutable TagPipe <: AbstractPipe
+    tag::Symbol
+    domain::Type
 end
 
-SievePipe{I}(P::AbstractPipe{I}) =
-    let T = eltype(I),
-        P = ofunctor(P) <: Iso ? P : IsoIfNullPipe(P, ConstPipe(T, false))
-        SievePipe{I,T}(P)
+show(io::IO, pipe::TagPipe) = print(io, "Tag($(pipe.tag))")
+
+input(pipe::TagPipe) = Input(pipe.domain)
+output(pipe::TagPipe) = Output(Pair{Symbol,pipe.domain}, runique=true)
+
+codegen(pipe::TagPipe, X) =
+    quote
+        Iso(Pair{Symbol,$(pipe.domain)}($(QuoteNode(pipe.tag)), data($X)))
+    end
+
+
+#
+# Generates a tagged union.
+#
+
+typealias TaggedPipe Pair{Symbol,AbstractPipe}
+
+PackPipe(tagged_Fs::Vector{TaggedPipe}) =
+    if isempty(tagged_Fs)
+        EmptyPipe(Any)
+    else
+        domain = RBT.domain(maximum([output(F) for (tag, F) in tagged_Fs]))
+        VectorPipe(AbstractPipe[F >> TagPipe(tag, domain) for (tag, F) in tagged_Fs])
+    end
+PackPipe(tagged_Fs) =
+    PackPipe(TaggedPipe[TaggedPipe(tag, F) for (tag, F) in tagged_Fs])
+PackPipe(tagged_Fs::Pair{Symbol}...) = PackPipe(tagged_Fs)
+
+
+#
+# Unpacks a tagged union.
+#
+
+immutable CasePipe <: AbstractPipe
+    domain::Type
+    full::Bool
+    tagged_Fs::Vector{TaggedPipe}
+    input::Input
+    output::Output
+
+    CasePipe(domain::Type, full::Bool, tagged_Fs::Vector{TaggedPipe}) =
+        if isempty(tagged_Fs)
+            NullPipe(domain)
+        else
+            input = Input(
+                Pair{Symbol,domain},
+                maximum([imode(F) for (tag, F) in tagged_Fs]))
+            output = maximum([RBT.output(F) for (tag, F) in tagged_Fs])
+            if !full
+                output = Output(output, ltotal=false)
+            end
+            new(domain, full, tagged_Fs, input, output)
+        end
+end
+
+CasePipe(domain, full, tagged_Fs) =
+    CasePipe(domain, full, TaggedPipe[TaggedPipe(tag, F) for (tag, F) in tagged_Fs])
+CasePipe(domain, full, tagged_Fs::Pair{Symbol}...) = CasePipe(domain, full, tagged_Fs)
+
+show(io::IO, pipe::CasePipe) = print(io, "Case($(join(["$tag => $F" for (tag, F) in pipe.tagged_Fs], ", "))")
+
+arms(pipe::CasePipe) = AbstractPipe[F for (tag, F) in pipe.tagged_Fs]
+
+codegen(pipe::CasePipe, X, I) =
+    begin
+        O = okind(pipe)
+        @gensym X0 xtag
+        if pipe.full
+            body = :( throw(DomainError()) )
+        else
+            body = :( $O() )
+        end
+        for (tag, F) in reverse(pipe.tagged_Fs)
+            T = idomain(F)
+            Y = codegen_compose(
+                F, ikind(F), okind(F),
+                (X, I) -> :( Iso{$T}(get($X0).second) ), Iso{Pair{Symbol,pipe.domain}}, Iso{T},
+                X0, I)
+            body = quote
+                $xtag == $(QuoteNode(tag)) ? lift($O, $Y) : $body
+            end
+        end
+        return quote
+            $X0 = $X
+            $xtag = get($X0).first
+            $body
+        end
+    end
+
+
+#
+# Selects a record from the input.
+#
+#   Select(F, G_1, G_2, ...) :: I -> ((O_1, O_2, ...), I)
+#   Select(F, G_1, G_2, ...) = F >> ((G_1, G_2, ...), Here)
+#   where
+#       F :: I -> T
+#       G_1 :: T -> O_1
+#       G_2 :: T -> O_2
+#       ...
+#
+
+SelectPipe(F::AbstractPipe, Gs::Vector{AbstractPipe}) =
+    F >> TuplePipe(TuplePipe(Gs), HerePipe(odomain(F)))
+SelectPipe(F::AbstractPipe, Gs) = SelectPipe(F, collect(AbstractPipe, Gs))
+SelectPipe(F::AbstractPipe, Gs::AbstractPipe...) = SelectPipe(F, collect(AbstractPipe, Gs))
+
+
+#
+# Filters the input on the given predicate combinator.
+#
+#   Sieve(P) :: I -> I?
+#   Sieve(P) = x -> P(x) ? x : null
+#   where
+#       P :: I -> Bool
+#
+
+immutable SievePipe <: AbstractPipe
+    P::AbstractPipe
+    input::Input
+
+    SievePipe(domain::Type, P::AbstractPipe) =
+        begin
+            @assert(
+                domain <: idomain(P) && odomain(P) <: Bool,
+                "$(repr(P)) is not of type $domain -> $Bool")
+            P = AnyPipe(P)
+            return new(P, Input(domain, imode(P)))
+        end
+end
+
+FilterPipe(F, P) =
+    let T = odomain(F)
+        F >> SievePipe(T, P)
     end
 
 show(io::IO, pipe::SievePipe) = print(io, "Sieve($(pipe.P))")
 
-apply{I,T}(pipe::SievePipe{I,T}, X::I) =
-    unwrap(apply(pipe.P, X))::Bool ? Opt{T}(unwrap(X)) : Opt{T}()
+output(pipe::SievePipe) =
+    Output(idomain(pipe), lunique=true, ltotal=false, runique=true, rtotal=false)
 
-imode(pipe::SievePipe) = imode(pipe.P)
-omode(pipe::SievePipe) = OutputMode(true, false, true, false)
+arms(pipe::SievePipe) = AbstractPipe[pipe.P]
+
+codegen(pipe::SievePipe, X, I) =
+    begin
+        T = idomain(pipe)
+        @gensym X0
+        P = codegen(pipe.P, X0, I)
+        return quote
+            $X0 = $X
+            data($P) ? Opt{$T}(get($X0)) : Opt{$T}()
+        end
+    end
 
 
-immutable IsoIfNullPipe{I,T} <: IsoPipe{I,T}
-    F::OptPipe{I,T}
-    R::IsoPipe{I,T}
+#
+# Sorts an array.
+#
+#   Sort(F) :: I -> O*
+#   Sort(F) = x -> sort(F(x))
+#   where
+#       F :: I -> O*
+#
+
+immutable SortPipe <: AbstractPipe
+    F::AbstractPipe
+    rev::Bool
+    input::Input
+    output::Output
+
+    SortPipe(F::AbstractPipe, rev::Bool=false) =
+        let F = SeqPipe(F)
+            new(F, rev, input(F), output(F))
+        end
 end
 
-IsoIfNullPipe{I1,I2,T}(F::OptPipe{I1,T}, R::IsoPipe{I2,T}) =
-    let I = max(I1, I2)
-        IsoIfNullPipe{I,T}(I ^ F, I ^ R)
-    end
+show(io::IO, pipe::SortPipe) = print(io, "Sort($(pipe.F))")
 
-show(io::IO, pipe::IsoIfNullPipe) = print(io, "IsoIfNullPipe($(pipe.F), $(pipe.R))")
+arms(pipe::SortPipe) = AbstractPipe[pipe.F]
 
-apply{I,T}(pipe::IsoIfNullPipe{I,T}, X::I) =
-    let Y = apply(pipe.F, X)
-        !isnull(Y) ? Iso(get(Y)) : apply(pipe.R, X)
-    end
-
-imode(pipe::IsoIfNullPipe) = max(imode(pipe.F), imode(pipe.R))
-omode(pipe::IsoIfNullPipe) =
-    let mode1 = omode(pipe.F), mode2 = omode(pipe.G)
-        OutputMode(true, true, mode1.exclusive && mode2.exclusive, mode1.reachable)
+codegen(pipe::SortPipe, X, I) =
+    let O = okind(pipe)
+        quote
+            $O(sort(data($(codegen(pipe.F, X, I))), rev=$(pipe.rev)))
+        end
     end
 
 
-immutable IsoFirstPipe{I,T} <: IsoPipe{I,T}
-    F::SeqPipe{I,T}
-    dir::Int
+#
+# Sorts an array by a key.
+#
+#   SortBy(F, G) :: I -> O*
+#   SortBy(F, G) = x -> sort(F(x), by=G)
+#   where
+#       F :: I -> O*
+#       G :: O -> T
+#
+
+immutable SortByPipe <: AbstractPipe
+    F::AbstractPipe
+    G::AbstractPipe
+    rev::Bool
+    input::Input
+    output::Output
+
+    SortByPipe(F::AbstractPipe, G::AbstractPipe, rev::Bool=false) =
+        begin
+            F = SeqPipe(F)
+            G = IsoPipe(G)
+            @assert(
+                odomain(F) <: idomain(G),
+                "$(repr(F)) and $(repr(G)) are not composable")
+            input = Input(idomain(F), max(imode(F), imode(G)))
+            return new(F, G, rev, input, output(F))
+        end
 end
 
-show(io::IO, pipe::IsoFirstPipe) = print(io, "IsoFirst($(pipe.F), $(pipe.dir))")
+SortByPipe(F::AbstractPipe, G::AbstractPipe, rev::Bool, arg1, args...) =
+    SortByPipe(SortByPipe(F, arg1, args...), G, rev)
+SortByPipe(F::AbstractPipe, G1::AbstractPipe, arg1, args...) =
+    SortByPipe(SortByPipe(F, arg1, args...), G)
+SortByPipe(F::AbstractPipe, G_rev::Tuple{AbstractPipe,Bool}, args...) =
+    SortByPipe(F, G_rev..., args...)
 
-apply{I,T}(pipe::IsoFirstPipe{I,T}, X::I) =
-    wrap(Iso{T}, apply(pipe.F, X)[(pipe.dir >= 0 ? 1 : end)]::T)
+show(io::IO, pipe::SortByPipe) = print(io, "SortBy($(pipe.F), $(pipe.G))")
 
-imode(pipe::IsoFirstPipe) = imode(pipe.F)
-omode(pipe::IsoFirstPipe) = OutputMode(true, true, omode(pipe.F).exclusive, false)
+arms(pipe::SortByPipe) = AbstractPipe[pipe.F, pipe.G]
+
+codegen(pipe::SortByPipe, X, I) =
+    begin
+        T = odomain(pipe.F)
+        W = odomain(pipe.G)
+        @gensym ws Y0 Z0 l
+        Z = codegen_compose(ikind(pipe.G), Iso{T}, pipe.F, X, I) do Y, O
+            quote
+                $Y0 = $Y
+                $l = $(pipe.rev ? (-) : (+))(length($ws))
+                push!($ws, (data($(codegen(pipe.G, Y0, O))), $l))
+                Iso{$T}(data($Y0))
+            end
+        end
+        return quote
+            $ws = Tuple{$W,Int}[]
+            $Z0 = $Z
+            sort!($ws, rev=$(pipe.rev))
+            Seq{$T}($T[$Z0[$(pipe.rev ? (-) : (+))(1, idx)] for (w, idx) in $ws])
+        end
+    end
 
 
-immutable OptFirstPipe{I,T} <: OptPipe{I,T}
-    F::SeqPipe{I,T}
-    dir::Int
+#
+# Takes the greatest/smallest elements by a key.
+#
+#   FirstBy(F, G) :: I -> O?
+#   FirstBy(F, G) = x -> first(sort(F(x), by=G))
+#   where
+#       F :: I -> O*
+#       G :: O -> T
+#
+
+immutable FirstByPipe <: AbstractPipe
+    F::AbstractPipe
+    G::AbstractPipe
+    rev::Bool
+    input::Input
+    output::Output
+
+    FirstByPipe(F::AbstractPipe, G::AbstractPipe, rev::Bool=false) =
+        begin
+            F = SeqPipe(F)
+            G = IsoPipe(G)
+            @assert(
+                odomain(F) <: idomain(G),
+                "$(repr(F)) and $(repr(G)) are not composable")
+            input = Input(idomain(F), max(imode(F), imode(G)))
+            output = Output(RBT.output(F), lunique=true, rtotal=false)
+            return new(F, G, rev, input, output)
+        end
 end
 
-show(io::IO, pipe::OptFirstPipe) = print(io, "OptFirst($(pipe.F), $(pipe.dir))")
+FirstByPipe(F::AbstractPipe, G_rev::Tuple{AbstractPipe,Bool}) =
+    FirstByPipe(F, G_rev...)
 
-apply{I,T}(pipe::OptFirstPipe{I,T}, X::I) =
-    let Y = apply(pipe.F, X)::Seq{T}
-        isempty(Y) ? Opt{T}() : Opt(Y[(pipe.dir >= 0 ? 1 : end)])
-    end
+LastByPipe(F, G) = FirstByPipe(F, G, true)
 
-imode(pipe::OptFirstPipe) = imode(pipe.F)
-omode(pipe::OptFirstPipe) = OutputMode(true, false, omode(pipe.F).exclusive, false)
+show(io::IO, pipe::FirstByPipe) = print(io, "$(!pipe.rev ? "FirstBy" : "LastBy")($(pipe.F), $(pipe.G))")
 
+arms(pipe::FirstByPipe) = AbstractPipe[pipe.F, pipe.G]
 
-immutable IsoFirstByPipe{I,T,J,K} <: IsoPipe{I,T}
-    F::SeqPipe{I,T}
-    key::IsoPipe{J,K}
-    dir::Int
-end
-
-IsoFirstByPipe{I,T,J,K}(F::SeqPipe{I,T}, key::IsoPipe{J,K}, dir::Int) =
-    let I = max(I, functor(J, eltype(I))),
-        F = I ^ F
-        IsoFirstByPipe{I,T,J,K}(F, key, dir)
-    end
-
-show(io::IO, pipe::IsoFirstByPipe) = print(io, "IsoFirstBy($(pipe.F), $(pipe.key), $(pipe.dir))")
-
-apply{I,T,J,K}(pipe::IsoFirstByPipe{I,T,J,K}, X::I) =
-    let YY = lapply(pipe.F, X),
-        ys = unwrap(unwrap(YY)),
-        weights = unwrap(rapply(pipe.key, YY)),
-        j = (pipe.dir >= 0 ? indmax : indmin)(weights)
-        Iso(ys[j])
-    end
-
-imode(pipe::IsoFirstByPipe) = max(imode(pipe.F), imode(pipe.key))
-omode(pipe::IsoFirstByPipe) = OutputMode(true, true, omode(F).exclusive, false)
-
-
-immutable OptFirstByPipe{I,T,J,K} <: OptPipe{I,T}
-    F::SeqPipe{I,T}
-    key::IsoPipe{J,K}
-    dir::Int
-end
-
-OptFirstByPipe{I,T,J,K}(F::SeqPipe{I,T}, key::IsoPipe{J,K}, dir::Int) =
-    let I = max(I, functor(J, eltype(I))),
-        F = I ^ F
-        OptFirstByPipe{I,T,J,K}(F, key, dir)
-    end
-
-show(io::IO, pipe::OptFirstByPipe) = print(io, "OptFirstBy(", pipe.F, ", ", pipe.val, ", ", pipe.dir, ")")
-
-apply{I,T,J,K}(pipe::OptFirstByPipe{I,T,J,K}, X::I) =
-    let YY = lapply(pipe.F, X),
-        ys = unwrap(unwrap(YY)),
-        weights = unwrap(rapply(pipe.key, YY))
-        isempty(ys) ? Opt{T}() : Opt(ys[(pipe.dir >= 0 ? indmax : indmin)(weights)])
-    end
-
-imode(pipe::OptFirstByPipe) = max(imode(pipe.F), imode(pipe.key))
-omode(pipe::OptFirstByPipe) = OutputMode(true, false, omode(pipe.F).exclusive, false)
-
-
-immutable TakePipe{I,T} <: SeqPipe{I,T}
-    F::SeqPipe{I,T}
-    N::IsoPipe{I,Int}
-    dir::Int
-end
-
-TakePipe{I1,I2,T}(F::SeqPipe{I1,T}, N::SeqPipe{I2,T}, dir::Int) =
-    let I = max(I1, I2)
-        TakePipe{I,T}(I ^ F, I ^ N, dir)
-    end
-
-show(io::IO, pipe::TakePipe) = print(io, "Take($(pipe.F), $(pipe.N), $(pipe.dir))")
-
-apply{I,T}(pipe::TakePipe{I,T}, X::I) =
-    let ys = unwrap(apply(pipe.F, X))::Vector{T},
-        N = unwrap(apply(pipe.N, X))::Int
-        if pipe.dir >= 0
-            Seq(N >= 0 ? ys[1:min(N,end)] : ys[1:N+end])
+codegen(pipe::FirstByPipe, X, I) =
+    begin
+        T = odomain(pipe.F)
+        W = odomain(pipe.G)
+        @gensym ws Y0 Z0
+        Z = codegen_compose(ikind(pipe.G), Iso{T}, pipe.F, X, I) do Y, O
+            quote
+                $Y0 = $Y
+                push!($ws, data($(codegen(pipe.G, Y0, O))))
+                Iso{$T}(data($Y0))
+            end
+        end
+        idx = :( ($(pipe.rev) ? indmax : indmin )($ws) )
+        if isnonempty(pipe)
+            return quote
+                $ws = $W[]
+                $Z0 = $Z
+                Iso{$T}($Z0[$idx])
+            end
         else
-            Seq(N >= 0 ? ys[1+N:end] : ys[max(1,1+N+end):end])
+            return quote
+                $ws = $W[]
+                $Z0 = $Z
+                isempty($Z0) ? Opt{$T}() : Opt{$T}($Z0[$idx])
+            end
         end
     end
 
-imode(pipe::TakePipe) = max(imode(pipe.F), imode(pipe.N))
-omode(pipe::TakePipe) =
-    let mode = omode(pipe.F)
-        OutputMode(false, false, mode.exclusive, false)
-    end
 
+#
+# Takes/skips the first N elements (or the last -N elements).
+#
+#   Take(F, N) :: I -> O*
+#   Take(F, N) = x -> F(x)[1:N(x)]
+#   where
+#       F :: I -> O*
+#       N :: I -> Int
+#
 
-immutable GetPipe{I,T,J,K} <: OptPipe{I,T}
-    F::SeqPipe{I,T}
-    key::IsoPipe{J,K}
-    idx::IsoPipe{I,K}
+immutable TakePipe <: AbstractPipe
+    F::AbstractPipe
+    N::AbstractPipe
+    rev::Bool
+    input::Input
+    output::Output
+
+    TakePipe(F::AbstractPipe, N::AbstractPipe, rev::Bool=false) =
+        begin
+            F = SeqPipe(F)
+            N = IsoPipe(N)
+            @assert odomain(N) <: Int "$(repr(N)) is not of type $Int"
+            return new(F, N, rev, max(input(F), input(N)), Output(output(F), rtotal=false))
+        end
 end
 
-GetPipe{I1,I2,T,J,K}(F::SeqPipe{I1,T}, key::IsoPipe{J,K}, idx::IsoPipe{I2,K}) =
-    let I = max(I1, I2, functor(J, eltype(I1))),
-        F = I ^ F,
-        idx = I ^ idx
-        @assert otype(F) == itype(key)
-        GetPipe{I,T,J,K}(F, key, idx)
-    end
+SkipPipe(F, N) = TakePipe(F, N, true)
 
-show(io::IO, pipe::GetPipe) = print(io, "Get($(pipe.F), $(pipe.key), $(pipe.val))")
+show(io::IO, pipe::TakePipe) = print(io, "$(!pipe.rev ? "Take" : "Skip")($(pipe.F), $(pipe.N))")
 
-function apply{I,T,J,K}(pipe::GetPipe{I,T,J,K}, X::I)
-    idx = unwrap(apply(pipe.idx, X))::K
-    YY = lapply(pipe.F, X)
-    zs = unwrap(rapply(pipe.key, YY))
-    ys = unwrap(unwrap(YY))::Vector{T}
-    for j = 1:length(ys)
-        if zs[j] == idx
-            return Opt(ys[j])
+arms(pipe::TakePipe) = AbstractPipe[pipe.F, pipe.N]
+
+codegen(pipe::TakePipe, X, I) =
+    let T = odomain(pipe)
+        @gensym X0 ys n
+        quote
+            $X0 = $X
+            $ys = data($(codegen(pipe.F, X0, I)))
+            $n = data($(codegen(pipe.N, X0, I)))
+            Seq{$T}(
+                $(!pipe.rev ?
+                    :( $n >= 0 ? $ys[1:min($n,end)] : $ys[1:$n+end] ) :
+                    :( $n >= 0 ? $ys[1+$n:end] : $ys[max(1,1+$n+end):end] )))
         end
     end
-    return Opt{T}()
-end
-
-imode(pipe::GetPipe) = max(imode(pipe.F), imode(pipe.key), imode(pipe.F))
-omode(pipe::GetPipe) =
-    let mode = omode(pipe.F)
-        OutputMode(true, false, mode.exclusive, false)
-    end
 
 
-immutable ReversePipe{I,T} <: SeqPipe{I,T}
-    F::SeqPipe{I,T}
+#
+# Reverses an array.
+#
+#   Reverse(F) :: I -> O*
+#   Reverse(F) = x -> reverse(F(x))
+#   where
+#       F :: I -> O*
+#
+
+immutable ReversePipe <: AbstractPipe
+    F::AbstractPipe
+    input::Input
+    output::Output
+
+    ReversePipe(F::AbstractPipe) =
+        begin
+            F = SeqPipe(F)
+            return new(F, input(F), output(F))
+        end
 end
 
 show(io::IO, pipe::ReversePipe) = print(io, "Reverse($(pipe.F))")
 
-apply{I,T}(pipe::ReversePipe{I,T}, X::I) =
-    Seq(reverse(unwrap(apply(pipe.F, X))::Vector{T}))
+arms(pipe::ReversePipe) = AbstractPipe[pipe.F]
 
-imode(pipe::ReversePipe) = imode(pipe.F)
-omode(pipe::ReversePipe) = omode(pipe.F)
-
-
-immutable SortPipe{I,T} <: SeqPipe{I,T}
-    F::SeqPipe{I,T}
-    dir::Int
-end
-
-show(io::IO, pipe::SortPipe) = print(io, "Sort($(pipe.F), $(pipe.dir))")
-
-apply{I,T}(pipe::SortPipe{I,T}, X::I) =
-    wrap(Seq{T}, sort(unwrap(apply(pipe.F, X))::Vector{T}, rev=(pipe.dir<0)))
-
-imode(pipe::SortPipe) = imode(pipe.F)
-omode(pipe::SortPipe) = omode(pipe.F)
-
-
-immutable SortByPipe{I,T,J,K} <: SeqPipe{I,T}
-    F::SeqPipe{I,T}
-    key::IsoPipe{J,K}
-    dir::Int
-end
-
-SortByPipe{I,T,J,K}(F::SeqPipe{I,T}, key::IsoPipe{J,K}, dir::Int) =
-    let I = max(I, functor(J, eltype(I))),
-        F = I ^ F
-        SortByPipe{I,T,J,K}(F, key, dir)
-    end
-SortByPipe{I,T}(F::SeqPipe{I,T}, keys::Tuple{AbstractPipe, Int}...) =
-    let pipe = F
-        for (key, dir) in reverse(keys)
-            pipe = SortByPipe(pipe, key, dir)
+codegen(pipe::ReversePipe, X, I) =
+    let T = odomain(pipe)
+        quote
+            Seq{$T}(reverse(data($(codegen(pipe.F, X, I)))))
         end
-        pipe
     end
 
-show(io::IO, pipe::SortByPipe) =
-    print(io, "SortBy($(pipe.F), $(pipe.key), $(pipe.dir))")
 
-apply{I,T}(pipe::SortByPipe{I,T}, X::I) =
-    let YY = lapply(pipe.F, X),
-        ys = unwrap(unwrap(YY)),
-        weights = unwrap(rapply(pipe.key, YY)),
-        indexes = collect(1:length(ys))
-        sort!(
-            indexes,
-            alg=MergeSort,
-            by=(j -> weights[j]),
-            rev=(pipe.dir<0))
-        wrap(Seq{T}, T[ys[j] for j in indexes])
-    end
+#
+# Picks an element by key.
+#
+#   Get(F, D, Key) :: I -> O?
+#   Get(F, D, Key) = x -> y for y in F(x) such that Key(y) == D(x)
+#   where
+#       F :: I -> O*
+#       D :: I -> K
+#       Key :: O -> K
+#
 
-imode(pipe::SortByPipe) = max(imode(pipe.F), imode(pipe.key))
-omode(pipe::SortByPipe) = omode(pipe.F)
+immutable GetPipe <: AbstractPipe
+    F::AbstractPipe
+    FKey::AbstractPipe
+    D::AbstractPipe
+    input::Input
+    output::Output
 
-
-immutable ConnectPipe{I,T} <: SeqPipe{I,T}
-    F::SeqPipe{I,T}
-    reflexive::Bool
+    GetPipe(F::AbstractPipe, FKey::AbstractPipe, D::AbstractPipe) =
+        begin
+            F = SeqPipe(F)
+            D = IsoPipe(D)
+            @assert ismonic(F) "$(repr(F)) is not exclusive"
+            @assert(
+                isfree(FKey) && isplain(FKey) && ismonic(FKey),
+                "$(repr(FKey)) is not a key mapping")
+            @assert(
+                odomain(F) <: idomain(FKey),
+                "$(repr(F)) and $(repr(FKey)) are not composable")
+            return new(F, FKey, D, max(input(F), input(D)), Output(output(F), lunique=true, rtotal=false))
+        end
 end
 
-ConnectPipe{I,O}(F::AbstractPipe{I,O}, reflexive::Bool) =
-    let T = eltype(I)
-        @assert T == eltype(O)
-        ConnectPipe{I,T}(F ^ Seq, reflexive)
+GetPipe(F, D) = GetPipe(F, HerePipe(odomain(F)), D)
+
+show(io::IO, pipe::GetPipe) = print(io, "Get($(pipe.F), $(pipe.D))")
+
+arms(pipe::GetPipe) = AbstractPipe[pipe.F, pipe.FKey, pipe.D]
+
+codegen(pipe::GetPipe, X, I) =
+    let T = odomain(pipe)
+        @gensym X0 Z d y
+        Y = codegen(pipe.F, X0, I)
+        quote
+            $X0 = $X
+            $d = data($(codegen(pipe.D, X0, I)))
+            $Z = Opt{$T}()
+            for $y in $Y
+                if data($(codegen(pipe.FKey, :( Iso{$T}($y) ), Iso{T}))) == $d
+                    $Z = Opt{$T}($y)
+                    break
+                end
+            end
+            $Z
+        end
     end
 
-show(io::IO, pipe::ConnectPipe) = print(io, "Connect($(pipe.F), $(pipe.reflexive))")
 
-function apply{I,T}(pipe::ConnectPipe{I,T}, X::I)
-    Xs = pipe.reflexive ? I[X] : reverse(unwrap(dist(fmap(pipe.F, dup(X)))))
-    out = T[]
-    while !isempty(Xs)
-        X = pop!(Xs)
-        push!(out, unwrap(X))
-        append!(Xs, reverse(unwrap(dist(fmap(pipe.F, dup(X))))))
-    end
-    return Seq(out)
+#
+# Transitive closure.
+#
+
+immutable ConnectPipe <: AbstractPipe
+    F::AbstractPipe
+    self::Bool
+    input::Input
+    output::Output
+
+    ConnectPipe(F::AbstractPipe, self::Bool=false) =
+        begin
+            F = SeqPipe(F)
+            @assert odomain(F) <: idomain(F) "$(repr(F)) is not connectable"
+            return new(F, self, input(F), Output(RBT.output(F), domain=idomain(F), ltotal=self, runique=false))
+        end
 end
 
-imode(pipe::ConnectPipe) = imode(pipe.F)
-omode(pipe::ConnectPipe) = OutputMode(false, false, false, false)
+show(io::IO, pipe::ConnectPipe) = print(io, "Connect($(pipe.F))")
 
+arms(pipe::ConnectPipe) = AbstractPipe[pipe.F]
 
-immutable DepthPipe{I,T} <: IsoPipe{I,Int}
-    F::SeqPipe{I,T}
-end
-
-DepthPipe{I,O}(F::AbstractPipe{I,O}) =
-    let T = eltype(I)
-        @assert T == eltype(O)
-        DepthPipe{I,T}(F ^ Seq)
+codegen(pipe::ConnectPipe, X) =
+    begin
+        T = idomain(pipe)
+        I = ikind(pipe)
+        II = Kind(I, I)
+        @gensym X0 Xstk xs fst
+        return quote
+            $Xstk = $I[$X]
+            $xs = $T[]
+            $fst = $(!pipe.self)
+            while !isempty($Xstk)
+                $X0 = pop!($Xstk)
+                if $fst
+                    $fst = false
+                else
+                    push!($xs, get($X0))
+                end
+                append!($Xstk, reverse(data(dist($(codegen_map(pipe.F, :( dup($II, $X0) ), II))))))
+            end
+            Seq{$T}($xs)
+        end
     end
+
+
+#
+# Height of the tree formed by the transitive closure.
+#
+
+immutable DepthPipe <: AbstractPipe
+    F::AbstractPipe
+    input::Input
+    output::Output
+
+    DepthPipe(F::AbstractPipe) =
+        begin
+            F = SeqPipe(F)
+            @assert odomain(F) <: idomain(F) "$(repr(F)) is not connectable"
+            return new(F, input(F), Output(Int))
+        end
+end
 
 show(io::IO, pipe::DepthPipe) = print(io, "Depth($(pipe.F))")
 
-function apply{I,T}(pipe::DepthPipe{I,T}, X::I)
-    Xs = Tuple{I,Int}[(X,0)]
-    max_d = 0
-    k = 1
-    while k <= length(Xs)
-        X, d = Xs[k]
-        max_d = max(max_d, d)
-        for Y in unwrap(dist(fmap(pipe.F, dup(X))))
-            push!(Xs, (Y,d+1))
-        end
-        k = k+1
-    end
-    return Iso(max_d)
-end
+arms(pipe::DepthPipe) = AbstractPipe[pipe.F]
 
-imode(pipe::DepthPipe) = imode(pipe.F)
-omode(pipe::DepthPipe) = OutputMode(true, true, false, false)
-
-
-immutable SortConnectPipe{I,T,J,K} <: SeqPipe{I,T}
-    F::SeqPipe{I,T}
-    L::SeqPipe{J,T}
-    key::IsoPipe{J,K}
-end
-
-SortConnectPipe{I,T,J1,J2,K}(F::SeqPipe{I,T}, L::SeqPipe{J1,T}, key::IsoPipe{J2,K}) =
-    let J = max(J1, J2),
-        I = max(I, functor(J, eltype(I)))
-        @assert T == eltype(J)
-        SortConnectPipe{I,T,J,K}(I ^ F, J ^ L, J ^ key)
-    end
-SortConnectPipe{I,T,J1,J2,K}(F::SeqPipe{I,T}, L::OptPipe{J1,T}, key::IsoPipe{J2,K}) =
-    SortConnectPipe(F, L ^ Seq, key)
-SortConnectPipe{I,T}(F::SeqPipe{I,T}, L::AbstractPipe) =
-    SortConnectPipe(F, L, HerePipe(T))
-
-show(io::IO, pipe::SortConnectPipe) = print(io, "SortConnect($(pipe.F), $(pipe.L), $(pipe.key))")
-
-function apply{I,T,J,K}(pipe::SortConnectPipe{I,T,J,K}, X::I)
-    YY = lapply(pipe.F, X)
-    ys = unwrap(unwrap(YY))
-    keyidx = Dict{K,Int}()
-    edges = Vector{Vector{Int}}()
-    weight = Vector{Int}()
-    for (k, key) in enumerate(rapply(pipe.key, YY))
-        keyidx[key] = k
-        push!(edges, [])
-        push!(weight, 0)
-    end
-    for (k, Y) in enumerate(dist(rewrap(functor(J, eltype(YY)), YY)))
-        for Z in unwrap(dist(fmap(pipe.L, dup(Y))))
-            key = unwrap(apply(pipe.key, Z))
-            if key in keys(keyidx)
-                m = keyidx[key]
-                push!(edges[m], k)
-                weight[k] = weight[k]+1
-            end
-        end
-    end
-    out = Vector{T}()
-    stack = Vector{Int}()
-    for k = length(ys):-1:1
-        if weight[k] == 0
-            push!(stack, k)
-        end
-    end
-    while !isempty(stack)
-        m = pop!(stack)
-        push!(out, ys[m])
-        for k in reverse(edges[m])
-            weight[k] = weight[k]-1
-            if weight[k] == 0
-                push!(stack, k)
-            end
-        end
-    end
-    return Seq(out)
-end
-
-imode(pipe::SortConnectPipe) = max(imode(pipe.F), imode(pipe.L), imode(pipe.key))
-omode(pipe::SortConnectPipe) = omode(pipe.F)
-
-
-immutable UniquePipe{I,T} <: SeqPipe{I,T}
-    F::SeqPipe{I,T}
-    dir::Int
-end
-
-show(io::IO, pipe::UniquePipe) = print(io, "Unique($(pipe.F), $(pipe.dir))")
-
-apply{I,T}(pipe::UniquePipe{I,T}, X::I) =
-    wrap(Seq{T}, sort(unique(unwrap(apply(pipe.F, X))::Vector{T}), rev=(pipe.dir<0)))
-
-imode(pipe::UniquePipe) = imode(pipe.F)
-omode(pipe::UniquePipe) =
-    let mode = omode(pipe.F)
-        OutputMode(false, mode.complete, true, mode.reachable)
-    end
-
-
-immutable UniqueByPipe{I,T,J,K} <: SeqPipe{I,T}
-    F::SeqPipe{I,T}
-    key::IsoPipe{J,K}
-    dir::Int
-end
-
-UniqueByPipe{I,T,J,K}(F::SeqPipe{I,T}, key::IsoPipe{J,K}, dir::Int) =
-    let I = max(I, functor(J, eltype(I)))
-        @assert T == eltype(J)
-        UniqueByPipe{I,T,J,K}(I ^ F, key, dir)
-    end
-
-show(io::IO, pipe::UniqueByPipe) =
-    print(io, "UniqueBy($(pipe.F), $(pipe.key), $(pipe.dir))")
-
-function apply{I,T,J,K}(pipe::UniqueByPipe{I,T,J,K}, X::I)
-    YY = lapply(pipe.F, X)
-    ys = unwrap(unwrap(YY))::Vector{T}
-    ks = unwrap(rapply(pipe.key, YY))::Vector{K}
-    kys = Vector{Tuple{K,T}}()
-    seen = Set{K}()
-    for (k, y) in enumerate(ys)
-        key = ks[k]
-        if !in(key, seen)
-            push!(kys, (key, y))
-            push!(seen, key)
-        end
-    end
-    sort!(kys, rev=(pipe.dir<0))
-    return Seq(T[y for (k, y) in kys])
-end
-
-imode(pipe::UniqueByPipe) = max(imode(pipe.F), imode(pipe.key))
-omode(pipe::UniqueByPipe) =
-    let mode = omode(pipe.F)
-        OutputMode(false, mode.complete, true, mode.reachable)
-    end
-
-
-immutable GroupStartPipe{I,V,T} <: IsoPipe{I,Tuple{Unit, Vector{V}}}
-    F::SeqPipe{I,T}
-end
-
-
-show(io::IO, pipe::GroupStartPipe) = print(io, "GroupStart($(pipe.F))")
-
-apply{I,V,T}(pipe::GroupStartPipe{I,V,T}, X::I) =
-    let vs = unwrap(dist(fmap(pipe.F, dup(X))))::Vector{V}
-        Iso(((), vs))
-    end
-
-imode(pipe::GroupStartPipe) = imode(pipe.F)
-omode(pipe::GroupStartPipe) = OutputMode(true, true, false, false)
-
-
-immutable GroupEndPipe{P,V,T} <: AbstractPipe{Iso{Tuple{P, Vector{V}}}, Iso{Tuple{P, Vector{T}}}}
-end
-
-show(io::IO, pipe::GroupEndPipe) = print(io, "GroupEnd()")
-
-apply{P,V,T}(pipe::GroupEndPipe{P,V,T}, X::Iso{Tuple{P, Vector{V}}}) =
+codegen(pipe::DepthPipe, X) =
     begin
-        (p, vs) = unwrap(X)
-        ys = T[unwrap(v) for v in vs]
-        Iso((p, ys))
-    end
-
-imode(pipe::GroupEndPipe) = InputMode(false, ())
-omode(pipe::GroupEndPipe) = OutputMode(true, true, true, true)
-
-
-immutable GroupByPipe{P,Q,V,R,J,K} <: AbstractPipe{Iso{Tuple{P, Vector{V}}}, Seq{Tuple{Q, Vector{V}}}}
-    img::IsoPipe{V,R}
-    key::IsoPipe{J,K}
-    dir::Int
-end
-
-GroupByPipe{I0,T}(F::SeqPipe{I0,T}, groups::Tuple...) =
-    let groups = ([length(t) == 3 ? t : (t[1], HerePipe(otype(t[1])), t[2]) for t in groups]...)
-        V = functor(I0, T)
-        for (img, key, dir) in groups
-            V = max(V, functor(ifunctor(img), T), functor(ifunctor(key), T))
-        end
-        I = functor(V, eltype(I0))
-        pipe = GroupStartPipe{I,V,T}(I ^ F)
-        P = Tuple{}
-        for (img, key, dir) in groups
-            R = otype(img)
-            Q = Tuple{P.parameters..., R}
-            J = ifunctor(key)
-            K = otype(key)
-            pipe = pipe >> GroupByPipe{P,Q,V,R,J,K}(V ^ img, key, dir)
-            P = Q
-        end
-        pipe = pipe >> GroupEndPipe{P,V,T}()
-        pipe
-    end
-
-show(io::IO, pipe::GroupByPipe) = print(io, "GroupBy($(pipe.img), $(pipe.key), $(pipe.dir))")
-
-function apply{P,Q,V,R,J,K}(pipe::GroupByPipe{P,Q,V,R,J,K}, X::Iso{Tuple{P, Vector{V}}})
-    p, Ys = unwrap(X)
-    ks = K[]
-    qYs = Tuple{Q,Vector{V}}[]
-    k2idx = Dict{K,Int}()
-    for Y in Ys
-        ZZ = lapply(pipe.img, Y)
-        z = unwrap(unwrap(ZZ))
-        k = unwrap(rapply(pipe.key, ZZ))
-        if k in keys(k2idx)
-            push!(qYs[k2idx[k]][2], Y)
-        else
-            push!(qYs, ((p..., z), V[Y]))
-            push!(ks, k)
-            k2idx[k] = length(ks)
+        T = idomain(pipe)
+        I = ikind(pipe)
+        II = Kind(I, I)
+        @gensym X0 Xstk d max_d
+        return quote
+            $Xstk = Tuple{$I,Int}[($X,0)]
+            $max_d = 0
+            while !isempty($Xstk)
+                $X0, $d = pop!($Xstk)
+                $max_d = max($d, $max_d)
+                for $X0 in dist($(codegen_map(pipe.F, :( dup($II, $X0) ), II)))
+                    push!($Xstk, ($X0, $d+1))
+                end
+            end
+            Iso{Int}($max_d)
         end
     end
-    sort!(ks, rev=(pipe.dir<0))
-    return Seq(Tuple{Q, Vector{V}}[qYs[k2idx[k]] for k in ks])
-end
-
-imode(pipe::GroupByPipe) = max(imode(pipe.img), imode(pipe.key))
-omode(pipe::GroupByPipe) = OutputMode(false, false, false, false)
 
 
-immutable CubeGroupByPipe{P,Q,V,R,J,K} <: AbstractPipe{Iso{Tuple{P, Vector{V}}}, Seq{Tuple{Q, Vector{V}}}}
-    img::IsoPipe{V,R}
-    key::IsoPipe{J,K}
-    dir::Int
-end
+#
+# Sorting with respect to the hierarchy.
+#
 
-CubeGroupByPipe{I0,T}(F::SeqPipe{I0,T}, groups::Tuple...) =
-    let groups = ([length(t) == 3 ? t : (t[1], HerePipe(otype(t[1])), t[2]) for t in groups]...)
-        V = functor(I0, T)
-        for (img, key, dir) in groups
-            V = max(V, functor(ifunctor(img), T), functor(ifunctor(key), T))
+immutable SortConnectPipe <: AbstractPipe
+    F::AbstractPipe
+    FKey::AbstractPipe
+    G::AbstractPipe
+    input::Input
+    output::Output
+
+    SortConnectPipe(F::AbstractPipe, FKey::AbstractPipe, G::AbstractPipe) =
+        begin
+            F = SeqPipe(F)
+            G = SeqPipe(G)
+            @assert odomain(F) <: idomain(FKey) "$(repr(F)) and $(repr(FKey)) are not composable"
+            @assert odomain(F) <: idomain(G) "$(repr(F)) and $(repr(G)) are not composable"
+            @assert isfree(FKey) && isplain(FKey) && ismonic(FKey) "$(repr(FKey)) is not a key mapping"
+            @assert odomain(G) <: idomain(G) "$(repr(G)) is not connectable"
+            input = Input(idomain(F), max(imode(F), imode(G)))
+            return new(F, FKey, G, input, output(F))
         end
-        I = functor(V, eltype(I0))
-        pipe = GroupStartPipe{I,V,T}(I ^ F)
-        P = Tuple{}
-        for (img, key, dir) in groups
-            R = otype(img)
-            Q = Tuple{P.parameters..., Nullable{R}}
-            J = ifunctor(key)
-            K = otype(key)
-            pipe = pipe >> CubeGroupByPipe{P,Q,V,R,J,K}(V ^ img, key, dir)
-            P = Q
-        end
-        pipe = pipe >> GroupEndPipe{P,V,T}()
-        pipe
-    end
-
-show(io::IO, pipe::CubeGroupByPipe) = print(io, "CubeGroupBy($(pipe.img), $(pipe.key), $(pipe.dir))")
-
-function apply{P,Q,V,R,J,K}(pipe::CubeGroupByPipe{P,Q,V,R,J,K}, X::Iso{Tuple{P, Vector{V}}})
-    p, Ys = unwrap(X)
-    ks = K[]
-    qYs = Tuple{Q,Vector{V}}[]
-    k2idx = Dict{K,Int}()
-    for Y in Ys
-        ZZ = lapply(pipe.img, Y)
-        z = unwrap(unwrap(ZZ))
-        k = unwrap(rapply(pipe.key, ZZ))
-        if k in keys(k2idx)
-            push!(qYs[k2idx[k]][2], Y)
-        else
-            push!(qYs, ((p..., Nullable{R}(z)), V[Y]))
-            push!(ks, k)
-            k2idx[k] = length(ks)
-        end
-    end
-    sort!(ks, rev=(pipe.dir<0))
-    qYs = Tuple{Q, Vector{V}}[qYs[k2idx[k]] for k in ks]
-    push!(qYs, ((p..., Nullable{R}()), Ys))
-    return Seq(qYs)
 end
 
-imode(pipe::CubeGroupByPipe) = max(imode(pipe.img), imode(pipe.key))
-omode(pipe::CubeGroupByPipe) = OutputMode(false, true, false, false)
+SortConnectPipe(F, G) = SortConnectPipe(F, HerePipe(odomain(F)), G)
 
+show(io::IO, pipe::SortConnectPipe) = print(io, "SortConnect($(pipe.F), $(pipe.G))")
 
-immutable PartitionStartPipe{I,V,T} <: IsoPipe{I, Tuple{I, Tuple{Unit, Vector{V}}}}
-    F::SeqPipe{I,T}
-end
+arms(pipe::SortConnectPipe) = AbstractPipe[pipe.F, pipe.FKey, pipe.G]
 
-show(io::IO, pipe::PartitionStartPipe) = print(io, "PartitionStart($(pipe.F))")
-
-apply{I,V,T}(pipe::PartitionStartPipe{I,V,T}, X::I) =
-    let vs = unwrap(dist(fmap(pipe.F, dup(X))))::Vector{V}
-        Iso((X, ((), vs)))
-    end
-
-imode(pipe::PartitionStartPipe) = imode(pipe.F)
-omode(pipe::PartitionStartPipe) = OutputMode(true, true, false, false)
-
-
-immutable PartitionEndPipe{I,P,V,T} <: AbstractPipe{Iso{Tuple{I, Tuple{P, Vector{V}}}}, Iso{Tuple{P, Vector{T}}}}
-end
-
-show(io::IO, pipe::PartitionEndPipe) = print(io, "PartitionEnd()")
-
-apply{I,P,V,T}(pipe::PartitionEndPipe{I,P,V,T}, X::Iso{Tuple{I, Tuple{P, Vector{V}}}}) =
+codegen(pipe::SortConnectPipe, X, I) =
     begin
-        (p, vs) = unwrap(X)[2]
-        ys = T[unwrap(v) for v in vs]
-        Iso((p, ys))
-    end
-
-imode(pipe::PartitionEndPipe) = InputMode(false, ())
-omode(pipe::PartitionEndPipe) = OutputMode(true, true, true, true)
-
-
-immutable PartitionByPipe{I,P,Q,V,R,J,K} <:
-        AbstractPipe{Iso{Tuple{I, Tuple{P, Vector{V}}}}, Seq{Tuple{I, Tuple{Q, Vector{V}}}}}
-    dim::SeqPipe{I,R}
-    img::IsoPipe{V,R}
-    key::IsoPipe{J,K}
-    dir::Int
-end
-
-
-PartitionByPipe{I0,T}(F::SeqPipe{I0,T}, groups::Tuple...) =
-    let groups = ([length(t) == 4 ? t : (t[1], t[2], HerePipe(otype(t[1])), t[3]) for t in groups]...)
-        V = functor(I0, T)
-        for (dim, img, key, dir) in groups
-            V = max(V, functor(ifunctor(img), T), functor(ifunctor(key), T), functor(ifunctor(dim), T))
-        end
-        I = functor(V, eltype(I0))
-        pipe = PartitionStartPipe{I,V,T}(I ^ F)
-        P = Tuple{}
-        for (dim,img, key, dir) in groups
-            R = otype(img)
-            Q = Tuple{P.parameters..., R}
-            J = ifunctor(key)
-            K = otype(key)
-            pipe = pipe >> PartitionByPipe{I,P,Q,V,R,J,K}(I ^ dim, V ^ img, key, dir)
-            P = Q
-        end
-        pipe = pipe >> PartitionEndPipe{I,P,V,T}()
-        pipe
-    end
-
-show(io::IO, pipe::PartitionByPipe) = print(io, "PartitionBy($(pipe.dim), $(pipe.img), $(pipe.key), $(pipe.dir))")
-
-function apply{I,P,Q,V,R,J,K}(pipe::PartitionByPipe{I,P,Q,V,R,J,K}, X::Iso{Tuple{I, Tuple{P, Vector{V}}}})
-    S, (p, Ys) = unwrap(X)
-    ks = K[]
-    qYs = Tuple{I,Tuple{Q,Vector{V}}}[]
-    k2idx = Dict{K,Int}()
-    ZZ = lapply(pipe.dim, S)
-    zs = unwrap(unwrap(ZZ))
-    dks = unwrap(rapply(pipe.key, ZZ))
-    for j = 1:length(zs)
-        z = zs[j]
-        k = dks[j]
-        push!(qYs, (S, ((p..., z), V[])))
-        push!(ks, k)
-        k2idx[k] = length(ks)
-    end
-    for Y in Ys
-        ZZ = lapply(pipe.img, Y)
-        z = unwrap(unwrap(ZZ))
-        k = unwrap(rapply(pipe.key, ZZ))
-        if k in keys(k2idx)
-            push!(qYs[k2idx[k]][2][2], Y)
-        end
-    end
-    sort!(ks, rev=(pipe.dir<0))
-    return Seq(Tuple{I, Tuple{Q, Vector{V}}}[qYs[k2idx[k]] for k in ks])
-end
-
-imode(pipe::PartitionByPipe) = max(imode(pipe.dim), imode(pipe.img), imode(pipe.key))
-omode(pipe::PartitionByPipe) = OutputMode(false, false, false, false)
-
-
-immutable CubePartitionByPipe{I,P,Q,V,R,J,K} <:
-        AbstractPipe{Iso{Tuple{I, Tuple{P, Vector{V}}}}, Seq{Tuple{I, Tuple{Q, Vector{V}}}}}
-    dim::SeqPipe{I,R}
-    img::IsoPipe{V,R}
-    key::IsoPipe{J,K}
-    dir::Int
-end
-
-CubePartitionByPipe{I0,T}(F::SeqPipe{I0,T}, groups::Tuple...) =
-    let groups = ([length(t) == 4 ? t : (t[1], t[2], HerePipe(otype(t[1])), t[3]) for t in groups]...)
-        V = functor(I0, T)
-        for (dim, img, key, dir) in groups
-            V = max(V, functor(ifunctor(img), T), functor(ifunctor(key), T), functor(ifunctor(dim), T))
-        end
-        I = functor(V, eltype(I0))
-        pipe = PartitionStartPipe{I,V,T}(I ^ F)
-        P = Tuple{}
-        for (dim,img, key, dir) in groups
-            R = otype(img)
-            Q = Tuple{P.parameters..., Nullable{R}}
-            J = ifunctor(key)
-            K = otype(key)
-            pipe = pipe >> CubePartitionByPipe{I,P,Q,V,R,J,K}(I ^ dim, V ^ img, key, dir)
-            P = Q
-        end
-        pipe = pipe >> PartitionEndPipe{I,P,V,T}()
-        pipe
-    end
-
-show(io::IO, pipe::CubePartitionByPipe) = print(io, "CubePartitionBy($(pipe.dim), $(pipe.img), $(pipe.key), $(pipe.dir))")
-
-function apply{I,P,Q,V,R,J,K}(pipe::CubePartitionByPipe{I,P,Q,V,R,J,K}, X::Iso{Tuple{I, Tuple{P, Vector{V}}}})
-    S, (p, Ys) = unwrap(X)
-    ks = K[]
-    qYs = Tuple{I,Tuple{Q,Vector{V}}}[]
-    k2idx = Dict{K,Int}()
-    ZZ = lapply(pipe.dim, S)
-    zs = unwrap(unwrap(ZZ))
-    dks = unwrap(rapply(pipe.key, ZZ))
-    for j = 1:length(zs)
-        z = zs[j]
-        k = dks[j]
-        push!(qYs, (S, ((p..., Nullable(z)), V[])))
-        push!(ks, k)
-        k2idx[k] = length(ks)
-    end
-    allYs = Vector{V}()
-    for Y in Ys
-        ZZ = lapply(pipe.img, Y)
-        z = unwrap(unwrap(ZZ))
-        k = unwrap(rapply(pipe.key, ZZ))
-        if k in keys(k2idx)
-            push!(qYs[k2idx[k]][2][2], Y)
-            push!(allYs, Y)
-        end
-    end
-    sort!(ks, rev=(pipe.dir<0))
-    qYs = Tuple{I, Tuple{Q, Vector{V}}}[qYs[k2idx[k]] for k in ks]
-    push!(qYs, (S, ((p..., Nullable{R}()), allYs)))
-    return Seq(qYs)
-end
-
-imode(pipe::CubePartitionByPipe) = max(imode(pipe.dim), imode(pipe.img), imode(pipe.key))
-omode(pipe::CubePartitionByPipe) = OutputMode(false, true, false, false)
-
-
-immutable FieldPipe{IT,O} <: AbstractPipe{Iso{IT},O}
-    field::Symbol
-    singular::Bool
-    complete::Bool
-    exclusive::Bool
-    reachable::Bool
-end
-
-FieldPipe(IT, field, O, mode...) = FieldPipe{IT,O}(field, mode...)
-
-show{IT,O}(io::IO, pipe::FieldPipe{IT,O}) = print(io, "[$(pipe.field)]")
-
-apply{IT,O}(pipe::FieldPipe{IT,O}, X::Iso{IT}) =
-    wrap(O, getfield(unwrap(X), pipe.field))
-
-imode(::FieldPipe) = InputMode(false, ())
-omode(pipe::FieldPipe) = OutputMode(pipe.singular, pipe.complete, pipe.exclusive, pipe.reachable)
-
-
-immutable ItemPipe{IT,O} <: AbstractPipe{Iso{IT},O}
-    index::Int
-    singular::Bool
-    complete::Bool
-    exclusive::Bool
-    reachable::Bool
-end
-
-ItemPipe(IT, index) = ItemPipe{IT, Iso{IT.parameters[index]}}(index, true, true, false, false)
-ItemPipe(IT, index, O) =
-    ItemPipe{IT, functor(O, O <: Iso? IT.parameters[index] : eltype(IT.parameters[index]))}(
-        index, O <: Iso || O <: Opt, O <: Iso, false, false)
-ItemPipe(IT, index, O, singular, complete, exclusive, reachable) =
-    ItemPipe{IT, functor(O, O <: Iso? IT.parameters[index] : eltype(IT.parameters[index]))}(
-        index, singular, complete, exclusive, reachable)
-
-show{IT,O}(io::IO, pipe::ItemPipe{IT,O}) = print(io, "[$(pipe.index)]")
-
-apply{IT,O}(pipe::ItemPipe{IT,O}, X::Iso{IT}) =
-    wrap(O, unwrap(X)[pipe.index])
-
-imode(::ItemPipe) = InputMode(false, ())
-omode(pipe::ItemPipe) = OutputMode(pipe.singular, pipe.complete, pipe.exclusive, pipe.reachable)
-
-
-immutable IsoNotPipe{I} <: IsoPipe{I,Bool}
-    F::IsoPipe{I,Bool}
-end
-
-show(io::IO, pipe::IsoNotPipe) = print(io, "OptNot($(pipe.F))")
-
-apply{I}(pipe::IsoNotPipe{I}, X::I) = wrap(Iso{Bool}, !unwrap(apply(pipe.F, X)::Iso{Bool}))
-
-imode(pipe::IsoNotPipe) = imode(pipe.F)
-omode(::IsoNotPipe) = OutputMode(true, true, false, false)
-
-
-immutable OptNotPipe{I} <: OptPipe{I,Bool}
-    F::OptPipe{I,Bool}
-end
-
-show(io::IO, pipe::OptNotPipe) = print(io, "OptNot($(pipe.F))")
-
-apply{I}(pipe::OptNotPipe{I}, X::I) =
-    let y = unwrap(apply(pipe.F, X))::Nullable{Bool}
-        wrap(Opt{Bool}, !isnull(y) ? Nullable{Bool}(!get(y)) : Nullable{Bool}())
-    end
-
-imode(pipe::OptNotPipe) = imode(pipe.F)
-omode(::OptNotPipe) = OutputMode(true, false, false, false)
-
-
-NotPipe(F::AbstractPipe) =
-    ofunctor(F) <: Iso ? IsoNotPipe(F) : OptNotPipe(F)
-
-
-immutable IsoAndPipe{I} <: IsoPipe{I,Bool}
-    F::IsoPipe{I,Bool}
-    G::IsoPipe{I,Bool}
-end
-
-IsoAndPipe{I1,I2}(F::IsoPipe{I1,Bool}, G::IsoPipe{I2,Bool}) =
-    let I = max(I1, I2)
-        IsoAndPipe{I}(I ^ F, I ^ G)
-    end
-
-show(io::IO, pipe::IsoAndPipe) = print(io, "IsoAnd($(pipe.F), $(pipe.G))")
-
-apply{I}(pipe::IsoAndPipe{I}, X::I) =
-    wrap(Iso{Bool}, unwrap(apply(pipe.F, X))::Bool && unwrap(apply(pipe.G, X))::Bool)
-
-imode(pipe::IsoAndPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(::IsoAndPipe) = OutputMode(true, true, false, false)
-
-
-immutable OptAndPipe{I} <: OptPipe{I,Bool}
-    F::OptPipe{I,Bool}
-    G::OptPipe{I,Bool}
-end
-
-show(io::IO, pipe::OptAndPipe) = print(io, "OptAnd($(pipe.F), $(pipe.G))")
-
-apply{I}(pipe::OptAndPipe{I}, X::I) =
-    let Y1 = apply(pipe.F, X)::Opt{Bool}
-        if !isnull(Y1)
-            if get(Y1)
-                return apply(pipe.G, X)::Opt{Bool}
-            end
-        else
-            Y2 = apply(pipe.G, X)::Opt{Bool}
-            if isnull(Y2) || get(Y2)
-                return Opt{Bool}()
+        T = odomain(pipe.F)
+        K = odomain(pipe.FKey)
+        @gensym keys deps Y0 ys key idx srcidx dstidx key2idxs edges weight sorted stk
+        Y = codegen_compose(ikind(pipe.G), Iso{T}, pipe.F, X, I) do Y, O
+            quote
+                $Y0 = $Y
+                push!($keys, data($(codegen(pipe.FKey, Y0, O))))
+                push!($deps, data($(codegen_compose(pipe.FKey, pipe.G, Y0, O))))
+                Iso{$T}(get($Y0))
             end
         end
-        return Opt{Bool}(false)
-    end
-
-imode(pipe::OptAndPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(::OptAndPipe) = OutputMode(true, false, false, false)
-
-
-AndPipe{I1,O1,I2,O2}(F::AbstractPipe{I1,O1}, G::AbstractPipe{I2,O2}) =
-    let I = max(I1, I2)
-        O1 <: Iso && O2 <: Iso ?
-            IsoAndPipe(I ^ F, I ^ G) :
-            OptAndPipe(I ^ (F ^ Opt), I ^ (G ^ Opt))
-    end
-
-
-immutable IsoOrPipe{I} <: IsoPipe{I,Bool}
-    F::IsoPipe{I,Bool}
-    G::IsoPipe{I,Bool}
-end
-
-show(io::IO, pipe::IsoOrPipe) = print(io, "IsoOr($(pipe.F), $(pipe.G))")
-
-apply{I}(pipe::IsoOrPipe{I}, X::I) =
-    wrap(Iso{Bool}, (unwrap(apply(pipe.F, X))::Bool || unwrap(apply(pipe.G, X))::Bool))
-
-imode(pipe::IsoOrPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(::IsoOrPipe) = OutputMode(true, true, false, false)
-
-
-immutable OptOrPipe{I} <: OptPipe{I,Bool}
-    F::OptPipe{I,Bool}
-    G::OptPipe{I,Bool}
-end
-
-show(io::IO, pipe::OptOrPipe) = print(io, "OptOr($(pipe.F), $(pipe.G))")
-
-apply{I}(pipe::OptOrPipe{I}, X::I) =
-    let Y1 = apply(pipe.F, X)::Opt{Bool}
-        if !isnull(Y1)
-            if !get(Y1)
-                return apply(pipe.G, X)::Opt{Bool}
+        return quote
+            $keys = $K[]
+            $deps = Vector{$K}[]
+            $ys = data($Y)
+            $key2idxs = Dict{$K,Vector{Int}}()
+            for ($idx, $key) in enumerate($keys)
+                if !haskey($key2idxs, $key)
+                    $key2idxs[$key] = Int[$idx]
+                else
+                    push!($key2idxs[$key], $idx)
+                end
             end
-        else
-            Y2 = apply(pipe.G, X)::Opt{Bool}
-            if isnull(Y2) || !get(Y2)
-                return Opt{Bool}()
+            $edges = Vector{Int}[Int[] for $idx = 1:length($ys)]
+            $weight = zeros(Int, length($ys))
+            for $dstidx in eachindex($deps)
+                for $key in $deps[$dstidx]
+                    if haskey($key2idxs, $key)
+                        for $srcidx in $key2idxs[$key]
+                            push!($edges[$srcidx], $dstidx)
+                            $weight[$dstidx] += 1
+                        end
+                    end
+                end
             end
-        end
-        return Opt{Bool}(true)
-    end
-
-imode(pipe::OptOrPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(::OptOrPipe) = OutputMode(true, false, false, false)
-
-
-OrPipe{I1,O1,I2,O2}(F::AbstractPipe{I1,O1}, G::AbstractPipe{I2,O2}) =
-    let I = max(I1, I2)
-        O1 <: Iso && O2 <: Iso ?
-            IsoOrPipe(I ^ F, I ^ G) :
-            OptOrPipe(I ^ (F ^ Opt), I ^ (G ^ Opt))
-    end
-
-
-immutable EQPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
-    F::IsoPipe{I,T}
-    G::IsoPipe{I,T}
-end
-
-EQPipe{I1,I2,T}(F::IsoPipe{I1,T}, G::IsoPipe{I2,T}) =
-    let I = max(I1, I2)
-        EQPipe{I,T}(I ^ F, I ^ G)
-    end
-
-show(io::IO, pipe::EQPipe) = print(io, "EQ($(pipe.F), $(pipe.G))")
-
-apply{I,T}(pipe::EQPipe{I,T}, X::I) =
-    Iso(unwrap(apply(pipe.F, X))::T == unwrap(apply(pipe.G, X))::T)
-
-imode(pipe::EQPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(::EQPipe) = OutputMode(true, true, false, false)
-
-
-immutable NEPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
-    F::IsoPipe{I,T}
-    G::IsoPipe{I,T}
-end
-
-NEPipe{I1,I2,T}(F::IsoPipe{I1,T}, G::IsoPipe{I2,T}) =
-    let I = max(I1, I2)
-        NEPipe{I,T}(I ^ F, I ^ G)
-    end
-
-show(io::IO, pipe::NEPipe) = print(io, "NE($(pipe.F), $(pipe.G))")
-
-apply{I,T}(pipe::NEPipe{I,T}, X::I) =
-    Iso(unwrap(apply(pipe.F, X))::T != unwrap(apply(pipe.G, X))::T)
-
-imode(pipe::NEPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(::NEPipe) = OutputMode(true, true, false, false)
-
-
-immutable InPipe{I,T<:Union{Int,UTF8String}} <: IsoPipe{I,Bool}
-    F::IsoPipe{I,T}
-    G::SeqPipe{I,T}
-end
-
-InPipe{I1,I2,T}(F::IsoPipe{I1,T}, G::SeqPipe{I2,T}) =
-    let I = max(I1, I2)
-        InPipe{I,T}(I ^ F, I ^ G)
-    end
-
-show(io::IO, pipe::InPipe) = print(io, "In($(pipe.F), $(pipe.G))")
-
-apply{I,T}(pipe::InPipe{I,T}, X::I) =
-    Iso(unwrap(apply(pipe.F, X))::T in unwrap(apply(pipe.G, X))::Vector{T})
-
-imode(pipe::InPipe) = max(imode(pipe.F), imode(pipe.G))
-omode(::InPipe) = OutputMode(true, true, false, false)
-
-
-macro defunarypipe(Name, op, T1, T2)
-    return esc(quote
-        immutable $Name{I} <: IsoPipe{I,$T2}
-            F::IsoPipe{I,$T1}
-        end
-        show(io::IO, pipe::$Name) = print(io, "(", $op, ")(", pipe.F, ")")
-        apply{I}(pipe::$Name, X::I) = wrap(Iso{$T2}, $op(unwrap(apply(pipe.F, X))::$T1)::$T2)
-        imode(pipe::$Name) = imode(pipe.F)
-        omode(::$Name) = OutputMode(true, true, false, false)
-    end)
-end
-
-macro defbinarypipe(Name, op, T1, T2, T3)
-    return esc(quote
-        immutable $Name{I} <: IsoPipe{I,$T3}
-            F::IsoPipe{I,$T1}
-            G::IsoPipe{I,$T2}
-        end
-        $Name{I1,I2}(F::IsoPipe{I1,$T1}, G::IsoPipe{I2,$T2}) =
-            let I = max(I1, I2)
-                $Name{I}(I ^ F, I ^ G)
+            $sorted = $T[]
+            $stk = Int[]
+            for $idx = length($ys):-1:1
+                if $weight[$idx] == 0
+                    push!($stk, $idx)
+                end
             end
-        show(io::IO, pipe::$Name) = print(io, "(", $op, ")(", pipe.F, ", ", pipe.G, ")")
-        apply{I}(pipe::$Name, X::I) =
-            wrap(Iso{$T3}, $op(unwrap(apply(pipe.F, X))::$T1, unwrap(apply(pipe.G, X))::$T2)::$T3)
-        imode(pipe::$Name) = max(imode(pipe.F), imode(pipe.G))
-        omode(::$Name) = OutputMode(true, true, false, false)
-    end)
-end
-
-@defunarypipe(PosPipe, (+), Int, Int)
-@defunarypipe(NegPipe, (-), Int, Int)
-
-@defbinarypipe(LTPipe, (<), Int, Int, Bool)
-@defbinarypipe(LEPipe, (<=), Int, Int, Bool)
-@defbinarypipe(GEPipe, (>=), Int, Int, Bool)
-@defbinarypipe(GTPipe, (>), Int, Int, Bool)
-@defbinarypipe(AddPipe, (+), Int, Int, Int)
-@defbinarypipe(SubPipe, (-), Int, Int, Int)
-@defbinarypipe(MulPipe, (*), Int, Int, Int)
-@defbinarypipe(DivPipe, div, Int, Int, Int)
-
-
-immutable OptToVoidPipe{I,T} <: IsoPipe{I,Union{T,Void}}
-    F::OptPipe{I,T}
-end
-
-show(io::IO, pipe::OptToVoidPipe) = print(io, "OptToVoid($(pipe.F))")
-
-apply{I,T}(pipe::OptToVoidPipe{I,T}, X::I) =
-    let Y = apply(pipe.F, X)::Opt{T}
-        Iso{Union{T,Void}}(isnull(Y) ? nothing : get(Y))
-    end
-
-imode(pipe::OptToVoidPipe) = imode(pipe.F)
-omode(::OptToVoidPipe) =
-    let mode = omode(pipe.F)
-        OutputMode(true, true, mode.exclusive, mode.reachable)
-    end
-
-
-immutable DictPipe{I} <: IsoPipe{I,Dict{Any,Any}}
-    fields::Tuple{Vararg{Pair{Symbol}}}
-end
-
-DictPipe(fields::Pair{Symbol,AbstractPipe}...) =
-    let I = max([ifunctor(F) for (name, F) in fields]...)
-        DictPipe{I}(([Pair{Symbol,AbstractPipe}(name, I ^ F) for (name, F) in fields]...))
-    end
-
-show(io::IO, pipe::DictPipe) =
-    print(io, "DictPipe(", join(["$name => $F" for (name, F) in pipe.fields], ", "), ")")
-
-apply{I}(pipe::DictPipe, X::I) =
-    let d = Dict{Any,Any}()
-        for (name, F) in pipe.fields
-            d[string(name)] = unwrap(apply(F, X))
+            while !isempty($stk)
+                $srcidx = pop!($stk)
+                push!($sorted, $ys[$srcidx])
+                for $dstidx in reverse($edges[$srcidx])
+                    $weight[$dstidx] -= 1
+                    if $weight[$dstidx] == 0
+                        push!($stk, $dstidx)
+                    end
+                end
+            end
+            Seq{$T}($sorted)
         end
-        Iso(d)
     end
 
-imode(pipe::DictPipe) =
-    isempty(pipe.fields) ? InputMode((), false) : max([imode(F) for (n, F) in pipe.fields]...)
-omode(pipe::DictPipe) =
-    OutputMode(true, true, false, false)
 
+#
+# All unique elements in a sequence.
+#
 
-immutable IsoParamPipe{Ns,P,T} <: AbstractPipe{Ctx{Ns,Tuple{P},T}, Iso{P}}
+immutable UniquePipe <: AbstractPipe
+    F::AbstractPipe
+    FKey::AbstractPipe
+    rev::Bool
+    input::Input
+    output::Output
+
+    UniquePipe(F::AbstractPipe, FKey::AbstractPipe, rev::Bool=false) =
+        begin
+            F = SeqPipe(F)
+            @assert odomain(F) <: idomain(FKey) "$(repr(F)) and $(repr(FKey)) are not composable"
+            @assert isfree(FKey) && isplain(FKey) && ismonic(FKey) "$(repr(FKey)) is not a key mapping"
+            return new(F, FKey, rev, input(F), Output(output(F), runique=true))
+        end
 end
 
-show{Ns,P,T}(io::IO, pipe::IsoParamPipe{Ns,P,T}) = print(io, Ns[1])
+UniquePipe(F, rev::Bool=false) = UniquePipe(F, HerePipe(odomain(F)), rev)
 
-IsoParamPipe(IT::Type, name::Symbol, P::Type) = IsoParamPipe{(name,),P,IT}()
+show(io::IO, pipe::UniquePipe) = print(io, "Unique($(pipe.F))")
 
-apply{Ns,P,T}(pipe::IsoParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{P},T}) =
-    wrap(Iso{P}, X.ctx[1])
+arms(pipe::UniquePipe) = AbstractPipe[pipe.F, pipe.FKey]
+
+codegen(pipe::UniquePipe, X, I) =
+    let T = odomain(pipe.F),
+        K = odomain(pipe.FKey)
+        @gensym y key keyed seen
+        quote
+            $keyed = Tuple{$K,$T}[]
+            $seen = Set{$K}()
+            for $y in $(codegen(pipe.F, X, I))
+                $key = data($(codegen(pipe.FKey, :( Iso{$T}($y) ), Iso{T})))
+                if !($key in $seen)
+                    push!($keyed, ($key, $y))
+                    push!($seen, $key)
+                end
+            end
+            sort!($keyed, rev=$(pipe.rev))
+            Seq{$T}($T[$y for ($key, $y) in $keyed])
+        end
+    end
 
 
-immutable OptParamPipe{Ns,P,T} <: AbstractPipe{Ctx{Ns,Tuple{Nullable{P}},T}, Opt{P}}
+#
+# Quotient.
+#
+
+immutable GroupItem
+    Q::AbstractPipe
+    QKey::AbstractPipe
+    rev::Bool
+
+    GroupItem(Q::AbstractPipe, QKey::AbstractPipe, rev::Bool=false) =
+        begin
+            @assert isplain(Q) "$(repr(Q)) is not a plain function"
+            @assert odomain(Q) <: idomain(QKey) "$(repr(Q)) and $(repr(QKey)) are not composable"
+            @assert isfree(QKey) && isplain(QKey) && ismonic(QKey) "$(repr(QKey)) is not a key mapping"
+            return new(Q, QKey, rev)
+        end
 end
 
-OptParamPipe(IT::Type, name::Symbol, P::Type) = OptParamPipe{(name,),P,IT}()
+GroupItem(Q, rev::Bool=false) = GroupItem(Q, HerePipe(odomain(Q)), rev)
+GroupItem(args::Tuple) = GroupItem(args...)
 
-show{Ns,P,T}(io::IO, pipe::OptParamPipe{Ns,P,T}) = print(io, Ns[1])
+show(io::IO, dim::GroupItem) = show(io, dim.Q)
 
-apply{Ns,P,T}(pipe::OptParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{Nullable{P}},T}) =
-    wrap(Opt{P}, X.ctx[1])
+input(dim::GroupItem) = input(dim.Q)
+output(dim::GroupItem) = output(dim.Q)
 
+immutable GroupPipe <: AbstractPipe
+    F::AbstractPipe
+    cube::Bool
+    items::Vector{GroupItem}
+    input::Input
+    output::Output
 
-immutable SeqParamPipe{Ns,P,T} <: AbstractPipe{Ctx{Ns,Tuple{Vector{P}},T}, Seq{P}}
+    GroupPipe(F::AbstractPipe, cube::Bool, items::Vector{GroupItem}) =
+        begin
+            F = SeqPipe(F)
+            mode = imode(F)
+            for item in items
+                @assert odomain(F) <: idomain(item) "$(repr(F)) and $(repr(item)) are not composable"
+                mode = max(mode, imode(item))
+            end
+            input = Input(idomain(F), mode)
+            Qs = [!cube ? odomain(item) : Nullable{odomain(item)} for item in items]
+            T = Tuple{Tuple{Qs...}, Vector{odomain(F)}}
+            output = Output(T, lunique=false, ltotal=isnonempty(F), runique=true)
+            return new(F, cube, items, input, output)
+        end
 end
 
-SeqParamPipe(IT::Type, name::Symbol, P::Type) = SeqParamPipe{(name,),P,IT}()
+GroupPipe(F, cube::Bool, args...) = GroupPipe(F, cube, GroupItem[GroupItem(arg) for arg in args])
+GroupPipe(F, args...) = GroupPipe(F, false, args...)
 
-show{Ns,P,T}(io::IO, pipe::SeqParamPipe{Ns,P,T}) = print(io, Ns[1])
+show(io::IO, pipe::GroupPipe) = print(io, "Group($(pipe.F), $(join(pipe.items, ", ")))")
 
-apply{Ns,P,T}(pipe::SeqParamPipe{Ns,P,T}, X::Ctx{Ns,Tuple{Vector{P}},T}) =
-    wrap(Seq{P}, X.ctx[1])
+arms(pipe::GroupPipe) =
+    let arms = AbstractPipe[pipe.F]
+        for item in pipe.items
+            push!(arms, item.Q, item.QKey)
+        end
+        arms
+    end
 
-
-immutable AroundPipe{T} <: AbstractPipe{Temp{T}, Seq{T}}
-    dir::Int
-    reflexive::Bool
-end
-
-AroundPipe(T::Type, dir, reflexive) = AroundPipe{T}(dir, reflexive)
-
-show(io::IO, pipe::AroundPipe) = print(io, "Around($(pipe.dir), $(pipe.reflexive))")
-
-apply{T}(pipe::AroundPipe{T}, X::Temp{T}) =
-    if pipe.dir < 0
-        pipe.reflexive ? Seq(X.vals[1:X.idx]) : Seq(X.vals[1:X.idx-1])
-    elseif pipe.dir > 0
-        pipe.reflexive ? Seq(X.vals[X.idx:end]) : Seq(X.vals[X.idx+1:end])
+ItemPipe(pipe::GroupPipe, idx) =
+    if idx == 1
+        ItemPipe(odomain(pipe), idx; runique=true)
+    elseif idx == 2
+        ItemPipe(odomain(pipe), idx, OutputMode(omode(pipe.F), ltotal=true, runique=(!pipe.cube && ismonic(pipe.F))))
     else
-        pipe.reflexive ? Seq(X.vals) : Seq(T[X.vals[1:X.idx-1]; X.vals[X.idx+1:end]])
+        throw(BoundsError())
     end
 
-omode(pipe::AroundPipe) = OutputMode(false, pipe.reflexive, false, false)
+ItemPipe(pipe::GroupPipe, idx1, idx2) =
+    if idx1 == 1
+        T = odomain(pipe).parameters[idx1]
+        ItemPipe(pipe, idx1) >> ItemPipe(T, idx2, ltotal=!pipe.cube)
+    else
+        throw(BoundsError())
+    end
+
+codegen(pipe::GroupPipe, X, I) =
+    begin
+        T = Tuple{Tuple{map(odomain, pipe.items)...}, odomain(pipe.F)}
+        K = isempty(pipe.items) ? Iso{odomain(pipe.F)} : ikind(maximum([input(item) for item in pipe.items]))
+        @gensym Y0 q
+        W = codegen_compose(K, Iso{T}, pipe.F, X, I) do Y, O
+            quote
+                $Y0 = $Y
+                $q = tuple($([:( data($(codegen(item.Q, Y0, O))) ) for item in pipe.items]...))
+                Iso{$T}(($q, get($Y0)))
+            end
+        end
+        PWs = :( [((), data($W))] )
+        P = Tuple{}
+        for (idx, item) in enumerate(pipe.items)
+            L = odomain(item.QKey)
+            R = odomain(item)
+            Q = Tuple{P.parameters..., pipe.cube? Nullable{R} : R}
+            @gensym QWs qws p ws key2idx key keys w ws d
+            PWs = quote
+                $QWs = Tuple{$Q,Vector{$T}}[]
+                for ($p, $ws) in $PWs
+                    $qws = Tuple{$Q,Vector{$T}}[]
+                    $key2idx = Dict{$L,Int}()
+                    $keys = $L[]
+                    for $w in $ws
+                        $d = $w[1][$idx]
+                        $key = data($(codegen(item.QKey, :( Iso{$R}($d) ), Iso{R})))
+                        if $key in keys($key2idx)
+                            push!($qws[$key2idx[$key]][2], $w)
+                        else
+                            push!($qws, (($p..., $(pipe.cube ? :( Nullable{$R}($d) ) : :( $d ))), $T[$w]))
+                            push!($keys, $key)
+                            $key2idx[$key] = length($keys)
+                        end
+                    end
+                    sort!($keys, rev=$(item.rev))
+                    for $key in $keys
+                        push!($QWs, $qws[$key2idx[$key]])
+                    end
+                    $(if pipe.cube; :( push!($QWs, (($p..., Nullable{$R}()), $ws)) ); end)
+                end
+                $QWs
+            end
+            P = Q
+        end
+        O = odomain(pipe)
+        T = odomain(pipe.F)
+        @gensym qws w
+        return quote
+            Seq{$O}($O[($qws[1], $T[$w[2] for $w in $qws[2]]) for $qws in $PWs])
+        end
+    end
 
 
-immutable AroundByPipe{T,K} <: AbstractPipe{Temp{T}, Seq{T}}
-    key::AbstractPipe{Iso{T}, Iso{K}}
-    dir::Int
-    reflexive::Bool
+
+#
+# Partition.
+#
+
+immutable PartitionItem
+    D::AbstractPipe
+    Q::AbstractPipe
+    QKey::AbstractPipe
+    rev::Bool
+
+    PartitionItem(D::AbstractPipe, Q::AbstractPipe, QKey::AbstractPipe, rev::Bool=false) =
+        begin
+            D = SeqPipe(D)
+            @assert isplain(Q) "$(repr(Q)) is not a plain function"
+            @assert odomain(D) <: idomain(QKey) "$(repr(D)) and $(repr(QKey)) are not composable"
+            @assert odomain(Q) <: idomain(QKey) "$(repr(Q)) and $(repr(QKey)) are not composable"
+            @assert isfree(QKey) && isplain(QKey) && ismonic(QKey) "$(repr(QKey)) is not a key mapping"
+            return new(D, Q, QKey, rev)
+        end
 end
 
-show(io::IO, pipe::AroundByPipe) = print(io, "AroundBy($(pipe.dir), $(pipe.reflexive))")
+PartitionItem(D, Q, rev::Bool=false) = PartitionItem(D, Q, HerePipe(odomain(Q)), rev)
+PartitionItem(args::Tuple) = PartitionItem(args...)
 
-apply{T,K}(pipe::AroundByPipe{T,K}, X::Temp{T}) =
-    let key = unwrap(apply(pipe.key, Iso(X.vals[X.idx]))),
-        out = T[]
-        if pipe.dir <= 0
-            for j = 1:X.idx-1
-                x = X.vals[j]
-                if unwrap(apply(pipe.key, Iso(x))) == key
-                    push!(out, x)
-                end
+show(io::IO, dim::PartitionItem) = show(io, dim.Q)
+
+input(dim::PartitionItem) = input(dim.Q)
+output(dim::PartitionItem) = output(dim.D)
+
+immutable PartitionPipe <: AbstractPipe
+    F::AbstractPipe
+    cube::Bool
+    items::Vector{PartitionItem}
+    input::Input
+    output::Output
+
+    PartitionPipe(F::AbstractPipe, cube::Bool, items::Vector{PartitionItem}) =
+        begin
+            F = SeqPipe(F)
+            mode = imode(F)
+            for item in items
+                @assert odomain(F) <: idomain(item) "$(repr(F)) and $(repr(item)) are not composable"
+                mode = max(mode, imode(item))
             end
+            input = max(RBT.input(F), [RBT.input(item.D) for item in items]...)
+            Qs = [!cube ? odomain(item) : Nullable{odomain(item)} for item in items]
+            T = Tuple{Tuple{Qs...}, Vector{odomain(F)}}
+            output = Output(
+                T,
+                lunique=false,
+                ltotal=all([isnonempty(item.D) for item in items]),
+                runique=all([ismonic(item.D) for item in items]))
+            return new(F, cube, items, input, output)
         end
-        if pipe.reflexive
-            push!(out, X.vals[X.idx])
+end
+
+PartitionPipe(F, cube::Bool, args...) = PartitionPipe(F, cube, PartitionItem[PartitionItem(arg) for arg in args])
+PartitionPipe(F, args...) = PartitionPipe(F, false, args...)
+
+show(io::IO, pipe::PartitionPipe) = print(io, "Partition($(pipe.F), $(join(pipe.items, ", ")))")
+
+arms(pipe::PartitionPipe) =
+    let arms = AbstractPipe[pipe.F]
+        for item in pipe.items
+            push!(arms, item.D, item.Q, item.QKey)
         end
-        if pipe.dir >= 0
-            for j = X.idx+1:length(X.vals)
-                x = X.vals[j]
-                if unwrap(apply(pipe.key, Iso(x))) == key
-                    push!(out, x)
-                end
-            end
-        end
-        Seq(out)
+        arms
     end
 
-omode(pipe::AroundByPipe) = OutputMode(false, pipe.reflexive, false, false)
+ItemPipe(pipe::PartitionPipe, idx) =
+    if idx == 1
+        ItemPipe(odomain(pipe), idx; runique=(all([ismonic(item.D) for item in pipe.items])))
+    elseif idx == 2
+        ItemPipe(odomain(pipe), idx, OutputMode(omode(pipe.F), ltotal=false))
+    else
+        throw(BoundsError())
+    end
 
+ItemPipe(pipe::PartitionPipe, idx1, idx2) =
+    if idx1 == 1
+        T = odomain(pipe).parameters[idx1]
+        ItemPipe(pipe, idx1) >> ItemPipe(T, idx2, ltotal=!pipe.cube)
+    else
+        throw(BoundsError())
+    end
+
+codegen(pipe::PartitionPipe, X, I) =
+    begin
+        T = Tuple{Tuple{map(odomain, pipe.items)...}, odomain(pipe.F)}
+        K = isempty(pipe.items) ? Iso{odomain(pipe.F)} : ikind(maximum([input(item) for item in pipe.items]))
+        @gensym X0 Y0 q
+        W = codegen_compose(K, Iso{T}, pipe.F, X0, I) do Y, O
+            quote
+                $Y0 = $Y
+                $q = tuple($([:( data($(codegen(item.Q, Y0, O))) ) for item in pipe.items]...))
+                Iso{$T}(($q, get($Y0)))
+            end
+        end
+        PWs = :( [((), data($W))] )
+        P = Tuple{}
+        for (pos, item) in enumerate(pipe.items)
+            L = odomain(item.QKey)
+            R = odomain(item)
+            Q = Tuple{P.parameters..., pipe.cube? Nullable{R} : R}
+            @gensym QWs qws p ws key2idxs key keys w ws allws dim d idx
+            PWs = quote
+                $dim = data($(codegen(item.D, X0, I)))
+                $QWs = Tuple{$Q,Vector{$T}}[]
+                for ($p, $ws) in $PWs
+                    $qws = Tuple{$Q,Vector{$T}}[]
+                    $key2idxs = Dict{$L,Vector{Int}}()
+                    $keys = $L[]
+                    for $d in $dim
+                        $key = data($(codegen(item.QKey, :( Iso{$R}($d) ), Iso{R})))
+                        push!($keys, $key)
+                        if $key in keys($key2idxs)
+                            push!($key2idxs[$key], length($keys))
+                        else
+                            $key2idxs[$key] = Int[length($keys)]
+                        end
+                        push!($qws, (($p..., $(pipe.cube ? :( Nullable{$R}($d) ) : :( $d ))), $T[]))
+                    end
+                    $(if pipe.cube; :( $allws = $T[] ); end)
+                    for $w in $ws
+                        $d = $w[1][$pos]
+                        $key = data($(codegen(item.QKey, :( Iso{$R}($d) ), Iso{R})))
+                        if $key in keys($key2idxs)
+                            for $idx in $key2idxs[$key]
+                                push!($qws[$idx][2], $w)
+                            end
+                            $(if pipe.cube; :( push!($allws, $w) ); end)
+                        end
+                    end
+                    sort!($keys, rev=$(item.rev))
+                    for $key in unique($keys)
+                        for $idx in $key2idxs[$key]
+                            push!($QWs, $qws[$idx])
+                        end
+                    end
+                    $(if pipe.cube; :( push!($QWs, (($p..., Nullable{$R}()), $allws)) ); end)
+                end
+                $QWs
+            end
+            P = Q
+        end
+        O = odomain(pipe)
+        T = odomain(pipe.F)
+        @gensym qws w
+        return quote
+            $X0 = $X
+            Seq{$O}($O[($qws[1], $T[$w[2] for $w in $qws[2]]) for $qws in $PWs])
+        end
+    end
+
+
+#
+# Converts Null to Void().
+#
+
+immutable NullToVoidPipe <: AbstractPipe
+    F::AbstractPipe
+    input::Input
+    output::Output
+
+    NullToVoidPipe(F::AbstractPipe) =
+        begin
+            if isnonempty(F)
+                return F
+            end
+            F = OptPipe(F)
+            output = Output(Union{odomain(F),Void}, omode(F))
+            output = Output(output, ltotal=true, runique=false)
+            return new(F, input(F), output)
+        end
+end
+
+show(io::IO, pipe::NullToVoidPipe) = show(io, pipe.F)
+
+arms(pipe::NullToVoidPipe) = AbstractPipe[pipe.F]
+
+codegen(pipe::NullToVoidPipe, X, I) =
+    let T = odomain(pipe)
+        @gensym Y
+        quote
+            $Y = $(codegen(pipe.F, X, I))
+            isnull($Y) ? Iso{$T}(nothing) : Iso{$T}(get($Y))
+        end
+    end
+
+
+#
+# Generates a JSON object.
+#
+
+immutable DictPipe <: AbstractPipe
+    tagged_Fs::Vector{TaggedPipe}
+    input::Input
+    output::Output
+
+    DictPipe(tagged_Fs::Vector{TaggedPipe}) =
+        if isempty(tagged_Fs)
+            ConstPipe(Any, Dict{Any,Any}())
+        else
+            input = maximum([RBT.input(F) for (tag, F) in tagged_Fs])
+            output = Output(Dict{Any,Any})
+            new(tagged_Fs, input, output)
+        end
+end
+
+DictPipe(tagged_Fs) = DictPipe(TaggedPipe[TaggedPipe(tag, F) for (tag, F) in tagged_Fs])
+DictPipe(tagged_Fs::Pair{Symbol}...) = DictPipe(tagged_Fs)
+
+show(io::IO, pipe::DictPipe) = print(io, "Dict($(join(["$tag => $F" for (tag, F) in pipe.tagged_Fs], ", "))")
+
+arms(pipe::DictPipe) = AbstractPipe[F for (tag, F) in pipe.tagged_Fs]
+
+codegen(pipe::DictPipe, X, I) =
+    begin
+        @gensym X0
+        return quote
+            $X0 = $X
+            Iso(Dict{Any,Any}($([
+                :( $(QuoteNode(tag)) => data($(codegen(F, X0, I))) )
+                for (tag, F) in pipe.tagged_Fs]...)))
+        end
+    end
+
+
+#
+# Extracts a parameter from the input context.
+#
+
+immutable ParamPipe <: AbstractPipe
+    tag::Symbol
+    output::Output
+end
+
+ParamPipe(T::Type, args...) =
+    T <: Unit ? ParamPipe(args...) : UnitPipe(T) >> ParamPipe(args...)
+ParamPipe(tag::Symbol, domain::Type, mode::OutputMode) =
+    ParamPipe(tag, Output(domain, mode))
+ParamPipe(tag::Symbol, domain::Type; lunique::Bool=true, ltotal::Bool=true, runique::Bool=false, rtotal::Bool=false) =
+    ParamPipe(tag, Output(domain, OutputMode(lunique, ltotal, runique, rtotal)))
+
+show(io::IO, pipe::ParamPipe) = print(io, "Param($(pipe.tag))")
+
+input(pipe::ParamPipe) = Input(Unit, params=Params((pipe.tag,), (data(pipe.output),)))
+output(pipe::ParamPipe) = pipe.output
+
+codegen(pipe::ParamPipe, X) =
+    let O = okind(pipe)
+        @gensym param val
+        quote
+            ($param,), $val = data($X)
+            $O($param)
+        end
+    end
+
+
+#
+# Extracts the relative context.
+#
+
+immutable RelativePipe <: AbstractPipe
+    domain::Type
+    before::Bool
+    self::Bool
+    after::Bool
+end
+
+show(io::IO, pipe::RelativePipe) = print(io, "Relative($(pipe.before), $(pipe.self), $(pipe.after))")
+
+input(pipe::RelativePipe) = Input(pipe.domain, relative=true)
+output(pipe::RelativePipe) = Output(pipe.domain, lunique=false, ltotal=pipe.self)
+
+codegen(pipe::RelativePipe, X) =
+    let T = pipe.domain
+        @gensym ptr vals
+        slice =
+            pipe.before && pipe.self && pipe.after ?
+                vals :
+            pipe.before && !pipe.self && pipe.after ?
+                :( $T[$vals[1:$ptr-1]; $vals[$ptr+1:end]] ) :
+            pipe.before && pipe.self && !pipe.after ?
+                :( $vals[$ptr:-1:1] ) :
+            pipe.before && !pipe.self && !pipe.after ?
+                :( $vals[$ptr-1:-1:1] ) :
+            !pipe.before && pipe.self && pipe.after ?
+                :( $vals[$ptr:end] ) :
+            !pipe.before && !pipe.self && pipe.after ?
+                :( $vals[$ptr+1:end] ) :
+            !pipe.before && pipe.self && !pipe.after ?
+                :( $vals[$ptr:$ptr] ) : :( $T[] )
+        quote
+            $ptr, $vals = data($X)
+            Seq{$T}($slice)
+        end
+    end
+
+
+#
+# Extracts the relative context based on some property.
+#
+
+immutable RelativeByPipe <: AbstractPipe
+    F::AbstractPipe
+    before::Bool
+    self::Bool
+    after::Bool
+    input::Input
+    output::Output
+
+    RelativeByPipe(F::AbstractPipe, before::Bool, self::Bool, after::Bool) =
+        begin
+            F = IsoPipe(F)
+            input = Input(RBT.input(F), relative=true)
+            output = Output(idomain(F), lunique=false, ltotal=self)
+            return new(F, before, self, after, input, output)
+        end
+end
+
+show(io::IO, pipe::RelativeByPipe) = print(io, "RelativeBy($(pipe.F), $(pipe.before), $(pipe.self), $(pipe.after))")
+
+arms(pipe::RelativeByPipe) = AbstractPipe[pipe.F]
+
+codegen(pipe::RelativeByPipe, X, I) =
+    let T = odomain(pipe),
+        II = Rel{ikind(pipe.F)}
+        @gensym X0 ptr vals qs q ys idxs idx
+        slice =
+            pipe.before && pipe.self && pipe.after ?
+                :( (1:endof($vals),) ) :
+            pipe.before && !pipe.self && pipe.after ?
+                :( (1:$ptr-1, $ptr+1:endof($vals)) ) :
+            pipe.before && pipe.self && !pipe.after ?
+                :( ($ptr:-1:1,) ) :
+            pipe.before && !pipe.self && !pipe.after ?
+                :( ($ptr-1:-1:1,) ) :
+            !pipe.before && pipe.self && pipe.after ?
+                :( ($ptr:endof($vals),) ) :
+            !pipe.before && !pipe.self && pipe.after ?
+                :( ($ptr+1:endof($vals),) ) :
+            !pipe.before && pipe.self && !pipe.after ?
+                :( ($ptr:$ptr,) ) : :( () )
+        quote
+            $X0 = $X
+            $ptr, $vals = data($X)
+            $qs = data(data(dist($(codegen_map(pipe.F, :( dup($II, $X0) ), II)))))[2]
+            $q = $qs[$ptr]
+            $ys = $T[]
+            for $idxs in $slice
+                for $idx in $idxs
+                    if $qs[$idx] == $q
+                        push!($ys, $vals[$idx])
+                    end
+                end
+            end
+            Seq{$T}($ys)
+        end
+    end
 

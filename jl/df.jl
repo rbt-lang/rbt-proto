@@ -1,95 +1,95 @@
 
-immutable OptToNAPipe{I,T} <: IsoPipe{I,Union{T,NAtype}}
-    F::OptPipe{I,T}
-end
+immutable NullToNAPipe <: AbstractPipe
+    F::AbstractPipe
+    input::Input
+    output::Output
 
-show(io::IO, pipe::OptToNAPipe) =
-    print(io, "OptToNA($(pipe.F))")
-
-apply{I,T}(pipe::OptToNAPipe{I,T}, X::I) =
-    let Y = apply(pipe.F, X)::Opt{O}
-        isnull(Y) ? NA : get(Y)
-    end
-
-
-immutable IsoDataFramePipe{I} <: IsoPipe{I, DataFrame}
-    F::AbstractPipe{I}
-    fields
-end
-
-show(io::IO, pipe::IsoDataFramePipe) =
-    print(io, "IsoDataFrame($(pipe.F), $(join(pipe.fields, ", ")))")
-
-function apply{I}(pipe::IsoDataFramePipe{I}, X::I)
-    data = Any[]
-    names = Symbol[]
-    Y = apply(pipe.F, X)
-    for (name, A, F) in pipe.fields
-        push!(names, name)
-        a = A()
-        push!(a, unwrap(apply(F, Y)))
-        push!(data, a)
-    end
-    return Iso(DataFrame(data, names))
-end
-
-
-immutable OptDataFramePipe{I} <: IsoPipe{I, DataFrame}
-    F::AbstractPipe{I}
-    fields
-end
-
-show(io::IO, pipe::OptDataFramePipe) =
-    print(io, "OptDataFrame($(pipe.F), $(join(pipe.fields, ", ")))")
-
-function apply{I}(pipe::OptDataFramePipe{I}, X::I)
-    data = Any[]
-    names = Symbol[]
-    Y = apply(pipe.F, X)
-    for (name, A, F) in pipe.fields
-        push!(names, name)
-        a = A()
-        if !isnull(y)
-            push!(a, unwrap(apply(F, Iso(get(y)))))
-        end
-        push!(data, a)
-    end
-    return Iso(DataFrame(data, names))
-end
-
-
-immutable SeqDataFramePipe{I} <: IsoPipe{I, DataFrame}
-    F::AbstractPipe{I}
-    fields
-end
-
-show(io::IO, pipe::SeqDataFramePipe) =
-    print(io, "SeqDataFrame($(pipe.F), $(join(pipe.fields, ", ")))")
-
-
-function apply{I}(pipe::SeqDataFramePipe{I}, X::I)
-    data = Any[]
-    names = Symbol[]
-    Y = apply(pipe.F, X)
-    for (name, A, F) in pipe.fields
-        push!(names, name)
-        a = A([])
-        for y in Y
-            z = unwrap(apply(F, Iso(y)))
-            if A <: DataVector
-                if isnull(z)
-                    push!(a, NA)
-                else
-                    push!(a, get(z))
-                end
-            else
-                push!(a, z)
+    NullToVoidPipe(F::AbstractPipe) =
+        begin
+            if isnonempty(F)
+                return F
             end
+            F = OptPipe(F)
+            output = Output(Union{odomain(F),NAType}, omode(F))
+            output = Output(output, ltotal=true, runique=false)
+            return new(F, input(F), output)
         end
-        push!(data, a)
-    end
-    return Iso(DataFrame(data, names))
 end
+
+show(io::IO, pipe::NullToNAPipe) = show(io, pipe.F)
+
+arms(pipe::NullToNAPipe) = AbstractPipe[pipe.F]
+
+codegen(pipe::NullToNAPipe, X, I) =
+    let T = odomain(pipe)
+        @gensym Y
+        quote
+            $Y = $(codegen(pipe.F, X, I))
+            isnull($Y) ? Iso{$T}(NA) : Iso{$T}(get($Y))
+        end
+    end
+
+
+immutable DataFramePipe <: AbstractPipe
+    F::AbstractPipe
+    G::TuplePipe
+    tags::Vector{Symbol}
+    input::Input
+    output::Output
+
+    DataFramePipe(F::AbstractPipe, tagged_Gs::Vector{TaggedPipe}) =
+        begin
+            F = SeqPipe(F)
+            G = TuplePipe(AbstractPipe[G0 for (tag, G0) in tagged_Gs])
+            @assert(
+                odomain(F) <: idomain(G),
+                "$(repr(F)) and $(repr(G)) are not composable")
+            tags = Symbol[tag for (tag, G0) in tagged_Gs]
+            input = RBT.input(F >> G)
+            output = Output(DataFrame)
+            return new(F, G, tags, input, output)
+        end
+end
+
+DataFramePipe(F, tagged_Gs) = DataFramePipe(F, TaggedPipe[TaggedPipe(tag, G) for (tag, G) in tagged_Gs])
+DataFramePipe(F, tagged_Gs::Pair{Symbol}...) = DataFramePipe(F, tagged_Gs)
+
+show(io::IO, pipe::DataFramePipe) =
+    print(io, "DataFrame($(pipe.F), $(pipe.G))")
+
+arms(pipe::DataFramePipe) = AbstractPipe[pipe.F, pipe.G]
+
+codegen(pipe::DataFramePipe, X, I) =
+    begin
+        @gensym cols Y0 y idx
+        Y = codegen_compose(pipe.G, pipe.F, X, I)
+        return quote
+            $Y0 = $Y
+            $cols = Any[
+                $([
+                    let T = odomain(F)
+                        isplural(F) ?
+                            :( Vector{Vector{$T}}() ) :
+                        ispartial(F) ?
+                            :( DataVector{$T}([]) ) :
+                            :( Vector{$T}() )
+                    end
+                    for F in pipe.G.Fs
+                ]...)
+            ]
+            for $y in $Y0
+                $([
+                    isplural(F) ?
+                        :( push!($cols[$idx], $y[$idx]) ) :
+                    ispartial(F) ?
+                        :( push!($cols[$idx], isnull($y[$idx]) ? NA : get($y[$idx])) ) :
+                        :( push!($cols[$idx], $y[$idx]) )
+                    for (idx, F) in enumerate(pipe.G.Fs)
+                ]...)
+            end
+            Iso(DataFrame($cols, $(pipe.tags)))
+        end
+    end
 
 
 compile(fn::Fn(:dataframe), base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
@@ -103,14 +103,11 @@ function compile(::Fn(:dataframe), base::Query, flow::Query)
     flow = select(flow)
     if !isnull(flow.fields)
         fields = mkdffields(flow)
-        pipe =
-            singular(flow) && complete(flow) ? IsoDataFramePipe(flow.pipe, fields) :
-            singular(flow) ? OptDataFramePipe(flow.pipe, fields) :
-            SeqDataFramePipe(flow.pipe, fields)
+        pipe = DataFramePipe(flow.pipe, fields)
         return Query(empty(flow), pipe=pipe)
     else
         flow = select(flow)
-        if singular(flow) && !complete(flow)
+        if ispartial(flow)
             pipe = OptToNAPipe(flow.pipe)
             flow = Query(flow, pipe=pipe)
         end
@@ -126,14 +123,11 @@ function mkdffields(flow::Query)
             fields = (fields..., mkdffields(field.fields)...)
         else
             name = get(field.tag, symbol(""))
-            if !singular(field)
+            if !issingular(field)
                 field = compile(Fn{:dataframe}, flow, field)
             end
-            O = odomain(field)
-            A = !singular(field) ? Vector{DataVector{O}} :
-                singular(field) && !complete(field) ? DataVector{O} : Vector{O}
             F = field.pipe
-            fields = (fields..., (name, A, F))
+            fields = (fields..., (name, F))
         end
     end
     return fields

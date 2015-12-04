@@ -20,10 +20,10 @@ ACCS = ["AUDITOR IV", "ACCOUNTANT IV", "ACCOUNTANT III", "STAFF ASST", "ACCOUNTA
 schema = Schema(
     Class(
         :department,
-        Arrow(:name, UTF8String, exclusive=true),
+        Arrow(:name, UTF8String, runique=true),
         Arrow(
             :employee,
-            singular=false, complete=false, exclusive=true, reachable=true,
+            lunique=false, ltotal=false, runique=true, rtotal=true,
             select=(:name, :surname), inverse=:department),
         select=(:name,)),
     Class(
@@ -35,11 +35,11 @@ schema = Schema(
         Arrow(:department, select=:name),
         Arrow(
             :managed_by, :employee,
-            complete=false,
+            ltotal=false,
             select=(:name, :surname, :position)),
         Arrow(
             :manages, :employee,
-            singular=false, complete=false, exclusive=true,
+            lunique=false, ltotal=false, runique=true,
             select=(:name, :surname, :position),
             inverse=:managed_by),
         select=(:name, :surname, :department, :position, :salary)))

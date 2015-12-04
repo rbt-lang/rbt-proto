@@ -11,26 +11,32 @@ export
     @query
 
 import Base:
-    show, call, convert, get, isnull, isempty, length, eltype,
-    start, next, done, endof, getindex, max, *, >>, ^
+    show, showcompact, showall, call, convert, get, isnull, isempty, length, eltype,
+    start, next, done, endof, getindex, max, typemin, foreach, eachindex,
+    *, >>, ^, .==, .!=, .>, .>=, .<, .<=, ~, &, |
 
-
-include("abstract.jl")
-include("database.jl")
+include("kind.jl")
+include("domain.jl")
 include("syntax.jl")
-include("functor.jl")
 include("pipe.jl")
+include("database.jl")
 include("scope.jl")
 include("compile.jl")
 
-try
-    using DataFrames
+has_dataframes =
+    try
+        using DataFrames
+        true
+    catch ArgumentError
+        false
+    end
+
+if has_dataframes
     include("df.jl")
-catch ArgumentError
 end
 
-
 global DB = Database(Schema(), Instance(Dict(), Dict()))
+
 
 function setdb(db)
     global DB = db

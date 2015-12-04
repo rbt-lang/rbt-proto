@@ -1,4 +1,6 @@
 
+abstract AbstractDatabase
+
 immutable Entity{name}
     id::Int
 end
@@ -6,7 +8,8 @@ end
 classname{name}(::Type{Entity{name}}) = name
 convert{name}(::Type{Entity{name}}, id::Int) = Entity{name}(id)
 show{name}(io::IO, e::Entity{name}) = print(io, "<", name, ":", e.id, ">")
-
+show{name}(io::IO, ::Type{Entity{name}}) = print(io, ucfirst(string(name)))
+getindex(entity::Entity, k::Int) = k == 1 ? entity.id : throw(BoundsError())
 
 const SelectType = Union{Void, Symbol, Tuple{Vararg{Symbol}}}
 const InverseType = Union{Void, Symbol}
@@ -20,17 +23,19 @@ end
 
 Arrow(
     name::Symbol, T::Type;
-    singular=true, complete=true, exclusive=false, reachable=false,
+    lunique=true, ltotal=true, runique=false, rtotal=false,
     select=nothing, inverse=nothing) =
-    Arrow(name, Output(T, OutputMode(singular, complete, exclusive, reachable)), select, inverse)
+    Arrow(name, Output(T, OutputMode(lunique, ltotal, runique, rtotal)), select, inverse)
 Arrow(name::Symbol, targetname::Symbol; props...) =
     Arrow(name, Entity{targetname}; props...)
 Arrow(name::Symbol; props...) =
     Arrow(name, Entity{name}; props...)
 
+output(arrow::Arrow) = arrow.output
+
 function show(io::IO, a::Arrow)
     T = domain(a.output)
-    print(io, a.name, ": ", T <: Entity ? ucfirst(string(classname(T))) : T)
+    print(io, a.name, ":: ", T <: Entity ? ucfirst(string(classname(T))) : T)
     features = []
     inv = false
     if (a.output.domain <: Entity && a.inverse != nothing)
@@ -38,10 +43,10 @@ function show(io::IO, a::Arrow)
         inv = true
     end
     o = a.output
-    singular(o) != inv || push!(features, singular(o) ? "singular" : "plural")
-    complete(o) != inv || push!(features, complete(o) ? "complete" : "partial")
-    exclusive(o) == inv || push!(features, exclusive(o) ? "exclusive" : "inexclusive")
-    reachable(o) == inv || push!(features, reachable(o) ? "reachable" : "unreachable")
+    issingular(o) != inv || push!(features, issingular(o) ? "singular" : "plural")
+    isnonempty(o) != inv || push!(features, isnonempty(o) ? "complete" : "partial")
+    ismonic(o) == inv || push!(features, ismonic(o) ? "exclusive" : "inexclusive")
+    iscovering(o) == inv || push!(features, iscovering(o) ? "reachable" : "unreachable")
     if !isempty(features)
         print(io, " {", join(features, ", "), "}")
     end
