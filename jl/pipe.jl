@@ -1372,7 +1372,7 @@ codegen(pipe::FirstByPipe, X, I) =
                 Iso{$T}(data($Y0))
             end
         end
-        idx = :( ($(pipe.rev) ? indmax : indmin )($ws) )
+        idx = :( ($(pipe.rev) ? indmin : indmax )($ws) )
         if isnonempty(pipe)
             return quote
                 $ws = $W[]

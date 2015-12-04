@@ -274,7 +274,7 @@ println(repr(first_prime))
 
 @test isequal(first_prime(), Nullable(2))
 
-last_prime = RBT.FirstPipe(primes, false)
+last_prime = RBT.FirstPipe(primes, true)
 println(repr(last_prime))
 
 @test isequal(last_prime(), Nullable(11))
@@ -325,7 +325,7 @@ println(repr(primes_by_count_dec_div))
 
 @test primes_by_count_dec_div() == [2,3,11,5,7]
 
-first_prime_by_count_dec_div = RBT.FirstByPipe(primes, RBT.CountPipe(decmap >> divmap), true)
+first_prime_by_count_dec_div = RBT.FirstByPipe(primes, RBT.CountPipe(decmap >> divmap))
 println(repr(first_prime_by_count_dec_div))
 
 @test isequal(first_prime_by_count_dec_div(), Nullable(7))
