@@ -651,3 +651,17 @@ codegen_compose{I<:Kind,I1<:Kind,O1<:Kind,I2<:Kind,O2<:Kind}(
         end
     end
 
+# Faster shortcuts.
+
+codegen_compose{A,B,C}(G, ::Type{Iso{B}}, ::Type{Iso{C}}, F, ::Type{Iso{A}}, ::Type{Iso{B}}, X, ::Type{Iso{A}}) =
+    codegen(G, Iso{B}, codegen(F, Iso{A}, X, Iso{A}), Iso{B})
+
+codegen_compose{A,B,C}(G, ::Type{Iso{B}}, ::Type{Iso{C}}, F, ::Type{Iso{A}}, ::Type{Seq{B}}, X, ::Type{Iso{A}}) =
+    begin
+        @gensym Y
+        quote
+            Seq{$C}(
+                $C[data($(codegen(G, Iso{B}, :( Iso{$B}($Y) ), Iso{B}))) for $Y in $(codegen(F, Iso{A}, X, Iso{A}))])
+        end
+    end
+

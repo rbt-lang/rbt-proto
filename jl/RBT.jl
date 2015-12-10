@@ -15,12 +15,14 @@ import Base:
     start, next, done, endof, getindex, max, typemin, foreach, eachindex,
     *, >>, ^, .==, .!=, .>, .>=, .<, .<=, ~, &, |
 
+include("immdict.jl")
 include("kind.jl")
 include("domain.jl")
 include("syntax.jl")
 include("pipe.jl")
 include("database.jl")
 include("scope.jl")
+include("binding.jl")
 include("compile.jl")
 
 has_dataframes =
@@ -35,7 +37,7 @@ if has_dataframes
     include("df.jl")
 end
 
-global DB = Database(Schema(), Instance(Dict(), Dict()))
+global DB = ToyDatabase(Schema(), Instance(Dict(), Dict()))
 
 
 function setdb(db)

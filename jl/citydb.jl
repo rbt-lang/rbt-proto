@@ -5,7 +5,7 @@ end
 
 ENV["LINES"] = 15
 
-using RBT: Entity, Database, Schema, Class, Arrow, Instance
+using RBT: Entity, ToyDatabase, Schema, Class, Arrow, Instance
 
 
 URL = "https://data.cityofchicago.org/api/views/xzkq-xp2w/rows.csv?accessType=DOWNLOAD"
@@ -144,5 +144,5 @@ instance = Instance(
         (:employee, :manages) => empl_manages))
 
 
-citydb = Database(schema, instance)
+citydb = ToyDatabase(schema, instance)
 

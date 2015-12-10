@@ -1,15 +1,30 @@
+#
+# A toy database backend.
+#
+
 
 abstract AbstractDatabase
+
+
+#
+# An opaque unit of data such as an object, a person or a thing.
+#
 
 immutable Entity{name}
     id::Int
 end
 
+isentity{name}(::Type{Entity{name}}) = true
+isentity(::Type) = false
 classname{name}(::Type{Entity{name}}) = name
 convert{name}(::Type{Entity{name}}, id::Int) = Entity{name}(id)
-show{name}(io::IO, e::Entity{name}) = print(io, "<", name, ":", e.id, ">")
+show{name}(io::IO, e::Entity{name}) = print(io, typeof(e), "(", e.id, ")")
 show{name}(io::IO, ::Type{Entity{name}}) = print(io, ucfirst(string(name)))
-getindex(entity::Entity, k::Int) = k == 1 ? entity.id : throw(BoundsError())
+
+
+#
+# Describes an attribute or a relation defined on a class of entities.
+#
 
 const SelectType = Union{Void, Symbol, Tuple{Vararg{Symbol}}}
 const InverseType = Union{Void, Symbol}
@@ -22,74 +37,66 @@ immutable Arrow
 end
 
 Arrow(
-    name::Symbol, T::Type;
+    name::Symbol, domain::Type;
     lunique=true, ltotal=true, runique=false, rtotal=false,
     select=nothing, inverse=nothing) =
-    Arrow(name, Output(T, OutputMode(lunique, ltotal, runique, rtotal)), select, inverse)
+    Arrow(name, Output(domain, OutputMode(lunique, ltotal, runique, rtotal)), select, inverse)
 Arrow(name::Symbol, targetname::Symbol; props...) =
     Arrow(name, Entity{targetname}; props...)
 Arrow(name::Symbol; props...) =
     Arrow(name, Entity{name}; props...)
 
-output(arrow::Arrow) = arrow.output
+output(a::Arrow) = a.output
 
-function show(io::IO, a::Arrow)
-    T = domain(a.output)
-    print(io, a.name, ":: ", T <: Entity ? ucfirst(string(classname(T))) : T)
-    features = []
-    inv = false
-    if (a.output.domain <: Entity && a.inverse != nothing)
-        push!(features, "inverse of $(classname(a.output.domain)).$(a.inverse)")
-        inv = true
-    end
-    o = a.output
-    issingular(o) != inv || push!(features, issingular(o) ? "singular" : "plural")
-    isnonempty(o) != inv || push!(features, isnonempty(o) ? "complete" : "partial")
-    ismonic(o) == inv || push!(features, ismonic(o) ? "exclusive" : "inexclusive")
-    iscovering(o) == inv || push!(features, iscovering(o) ? "reachable" : "unreachable")
-    if !isempty(features)
-        print(io, " {", join(features, ", "), "}")
-    end
-end
+show(io::IO, a::Arrow) =
+    print(io,
+        a.name,
+        a.inverse != nothing ? " (inverse of $(odomain(a)).$(a.inverse))" : "",
+        " :: ", a.output)
 
+
+#
+# Describes a group of homogeneous entities.
+#
 
 immutable Class
     name::Symbol
-    arrows::Tuple{Vararg{Arrow}}
-    name2arrow::Dict{Symbol,Arrow}
+    arrows::Vector{Arrow}
     select::SelectType
+    name2arrow::Dict{Symbol,Arrow}
 end
 
 Class(name::Symbol, as::Arrow...; select=nothing) =
-    Class(name, as, Dict{Symbol,Arrow}([a.name => a for a in as]), select)
+    Class(name, collect(Arrow, as), select, Dict{Symbol,Arrow}([a.name => a for a in as]))
 
-function show(io::IO, c::Class)
-    print(io, ucfirst(string(c.name)), ":")
-    for a in c.arrows
-        print(io, "\n  ", a)
+show(io::IO, c::Class) =
+    begin
+        print(io, Entity{c.name}, ":")
+        for a in c.arrows
+            print(io, "\n  ", a)
+        end
     end
-end
 
+
+#
+# All the classes in the database.
+#
 
 immutable Schema
-    classes::Tuple{Vararg{Class}}
+    classes::Vector{Class}
     name2class::Dict{Symbol,Class}
 end
 
 Schema(cs::Class...) =
-    Schema(cs, Dict{Symbol,Class}([c.name => c for c in cs]))
+    Schema(collect(Class, cs), Dict{Symbol,Class}([c.name => c for c in cs]))
 
-function show(io::IO, s::Schema)
-    fst = true
-    for c in s.classes
-        if !fst
-            print(io, "\n")
-        end
-        print(io, c)
-        fst = false
-    end
-end
+show(io::IO, s::Schema) = print_joined(io, s.classes, "\n")
 
+
+#
+# Data for a specific database instance.  In the toy backend,
+# we keep all data in memory.
+#
 
 immutable Instance
     sets::Dict{Symbol, Vector}
@@ -97,10 +104,10 @@ immutable Instance
 end
 
 
-immutable Database <: AbstractDatabase
+immutable ToyDatabase <: AbstractDatabase
     schema::Schema
     instance::Instance
 end
 
-show(io::IO, db::Database) = show(io, db.schema)
+show(io::IO, db::ToyDatabase) = show(io, db.schema)
 

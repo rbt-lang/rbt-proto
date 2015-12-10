@@ -1,101 +1,147 @@
+#
+# Compiler state.
+#
 
-# Local namespace.
-abstract AbstractScope
 
-# Resolves an arrow name into a `Nullable{Query}` object.
-lookup(scope::AbstractScope, name::Symbol) =
-    error("lookup() is not implemented for scope $scope")
+#
+# A combinator constructor.
+#
 
-# Returns the root (unit) scope.
-root(scope::AbstractScope) =
-    error("root() is not implemented for scope $scope")
+abstract AbstractBinding
 
-# Returns an empty (zero) scope.
-empty(scope::AbstractScope) =
-    error("empty() is not implemented for scope $scope")
 
-# Compatibility with `scope(::AbstractDatabase)` and `scope(::Query)`.
-scope(scope::AbstractScope) = scope
+#
+# Collection of bindings and other compiler state.
+#
 
-# Encapsulates the compiler state and the query combinator.
+typealias BindingTuple Tuple{Vararg{AbstractBinding}}
+typealias NullableBindingTuple Nullable{BindingTuple}
+typealias NullableSymbol Nullable{Symbol}
+typealias SymbolTable ImmutableDict{Tuple{Symbol,Int}, AbstractBinding}
+
+
+immutable Scope
+    db::AbstractDatabase
+    domain::Type
+    rev::Bool
+    tag::NullableSymbol
+    globals::SymbolTable
+    locals::SymbolTable
+    items::NullableBindingTuple
+end
+
+Scope(
+    db::AbstractDatabase, domain::Type;
+    rev::Bool=false,
+    tag::Union{Symbol,NullableSymbol}=NullableSymbol(),
+    globals::SymbolTable=SymbolTable(),
+    locals::SymbolTable=SymbolTable(),
+    items::Union{BindingTuple,NullableBindingTuple}=NullableBindingTuple()) =
+    Scope(db, domain, rev, tag, globals, locals, items)
+
+domain(scope::Scope) = scope.domain
+
+addglobal(scope::Scope, key::Tuple{Symbol,Int}, binding::AbstractBinding) =
+    Scope(scope.db, scope.domain, scope.rev, scope.tag, assoc(scope.globals, key, binding), scope.locals, scope.items)
+
+addglobal(scope::Scope, key::Symbol, binding::AbstractBinding) =
+    addglobal(scope, (key, 0), binding)
+
+addlocal(scope::Scope, key::Tuple{Symbol,Int}, binding::AbstractBinding) =
+    Scope(scope.db, scope.domain, scope.rev, scope.tag, scope.globals, assoc(scope.locals, key, binding), scope.items)
+
+addlocal(scope::Scope, key::Symbol, binding::AbstractBinding) =
+    addlocal(scope, (key, 0), binding)
+
+settag(scope::Scope, tag::Symbol) =
+    Scope(scope.db, scope.domain, scope.rev, tag, scope.globals, scope.locals, scope.items)
+
+setrev(scope::Scope, rev::Bool) =
+    Scope(scope.db, scope.domain, rev, scope.tag, scope.globals, scope.locals, scope.items)
+
+setitems(scope::Scope, items::BindingTuple) =
+    Scope(scope.db, scope.domain, scope.rev, scope.tag, scope.globals, scope.locals, items)
+
+lookup(scope::Scope, key::Tuple{Symbol,Int}) =
+    begin
+        name, arity = key
+        b = get(scope.locals, (name, arity))
+        if !isnull(b)
+            return b
+        end
+        b = get(scope.locals, (name, -1))
+        if !isnull(b)
+            return b
+        end
+        b = get(scope.globals, (name, arity))
+        if !isnull(b)
+            return b
+        end
+        return get(scope.globals, (name, -1))
+    end
+lookup(scope::Scope, key::Symbol) = lookup(scope, (key, 0))
+
+nest(scope::Scope, domain::Type) = nest(scope.db, scope, domain)
+
+
+#
+# Encapsulates the compiler state and the combinator.
+#
+
 immutable Query
-    # Local namespace.
-    scope::AbstractScope
-    # The input type of the combinator.
-    #input::Input
-    # The output type of the combinator.
-    #output::Output
-    # Execution pipeline that implements the combinator.
+    scope::Scope
     pipe::AbstractPipe
-    # Extractors of individual fields for a record-generating combinator.
-    fields::Nullable{Tuple{Vararg{Query}}}
-    # Generator of a unique representable value (for opaque output values
-    # that cannot be tested for equality).
-    identity::Nullable{Query}
-    # Output formatter (for opaque output values).
-    selector::Nullable{Query}
-    # Named attributes that augment the current scope.
-    defs::Dict{Symbol,Query}
-    # Sorting direction (0 or +1 for ascending, -1 for descending).
-    order::Int
-    # Identifier that denotes the combinator.
-    tag::Nullable{Symbol}
-    # The source code for the query.
     syntax::Nullable{AbstractSyntax}
-    # The query as it was before formatting and optimizing.  Use it to
-    # resume compilation.
     origin::Nullable{Query}
 end
 
-# Type aliases.
-typealias Queries Tuple{Vararg{Query}}
-typealias NullableQuery Nullable{Query}
-typealias NullableQueries Nullable{Queries}
-typealias NullableSymbol Nullable{Symbol}
-typealias NullableSyntax Nullable{AbstractSyntax}
-
-# Fresh state for the given scope.
 Query(
-    scope::AbstractScope, domain::Type=Unit;
-    pipe=HerePipe(domain),
-    fields=NullableQueries(),
-    identity=NullableQuery(),
-    selector=NullableQuery(),
-    defs=Dict{Symbol,Query}(),
-    order=0,
-    tag=NullableSymbol(),
-    syntax=NullableSyntax(),
-    origin=NullableQuery()) =
-    Query(scope, pipe, fields, identity, selector, defs, order, tag, syntax, origin)
+    scope::Scope,
+    pipe::AbstractPipe;
+    syntax::Union{AbstractSyntax,Nullable{AbstractSyntax}}=Nullable{AbstractSyntax}(),
+    origin::Union{Query,Nullable{Query}}=Nullable{Query}()) =
+    Query(scope, pipe, syntax, origin)
 
-# Initial compiler state.
-Query(db::AbstractDatabase; params...) = Query(scope(db, Dict{Symbol,Type}(params)))
-
-# Clone constructor.
 Query(
     q::Query;
-    scope=nothing, pipe=nothing,
-    fields=nothing, identity=nothing, selector=nothing, defs=nothing,
-    order=nothing, tag=nothing,
-    syntax=nothing, origin=nothing) =
+    scope=nothing,
+    pipe=nothing,
+    syntax=nothing,
+    origin=nothing) =
     Query(
-        scope != nothing ? scope : q.scope,
-        #input != nothing ? input : q.input,
-        #output != nothing ? output : q.output,
-        pipe != nothing ? pipe : q.pipe,
-        fields != nothing ? fields : q.fields,
-        identity != nothing ? identity : q.identity,
-        selector != nothing ? selector : q.selector,
-        defs != nothing ? defs : q.defs,
-        order != nothing ? order : q.order,
-        tag != nothing ? tag : q.tag,
-        syntax != nothing ? syntax : q.syntax,
-        origin != nothing ? origin : q.origin)
+        scope == nothing ? q.scope : scope,
+        pipe == nothing ? q.pipe : pipe,
+        syntax == nothing ? q.syntax : syntax,
+        origin == nothing ? q.origin : origin)
 
-# Extracts local namespace.
+# Initial compiler state.
+Query(db::AbstractDatabase; params...) =
+    let scope = scope(db)
+        for (tag, T) in params
+            output =
+                T <: Vector ? Output(eltype(T), lunique=false, ltotal=false) :
+                T <: Nullable ? Output(eltype(T), ltotal=false) : Output(T)
+            if output.domain == ASCIIString
+                output = Output(UTF8String, output.mode)
+            end
+            scope = addglobal(scope, tag, ParamBinding(tag, output))
+        end
+        Query(scope, HerePipe(domain(scope)))
+    end
+
+# Extracts the compiler state.
 scope(q::Query) = q.scope
 
-# Extracts the pipeline.
+lookup(q::Query, key) =
+    lookup(scope(q), key)
+
+addlocal(scope::Scope, key, q::Query) =
+    addlocal(scope, key, SimpleBinding(q))
+
+addglobal(scope::Scope, key, q::Query) =
+    addglobal(scope, key, SimpleBinding(q))
+
+# Extracts the combinator.
 pipe(q::Query) = q.pipe
 convert(::Type{AbstractPipe}, q::Query) = q.pipe
 
@@ -132,171 +178,5 @@ compile(base::Query, expr::AbstractSyntax) =
 optimize(q::Query) = q
 #optimize(q::Query) = Query(q, pipe=optimize(q.pipe))
 
-# Scope operations passthrough.
-lookup(q::Query, name::Symbol) =
-    name in keys(q.defs) ? NullableQuery(q.defs[name]) : lookup(q.scope, name)
-root(q::Query) = root(q.scope)
-empty(q::Query) = empty(q.scope)
 
-
-immutable RootScope <: AbstractScope
-    db::Database
-    params::Dict{Symbol,Type}
-end
-
-show(io::IO, ::RootScope) = print(io, "ROOT")
-
-root(self::RootScope) = self
-
-empty(self::RootScope) = EmptyScope(self.db, self.params)
-
-function lookup(self::RootScope, name::Symbol)
-    if name in keys(self.params)
-        return NullableQuery(param2q(self, name, self.params[name]))
-    end
-    if name in keys(self.db.schema.name2class)
-        class = self.db.schema.name2class[name]
-        scope = ClassScope(self.db, name, self.params)
-        T = Entity{name}
-        pipe = SetPipe(name, self.db.instance.sets[name], ismonic=true, iscovering=true)
-        tag = NullableSymbol(name)
-        syntax = NullableSyntax(ApplySyntax(name, []))
-        query = Query(scope, pipe=pipe, tag=tag, syntax=syntax)
-        selector = mkselector(
-            query,
-            class.select != nothing ? class.select : tuple(keys(class.arrows)...))
-        identity = mkidentity(query, :id)
-        query = Query(query, selector=selector, identity=identity)
-        return NullableQuery(query)
-    else
-        return NullableQuery()
-    end
-end
-
-
-immutable ClassScope <: AbstractScope
-    db::Database
-    name::Symbol
-    params::Dict{Symbol,Type}
-end
-
-show(io::IO, self::ClassScope) = print(io, "Class(<", self.name, ">)")
-
-root(self::ClassScope) = RootScope(self.db, self.params)
-
-empty(self::ClassScope) = EmptyScope(self.db, self.params)
-
-function lookup(self::ClassScope, name::Symbol)
-    if name in keys(self.params)
-        return NullableQuery(param2q(self, name, self.params[name]))
-    end
-    class = self.db.schema.name2class[self.name]
-    if name == :id
-        scope = EmptyScope(self.db, self.params)
-        IT = Entity{self.name}
-        pipe = ItemPipe(IT, 1, typemin(OutputMode))
-        tag = NullableSymbol(name)
-        syntax = NullableSyntax(ApplySyntax(name, []))
-        return NullableQuery(Query(scope, pipe=pipe, tag=tag, syntax=syntax))
-    elseif name in keys(class.name2arrow)
-        tag = NullableSymbol(name)
-        arrow = class.name2arrow[name]
-        map = self.db.instance.maps[(self.name, arrow.name)]
-        IT = Entity{self.name}
-        OT = domain(arrow.output)
-        pipe_name = symbol(self.name, "/", name)
-        if isplain(arrow)
-            pipe = IsoMapPipe(pipe_name, map, ismonic(arrow), iscovering(arrow))
-        elseif ispartial(arrow)
-            pipe = OptMapPipe(pipe_name, map, ismonic(arrow), iscovering(arrow))
-        else
-            pipe = SeqMapPipe(pipe_name, map, isnonempty(arrow), ismonic(arrow), iscovering(arrow))
-        end
-        syntax = NullableSyntax(ApplySyntax(name, []))
-        if OT <: Entity
-            targetname = classname(OT)
-            targetclass = self.db.schema.name2class[targetname]
-            scope = ClassScope(self.db, targetname, self.params)
-            query = Query(scope, pipe=pipe, tag=tag, syntax=syntax)
-            selector = mkselector(
-                query,
-                arrow.select != nothing ? arrow.select :
-                targetclass.select != nothing ? targetclass.select :
-                    tuple(keys(targetclass.arrows)...))
-            identity = mkidentity(query, :id)
-            query = Query(query, selector=selector, identity=identity)
-        else
-            scope = EmptyScope(self.db, self.params)
-            query = Query(scope, pipe=pipe, tag=tag, syntax=syntax)
-        end
-        return NullableQuery(query)
-    else
-        return NullableQuery()
-    end
-end
-
-
-immutable EmptyScope <: AbstractScope
-    db::Database
-    params::Dict{Symbol,Type}
-end
-
-show(io::IO, ::EmptyScope) = print(io, "EMPTY")
-
-root(self::EmptyScope) = RootScope(self.db, self.params)
-
-empty(self::EmptyScope) = self
-
-lookup(self::EmptyScope, name::Symbol) =
-    name in keys(self.params) ?
-        NullableQuery(param2q(self, name, self.params[name])) :
-        NullableQuery()
-
-
-mkselector(base::Query, spec) = mkcomposite(base, spec, :selector)
-
-mkidentity(base::Query, spec) = mkcomposite(base, spec, :identity)
-
-function mkcomposite(base::Query, query::Query, field)
-    cap = getfield(query, field)
-    if !isnull(cap)
-        query = Query(query >> get(cap), tag=query.tag)
-    end
-    return query
-end
-
-function mkcomposite(base::Query, name::Symbol, field)
-    op = lookup(base, name)
-    @assert !isnull(op)
-    return mkcomposite(base, get(op), field)
-end
-
-function mkcomposite(base::Query, parts::Tuple, field)
-    ops = [mkcomposite(base, part, field) for part in parts]
-    return record(base, ops...)
-end
-
-function param2q(base::AbstractScope, name::Symbol, T::Type)
-    if T <: AbstractString
-        T = UTF8String
-    elseif T <: Nullable{ASCIIString}
-        T = Nullable{UTF8String}
-    elseif T <: Vector{ASCIIString}
-        T = Vector{UTF8String}
-    end
-    if T == Void
-        T = Nullable{Union{}}
-    end
-    scope = empty(base)
-    IT = isa(base, ClassScope) ? Entity{base.name} : Unit
-    output =
-        T <: Vector ? Output(eltype(T), lunique=false, ltotal=false) :
-        T <: Nullable ? Output(eltype(T), ltotal=false) : Output(T)
-    pipe = ParamPipe(IT, name, output)
-    return Query(scope, pipe=pipe)
-end
-
-scope(db::Database) = RootScope(db, Dict{Symbol,Type}())
-
-scope(db::Database, params::Dict{Symbol,Type}) = RootScope(db, params)
 

@@ -92,19 +92,19 @@ codegen(pipe::DataFramePipe, X, I) =
     end
 
 
-compile(fn::Fn(:dataframe), base::Query, flow::AbstractSyntax, ops::AbstractSyntax...) =
+compile(fn::Fn(:dataframe), base::Scope, flow::AbstractSyntax, ops::AbstractSyntax...) =
     let flow = compile(base, flow),
         ops = [compile(flow, op) for op in ops]
         isempty(ops) ? compile(fn, base, flow) : compile(fn, base, compile(Fn{:select}, base, flow, ops...))
     end
 
 
-function compile(::Fn(:dataframe), base::Query, flow::Query)
+function compile(::Fn(:dataframe), base::Scope, flow::Query)
     flow = select(flow)
-    if !isnull(flow.fields)
+    if !isnull(flow.scope.items)
         fields = mkdffields(flow)
         pipe = DataFramePipe(flow.pipe, fields)
-        return Query(empty(flow), pipe=pipe)
+        return Query(nest(base, DataFrame), pipe)
     else
         flow = select(flow)
         if ispartial(flow)
@@ -118,13 +118,14 @@ end
 
 function mkdffields(flow::Query)
     fields = ()
-    for field in get(flow.fields)
-        if !isnull(field.fields)
-            fields = (fields..., mkdffields(field.fields)...)
+    for item in get(flow.scope.items)
+        field = item(flow.scope)
+        if !isnull(field.scope.items)
+            fields = (fields..., mkdffields(field)...)
         else
-            name = get(field.tag, symbol(""))
+            name = get(field.scope.tag, symbol(""))
             if !issingular(field)
-                field = compile(Fn{:dataframe}, flow, field)
+                field = compile(Fn{:dataframe}, flow.scope, field)
             end
             F = field.pipe
             fields = (fields..., (name, F))
