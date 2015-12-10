@@ -737,3 +737,32 @@ function compile(fn::Fn(:json), base::Scope, flow::Query)
 end
 
 
+function compile(::Fn(:frame), base::Scope, flow::Query)
+    return Query(flow, pipe=BindRelPipe(flow.pipe))
+end
+
+
+function compile(::Fn(:given), base::Scope, flow::AbstractSyntax, ops::AbstractSyntax...)
+    scope = base
+    qs = Query[]
+    tags = Symbol[]
+    for op in ops
+        q = compile(scope, op)
+        reqtag(q)
+        push!(qs, q)
+        tag = gensym(get(q.scope.tag))
+        push!(tags, tag)
+        binding = ParamBinding(tag, output(q))
+        scope = addglobal(scope, get(q.scope.tag), binding)
+    end
+    query = compile(scope, flow)
+    pipe = query.pipe
+    reverse!(qs)
+    reverse!(tags)
+    for (q, tag) in zip(qs, tags)
+        pipe = BindEnvPipe(pipe, tag, q.pipe)
+    end
+    # FIXME: remove parameters from the query scope.
+    return Query(query, pipe=pipe)
+end
+

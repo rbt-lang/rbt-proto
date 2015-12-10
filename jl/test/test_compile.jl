@@ -181,4 +181,7 @@ q(X=5, Y=4, Z=[2,3,4,5])
     :dataframe(
         name, surname, position, salary, salary_diff => max(and_around(position).salary)-salary),
     DEPT="TREASURER")
+@query(department:select(name, employee:filter(salary==max(and_around.salary)):frame))
+@query(employee:filter(salary==MAX_SALARY):given(MAX_SALARY => max(employee.salary)))
+@query(department:select(name, employee:filter(salary==MAX_SALARY):given(MAX_SALARY => max(employee.salary))))
 

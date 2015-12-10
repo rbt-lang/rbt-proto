@@ -339,14 +339,28 @@ output(pipe::IsoMapPipe) =
 
 ctxgen(pipe::IsoMapPipe) =
     let map = symbol("#map#", pipe.tag)
-        [Pair{Symbol,Any}(map, pipe.map)]
+        if keytype(pipe.map) <: Entity
+            mapvec = Vector{valtype(pipe.map)}(length(pipe.map))
+            for (key, val) in pipe.map
+                mapvec[key.id] = val
+            end
+            [Pair{Symbol,Any}(map, mapvec)]
+        else
+            [Pair{Symbol,Any}(map, pipe.map)]
+        end
     end
 
 codegen(pipe::IsoMapPipe, X) =
     let map = symbol("#map#", pipe.tag),
         T = valtype(pipe.map)
-        quote
-            Iso{$T}(_.$map[data($X)])
+        if keytype(pipe.map) <: Entity
+            quote
+                Iso{$T}(_.$map[data($X).id])
+            end
+        else
+            quote
+                Iso{$T}(_.$map[data($X)])
+            end
         end
     end
 
@@ -2243,6 +2257,80 @@ codegen(pipe::RelativeByPipe, X, I) =
                 end
             end
             Seq{$T}($ys)
+        end
+    end
+
+
+#
+# Binding surrounding context.
+#
+
+immutable BindRelPipe <: AbstractPipe
+    F::AbstractPipe
+    input::Input
+    output::Output
+
+    BindRelPipe(F::AbstractPipe) =
+        !isrelative(F) ?
+            F : new(F, Input(idomain(F), params=params(F)), output(F))
+end
+
+show(io::IO, pipe::BindRelPipe) = print(io, "BindRel($(pipe.F))")
+
+arms(pipe::BindRelPipe) = AbstractPipe[pipe.F]
+
+codegen(pipe::BindRelPipe, X) =
+    let I = ikind(pipe)
+        codegen(pipe.F, :( bind_rel($X) ), I)
+    end
+
+
+#
+# Binding environment variables.
+#
+
+immutable BindEnvPipe <: AbstractPipe
+    F::AbstractPipe
+    tag::Symbol
+    G::AbstractPipe
+    input0::Input
+    input::Input
+    output::Output
+
+    BindEnvPipe(F::AbstractPipe, tag::Symbol, G::AbstractPipe) =
+        begin
+            params0 = params(F)
+            pos = findfirst(params0.first, tag)
+            if pos == 0
+                return F
+            end
+            T = params0.second[pos]
+            @assert(odata(G) <: T, "$(repr(G)) is not of type $T")
+            params1 = Params(
+                (params0.first[1:pos-1]..., params0.first[pos+1:end]...),
+                (params0.second[1:pos-1]..., params0.second[pos+1:end]...))
+            input0 = Input(RBT.input(F), params=params1)
+            input = Input(domain(input0), max(mode(input0), imode(G)))
+            return new(F, tag, G, input0, input, output(F))
+        end
+end
+
+BindEnvPipe(F::AbstractPipe, p::Pair) = BindEnvPipe(F, p.first, p.second)
+
+show(io::IO, pipe::BindEnvPipe) = print(io, "BindEnv($(pipe.F), $(pipe.tag) => $(pipe.G))")
+
+arms(pipe::BindEnvPipe) = AbstractPipe[pipe.F, pipe.G]
+
+codegen(pipe::BindEnvPipe, X, I) =
+    begin
+        I0 = ikind(pipe.input0)
+        I1 = ikind(pipe.F)
+        Ns = Val{(pipe.tag,)}
+        @gensym X0 env
+        return quote
+            $X0 = $X
+            $env = (data($(codegen(pipe.G, X0, I))),)
+            $(codegen(pipe.F, :( bind_env(lift($I0, $X0), $Ns, $env) ), I1))
         end
     end
 

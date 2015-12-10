@@ -350,6 +350,72 @@ end
 
 
 #
+# Adding parameters and context.
+#
+
+bind_rel{T}(X::Iso{T}) =
+    begin
+        val = data(X)
+        Rel{T}(1, T[val])
+    end
+
+bind_rel{Ns,Vs,T}(X::Env{Ns,Vs,T}) =
+    begin
+        env, val = data(X)
+        EnvRel{Ns,Vs,T}(env, 1, T[val])
+    end
+
+bind_env{Ns,Vs,T}(X::Iso{T}, ::Type{Ns}, env::Vs) =
+    begin
+        val = data(X)
+        Env{Ns,Vs,T}(env, val)
+    end
+
+bind_env{Ns,Vs,T}(X::Iso{T}, ::Type{Ns}, env::Vs) =
+    begin
+        val = data(X)
+        Env{Ns,Vs,T}(env, val)
+    end
+
+@generated function bind_env{Ns1,Vs1,Ns2,Vs2,T}(X::Env{Ns1,Vs1,T}, ::Type{Ns2}, env2::Vs2)
+    Ns, Ts, idxmap = _envjoin(Ns1,Vs1,Ns2,Vs2)
+    return quote
+        env1, val = data(X)
+        env = $(Expr(:tuple, [idx > 0 ? :( env1[$idx] ) : :( env2[-$idx] ) for idx in idxmap]...))
+        return Env{$Ns,$Vs,$T}(env, val)
+    end
+end
+
+@generated function bind_env{Ns1,Vs1,Ns2,Vs2,T}(X::EnvRel{Ns1,Vs1,T}, ::Type{Ns2}, env2::Vs2)
+    Ns, Ts, idxmap = _envjoin(Ns1,Vs1,Ns2,Vs2)
+    return quote
+        env1, ptr, vals = data(X)
+        env = ($([idx > 0 ? :( env1[$idx] ) : :( env2[-$idx] ) for idx in idxmap]...))
+        return EnvRel{$Ns,$Vs,$T}(env, ptr, vals)
+    end
+end
+
+_envjoin(Ns1,Vs1,Ns2,Vs2) =
+    begin
+        names1 = Ns1.parameters[1]
+        names2 = Ns2.parameters[1]
+        idxs = Dict{Symbol,Int}()
+        for (j, name) in enumerate(names1)
+            idxs[name] = j
+        end
+        for (j, name) in enumerate(names2)
+            idxs[name] = -j
+        end
+        names = sort(collect(Symbol, keys(idx)))
+        idxmap = Int[idxs[name] for name in names]
+        types = Type[idx > 0 ? Vs1.parameters[idx] : Vs2.parameters[-idx] for idx in idxmap]
+        Ns = Val{tuple(names...)}
+        Vs = Tuple{types...}
+        return Ns, Vs, idxmap
+end
+
+
+#
 # Duplicate input: W{T} -> W_2{W_1{T}}.
 #
 
