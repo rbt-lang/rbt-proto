@@ -52,13 +52,7 @@ call(binding::ArrowBinding, base::Scope) =
         scope = settag(scope, binding.arrowname),
         tag = symbol(binding.classname, "/", binding.arrowname),
         map = binding.db.instance.maps[binding.classname, binding.arrowname],
-        isnonempty = isnonempty(arrow),
-        ismonic = ismonic(arrow),
-        iscovering = iscovering(arrow),
-        pipe =
-            isplural(arrow) ? SeqMapPipe(tag, map, isnonempty=isnonempty, ismonic=ismonic, iscovering=iscovering) :
-            ispartial(arrow) ? OptMapPipe(tag, map, ismonic=ismonic, iscovering=iscovering) :
-                IsoMapPipe(tag, map, ismonic=ismonic, iscovering=iscovering)
+        pipe = EntityMapPipe(tag, Entity{binding.classname}, map, omode(arrow))
         if arrow.select != nothing
             out = mkselect(scope, arrow.select)
             out = Query(out, scope=settag(out.scope, binding.arrowname))

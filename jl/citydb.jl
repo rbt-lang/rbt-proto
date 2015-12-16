@@ -5,7 +5,7 @@ end
 
 ENV["LINES"] = 15
 
-using RBT: Entity, ToyDatabase, Schema, Class, Arrow, Instance
+using RBT: Entity, ToyDatabase, Schema, Class, Arrow, Instance, Iso, Opt, Seq
 
 CSV_PATH = joinpath(dirname(@__FILE__), "../data/hr/hr.csv")
 
@@ -49,16 +49,16 @@ E = Entity{:employee}
 dept = Vector{D}()
 empl = Vector{E}()
 
-dept_name = Dict{D, UTF8String}()
-dept_empl = Dict{D, Vector{E}}()
+dept_name = Vector{Iso{UTF8String}}()
+dept_empl = Vector{Seq{E}}()
 
-empl_name = Dict{E, UTF8String}()
-empl_surname = Dict{E, UTF8String}()
-empl_position = Dict{E, UTF8String}()
-empl_salary = Dict{E, Int}()
-empl_dept = Dict{E, D}()
-empl_managed_by = Dict{E, E}()
-empl_manages = Dict{E, Vector{E}}()
+empl_name = Vector{Iso{UTF8String}}()
+empl_surname = Vector{Iso{UTF8String}}()
+empl_position = Vector{Iso{UTF8String}}()
+empl_salary = Vector{Iso{Int}}()
+empl_dept = Vector{Iso{D}}()
+empl_managed_by = Vector{Opt{E}}()
+empl_manages = Vector{Seq{E}}()
 
 tr_head = nothing
 trs = []
@@ -83,19 +83,19 @@ for i = 1:size(csv, 1)
     if !haskey(did_by_name, department_name)
         did = D(length(dept)+1)
         push!(dept, did)
-        dept_name[did] = department_name
-        dept_empl[did] = []
+        push!(dept_name, Iso{UTF8String}(department_name))
+        push!(dept_empl, Seq{E}(E[]))
         did_by_name[department_name] = did
     end
     did = did_by_name[department_name]
     eid = E(length(empl)+1)
     push!(empl, eid)
-    push!(dept_empl[did], eid)
-    empl_name[eid] = name
-    empl_surname[eid] = surname
-    empl_position[eid] = position
-    empl_salary[eid] = salary
-    empl_dept[eid] = did
+    push!(dept_empl[did.id].data, eid)
+    push!(empl_name, Iso{UTF8String}(name))
+    push!(empl_surname, Iso{UTF8String}(surname))
+    push!(empl_position, Iso{UTF8String}(position))
+    push!(empl_salary, Iso{Int}(salary))
+    push!(empl_dept, Iso{D}(did))
     if department_name == TREASURER_DEPT
         if position == TREASURER_HEAD
             tr_head = eid
@@ -108,15 +108,17 @@ for i = 1:size(csv, 1)
             push!(trs, eid)
         end
     end
+    push!(empl_manages, Seq{E}(E[]))
+    push!(empl_managed_by, Opt{E}())
 end
 
-empl_manages[tr_head] = trs
-empl_manages[acc_head] = accs
+empl_manages[tr_head.id] = Seq{E}(trs)
+empl_manages[acc_head.id] = Seq{E}(accs)
 for tr in trs
-    empl_managed_by[tr] = tr_head
+    empl_managed_by[tr.id] = Opt{E}(tr_head)
 end
 for acc in accs
-    empl_managed_by[acc] = acc_head
+    empl_managed_by[acc.id] = Opt{E}(acc_head)
 end
 
 instance = Instance(

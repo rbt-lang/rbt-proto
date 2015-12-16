@@ -100,7 +100,7 @@ show(io::IO, s::Schema) = print_joined(io, s.classes, "\n")
 
 immutable Instance
     sets::Dict{Symbol, Vector}
-    maps::Dict{Tuple{Symbol, Symbol}, Dict}
+    maps::Dict{Tuple{Symbol, Symbol}, Vector}
 end
 
 

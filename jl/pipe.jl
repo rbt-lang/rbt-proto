@@ -461,6 +461,35 @@ codegen(pipe::SeqMapPipe, X) =
 
 
 #
+# Specialized map for entity attributes.
+#
+
+immutable EntityMapPipe <: AbstractPipe
+    tag::Symbol
+    domain::Type
+    map::Vector
+    mode::OutputMode
+end
+
+show(io::IO, pipe::EntityMapPipe) = print(io, "EntityMap(<$(pipe.tag)>)")
+
+input(pipe::EntityMapPipe) = Input(pipe.domain)
+output(pipe::EntityMapPipe) = Output(eltype(eltype(pipe.map)), pipe.mode)
+
+ctxgen(pipe::EntityMapPipe) =
+    let map = symbol("#map#", pipe.tag)
+        [Pair{Symbol,Any}(map, pipe.map)]
+    end
+
+codegen(pipe::EntityMapPipe, X) =
+    let map = symbol("#map#", pipe.tag)
+        quote
+            _.$map[data($X).id]
+        end
+    end
+
+
+#
 # Adapts a combinator to a different output structure.
 #
 
