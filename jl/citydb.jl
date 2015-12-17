@@ -66,16 +66,6 @@ acc_head = nothing
 accs = []
 
 
-BASE_PATH = joinpath(dirname(@__FILE__), "data")
-if !isdir(BASE_PATH)
-    mkdir(BASE_PATH)
-end
-CSV_PATH = joinpath(BASE_PATH, CSV_PATH)
-
-if !isfile(CSV_PATH)
-    download(URL, CSV_PATH)
-end
-
 csv = readcsv(CSV_PATH, header=true)[1]
 did_by_name = Dict{UTF8String, D}()
 for i = 1:size(csv, 1)

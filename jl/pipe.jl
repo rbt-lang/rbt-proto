@@ -680,7 +680,7 @@ immutable TuplePipe <: AbstractPipe
             if isempty(Fs)
                 return ConstPipe(Any, ())
             end
-            input = maximum(map(RBT.input, Fs))
+            input = max(map(RBT.input, Fs)...)
             odomain = Tuple{map(odata, Fs)...}
             runique =
                 iszero(input.domain) ||
@@ -793,8 +793,8 @@ immutable VectorPipe <: AbstractPipe
             elseif length(Fs) == 1
                 return SeqPipe(Fs[1])
             end
-            input = maximum(map(RBT.input, Fs))
-            output = maximum(map(RBT.output, Fs))
+            input = max(map(RBT.input, Fs)...)
+            output = max(map(RBT.output, Fs)...)
             output = Output(
                 output.domain,
                 lunique=false,
@@ -880,7 +880,7 @@ immutable OpPipe <: AbstractPipe
             for (itype, F) in zip(itypes, Fs)
                 @assert odomain(F) <: itype "$(repr(F)) is not of type $itype"
             end
-            input = isempty(Fs) ? typemin(Input) : maximum(map(RBT.input, Fs))
+            input = isempty(Fs) ? typemin(Input) : max(map(RBT.input, Fs)...)
             output = Output(otype, lunique=all(issingular, Fs), ltotal=all(isnonempty, Fs))
             return new(op, itypes, otype, Fs, input, output)
         end
@@ -1061,7 +1061,7 @@ immutable RangePipe <: AbstractPipe
             for F in [start, step, stop]
                 @assert isplain(F) && odomain(F) <: Int "$(repr(F)) is not of type $Int"
             end
-            input = maximum(map(RBT.input, [start, step, stop]))
+            input = max(map(RBT.input, [start, step, stop])...)
             output = Output(Int, lunique=false, ltotal=false, runique=true, rtotal=false)
             new(start, step, stop, input, output)
         end
@@ -1135,7 +1135,7 @@ PackPipe(tagged_Fs::Vector{TaggedPipe}) =
     if isempty(tagged_Fs)
         EmptyPipe(Any)
     else
-        domain = RBT.domain(maximum([output(F) for (tag, F) in tagged_Fs]))
+        domain = RBT.domain(max([output(F) for (tag, F) in tagged_Fs]...))
         VectorPipe(AbstractPipe[F >> TagPipe(tag, domain) for (tag, F) in tagged_Fs])
     end
 PackPipe(tagged_Fs) =
@@ -1160,8 +1160,8 @@ immutable CasePipe <: AbstractPipe
         else
             input = Input(
                 Pair{Symbol,domain},
-                maximum([imode(F) for (tag, F) in tagged_Fs]))
-            output = maximum([RBT.output(F) for (tag, F) in tagged_Fs])
+                max([imode(F) for (tag, F) in tagged_Fs]...))
+            output = max([RBT.output(F) for (tag, F) in tagged_Fs]...)
             if !full
                 output = Output(output, ltotal=false)
             end
@@ -1875,7 +1875,7 @@ ItemPipe(pipe::GroupPipe, idx1, idx2) =
 codegen(pipe::GroupPipe, X, I) =
     begin
         T = Tuple{Tuple{map(odomain, pipe.items)...}, odomain(pipe.F)}
-        K = isempty(pipe.items) ? Iso{odomain(pipe.F)} : ikind(maximum([input(item) for item in pipe.items]))
+        K = isempty(pipe.items) ? Iso{odomain(pipe.F)} : ikind(max([input(item) for item in pipe.items]...))
         @gensym Y0 q
         W = codegen_compose(K, Iso{T}, pipe.F, X, I) do Y, O
             quote
@@ -2017,7 +2017,7 @@ ItemPipe(pipe::PartitionPipe, idx1, idx2) =
 codegen(pipe::PartitionPipe, X, I) =
     begin
         T = Tuple{Tuple{map(odomain, pipe.items)...}, odomain(pipe.F)}
-        K = isempty(pipe.items) ? Iso{odomain(pipe.F)} : ikind(maximum([input(item) for item in pipe.items]))
+        K = isempty(pipe.items) ? Iso{odomain(pipe.F)} : ikind(max([input(item) for item in pipe.items]...))
         @gensym X0 Y0 q
         W = codegen_compose(K, Iso{T}, pipe.F, X0, I) do Y, O
             quote
@@ -2131,7 +2131,7 @@ immutable DictPipe <: AbstractPipe
         if isempty(tagged_Fs)
             ConstPipe(Any, Dict{Any,Any}())
         else
-            input = maximum([RBT.input(F) for (tag, F) in tagged_Fs])
+            input = max([RBT.input(F) for (tag, F) in tagged_Fs]...)
             output = Output(Dict{Any,Any})
             new(tagged_Fs, input, output)
         end

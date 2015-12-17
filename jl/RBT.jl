@@ -13,9 +13,10 @@ export
 import Base:
     show, showcompact, showall, call, convert, get, isnull, isempty, length, eltype,
     start, next, done, endof, getindex, max, typemin, foreach, eachindex,
-    *, >>, ^, .==, .!=, .>, .>=, .<, .<=, ~, &, |
+    ==, +, -, *, /, >>, ^, .==, .!=, .>, .>=, .<, .<=, ~, &, |
 
 include("immdict.jl")
+include("monetary.jl")
 include("kind.jl")
 include("domain.jl")
 include("syntax.jl")
