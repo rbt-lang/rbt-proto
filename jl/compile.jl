@@ -211,19 +211,6 @@ function compile(::Fn(:count), base::Scope, flow::Query)
 end
 
 
-function compile(fn::Fn(:sum, :max, :min, :sum, :mean), base::Scope, flow::Query)
-    reqcomposable(base, flow); reqplural(flow); reqodomain(Int, flow)
-    pipe = (
-        fn == Fn{:sum} ? IntSumPipe :
-        fn == Fn{:max} ? IntMaxPipe :
-        fn == Fn{:min} ? IntMinPipe :
-        fn == Fn{:sum} ? IntSumPipe :
-        IntMeanPipe)(flow.pipe)
-    scope = nest(base, odomain(pipe))
-    return Query(scope, pipe)
-end
-
-
 compile(::Fn(:record), base::Scope, ops::Query...) = record(base, ops...)
 
 
@@ -664,40 +651,93 @@ function compile(fn::Fn(:in), base::Scope, op1::Query, op2::Query)
 end
 
 
-macro compileunaryop(fn, operator, T1, T2)
-    return esc(quote
-        function compile(::Fn($fn), base::Scope, op::Query)
-            reqcomposable(base, op); reqodomain($T1, op)
-            scope = nest(base, $T2)
-            pipe = OpPipe($operator, Type[$T1], $T2, [op.pipe])
-            return Query(scope, pipe)
-        end
-    end)
+const SCALAR_OPS = (
+    :(+), :(-), :(*), :(/),
+    :(<), :(<=), :(>), :(>=),
+    :date,
+    :day, :_day, :days, :_days,
+    :month, :_month, :months, :_months,
+    :year, :_year, :years, :_years)
+
+const AGGREGATE_OPS = (
+    :sum, :max, :min, :mean)
+
+
+function compile(fn::Fn(SCALAR_OPS...), base::Scope, ops::Query...)
+    reqcomposable(base, ops...)
+    for j = eachindex(ops)
+        issingular(ops[j]) || reqsingular(ops[1:j-1]...)
+    end
+    Ts = Type[odomain(op) for op in ops]
+    method_exists(polydomain, Tuple{Type{fn}, [Type{T} for T in Ts]...}) ||
+        error("expected compatible operands for operator $(fnname(fn)): $(join(ops, ", "))")
+    method = polymethod(fn, Ts...)
+    domain = polydomain(fn, Ts...)
+    scope = nest(base, domain)
+    pipe = OpPipe(method, Ts, domain, [op.pipe for op in ops])
+    return Query(scope, pipe)
 end
 
-macro compilebinaryop(fn, operator, T1, T2, T3)
-    return esc(quote
-        function compile(::Fn($fn), base::Scope, op1::Query, op2::Query)
-            reqcomposable(base, op1, op2); reqodomain($T1, op1); reqodomain($T2, op2)
-            issingular(op1) || reqsingular(op2)
-            scope = nest(base, $T3)
-            pipe = OpPipe($operator, Type[$T1, $T2], $T3, [op1, op2])
-            return Query(scope, pipe)
-        end
-    end)
+
+function compile(fn::Fn(AGGREGATE_OPS...), base::Scope, flow::Query)
+    reqcomposable(base, flow); reqplural(flow)
+    T = odomain(flow)
+    method = polymethod(fn, T)
+    domain = polydomain(fn, T)
+    haszero = polyhaszero(fn, T)
+    scope = nest(base, domain)
+    pipe = AggregateOpPipe(method, T, domain, haszero, flow.pipe)
+    scope = nest(base, odomain(pipe))
+    return Query(scope, pipe)
 end
 
-@compileunaryop(:(+), (+), Int, Int)
-@compileunaryop(:(-), (-), Int, Int)
+polymethod{name}(::Type{Fn{name}}, ::Type...) = eval(name)
+polyhaszero{name}(::Type{Fn{name}}, ::Type) = true
 
-@compilebinaryop(:(<), (<), Int, Int, Bool)
-@compilebinaryop(:(<=), (<=), Int, Int, Bool)
-@compilebinaryop(:(>=), (>=), Int, Int, Bool)
-@compilebinaryop(:(>), (>), Int, Int, Bool)
-@compilebinaryop(:(+), (+), Int, Int, Int)
-@compilebinaryop(:(-), (-), Int, Int, Int)
-@compilebinaryop(:(*), (*), Int, Int, Int)
-@compilebinaryop(:(/), (div), Int, Int, Int)
+polydomain(::Fn(:(+), :(-)), ::Type{Int}) = Int
+polydomain(::Fn(:(+), :(-)), ::Type{Int}, ::Type{Int}) = Int
+polydomain(::Fn(:(+), :(-)), ::Type{Int}, ::Type{Float64}) = Float64
+polydomain(::Fn(:(+), :(-)), ::Type{Float64}, ::Type{Int}) = Float64
+polydomain(::Fn(:(+), :(-)), ::Type{Float64}, ::Type{Float64}) = Float64
+polydomain(::Fn(:(*)), ::Type{Int}, ::Type{Int}) = Int
+polymethod(::Fn(:(/)), ::Type{Int}, ::Type{Int}) = div
+polydomain(::Fn(:(/)), ::Type{Int}, ::Type{Int}) = Int
+polydomain(::Fn(:(*), :(/)), ::Type{Int}, ::Type{Float64}) = Float64
+polydomain(::Fn(:(*), :(/)), ::Type{Float64}, ::Type{Int}) = Float64
+polydomain(::Fn(:(*), :(/)), ::Type{Float64}, ::Type{Float64}) = Float64
+polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{T}, ::Type{M}) = M
+polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{M}, ::Type{T}) = M
+polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{M}, ::Type{T}, ::Type{T}) = M
+
+polydomain(::Fn(:(<), :(<=), :(>), :(>=)), ::Type{Int}, ::Type{Int}) = Bool
+
+_dates_date(s) = Date(s)
+_dates_day() = Dates.Day(1)
+_dates_month() = Dates.Month(1)
+_dates_year() = Dates.Year(1)
+polymethod{S<:AbstractString}(::Fn(:date), ::Type{S}) = _dates_date
+polydomain{S<:AbstractString}(::Fn(:date), ::Type{S}) = Date
+polymethod(::Fn(:day, :_day, :days, :_days)) = _dates_day
+polymethod(::Fn(:month, :_month, :months, :_months)) = _dates_month
+polymethod(::Fn(:year, :_year, :years, :_years)) = _dates_year
+polydomain(::Fn(:day, :_day, :days, :_days)) = Dates.Day
+polydomain(::Fn(:month, :_month, :months, :_months)) = Dates.Month
+polydomain(::Fn(:year, :_year, :years, :_years)) = Dates.Year
+polydomain{P<:Dates.Period}(::Fn(:(+), :(-)), ::Type{P}) = Dates.Period
+polydomain{P1<:Dates.Period,P2<:Dates.Period}(::Fn(:(+), :(-)), ::Type{P1}, ::Type{P2}) = Dates.Period
+polydomain{P<:Dates.Period}(::Fn(:(+), :(-)), ::Type{Date}, ::Type{P}) = Date
+polydomain{P<:Dates.Period}(::Fn(:(*)), ::Type{Int}, ::Type{P}) = Dates.Period
+polydomain(::Fn(:(<), :(<=), :(>), :(>=)), ::Type{Date}, ::Type{Date}) = Bool
+
+polydomain{T<:Number}(::Fn(:sum), ::Type{T}) = T
+polydomain{M<:Monetary}(::Fn(:sum), ::Type{M}) = M
+polymethod(::Fn(:max), ::Type) = maximum
+polymethod(::Fn(:min), ::Type) = minimum
+polydomain{T}(::Fn(:max, :min), ::Type{T}) = T
+polyhaszero(::Fn(:max, :min, :mean), ::Type) = false
+polydomain(::Fn(:mean), ::Type{Int}) = Float64
+polydomain(::Fn(:mean), ::Type{Float64}) = Float64
+polydomain{M<:Monetary}(::Fn(:mean), ::Type{M}) = M
 
 
 compile(fn::Fn(:json), base::Scope, flow::AbstractSyntax, ops::AbstractSyntax...) =

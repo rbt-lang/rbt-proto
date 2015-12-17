@@ -104,9 +104,12 @@ function compile(::Fn(:dataframe), base::Scope, flow::Query)
     if !isnull(flow.scope.items)
         fields = mkdffields(flow)
         pipe = DataFramePipe(flow.pipe, fields)
-        return Query(nest(base, DataFrame), pipe)
+        scope = nest(base, DataFrame)
+        if !isnull(flow.scope.tag)
+            scope = settag(scope, get(flow.scope.tag))
+        end
+        return Query(scope, pipe)
     else
-        flow = select(flow)
         if ispartial(flow)
             pipe = OptToNAPipe(flow.pipe)
             flow = Query(flow, pipe=pipe)
@@ -120,17 +123,68 @@ function mkdffields(flow::Query)
     fields = ()
     for item in get(flow.scope.items)
         field = item(flow.scope)
+        if !issingular(field)
+            field = compile(Fn{:dataframe}, flow.scope, field)
+        end
         if !isnull(field.scope.items)
             fields = (fields..., mkdffields(field)...)
         else
             name = get(field.scope.tag, symbol(""))
-            if !issingular(field)
-                field = compile(Fn{:dataframe}, flow.scope, field)
-            end
             F = field.pipe
             fields = (fields..., (name, F))
         end
     end
     return fields
+end
+
+
+function formatdf()
+    @eval format(base::Scope, q::Query) =
+        Query(compile(Fn{:dataframe}, base, q), syntax=q.syntax)
+end
+
+
+function Base.writemime(io::IO,
+                        mime::MIME"text/html",
+                        df::DataFrame,
+                        sz::Int=0)
+    n = size(df, 1)
+    cnames = DataFrames._names(df)
+    write(io, "<table class=\"data-frame\">")
+    write(io, "<tr>")
+    write(io, "<th></th>")
+    for column_name in cnames
+        write(io, "<th>$column_name</th>")
+    end
+    write(io, "</tr>")
+    if sz <= 0
+        tty_rows, tty_cols = Base.tty_size()
+        sz = tty_rows
+    end
+    mxrow = min(n,sz)
+    for row in 1:mxrow
+        write(io, "<tr>")
+        write(io, "<th>$row</th>")
+        for column_name in cnames
+            cell = df[row, column_name]
+            if isa(cell, DataFrames.DataFrame)
+                write(io, "<td>")
+                writemime(io, mime, cell, 1+round(Int, sqrt(sz)))
+                write(io, "</td>")
+            else
+                write(io, "<td>$(DataFrames.html_escape(string(cell)))</td>")
+            end
+        end
+        write(io, "</tr>")
+    end
+    if n > mxrow
+        write(io, "<tr>")
+        write(io, "<th>&vellip;</th>")
+        for column_name in cnames
+            write(io, "<td>&vellip;</td>")
+        end
+        write(io, "</tr>")
+    end
+    write(io, "</table>")
 end
 

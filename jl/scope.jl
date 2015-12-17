@@ -162,8 +162,10 @@ prepare(base::Query, expr::AbstractSyntax) =
         return prepare(get(base.origin), expr)
     else
         origin = compile(base, expr)
-        return Query(optimize(select(origin)), origin=origin)
+        return Query(optimize(format(base.scope, origin)), origin=origin)
     end
+
+format(base::Scope, q::Query) = select(q)
 
 # Executes the query.
 execute(q::Query, args...; params...) =

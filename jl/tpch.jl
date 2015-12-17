@@ -2,9 +2,11 @@ if !any([dirname(path) == dirname(@__FILE__) for path in LOAD_PATH])
     push!(LOAD_PATH, dirname(@__FILE__))
 end
 
-ENV["LINES"] = 15
+ENV["LINES"] = 10
 
 using RBT: Entity, ToyDatabase, Schema, Class, Arrow, Instance, Iso, Opt, Seq, Monetary
+
+RBT.formatdf()
 
 CSV_DIR = joinpath(dirname(@__FILE__), "../data/tpch")
 
@@ -118,8 +120,8 @@ schema = Schema(
         Arrow(:linenumber, Int),
         Arrow(:quantity, Int),
         Arrow(:extendedprice, Monetary{:USD}),
-        Arrow(:discount, Monetary{:USD}),
-        Arrow(:tax, Monetary{:USD}),
+        Arrow(:discount, Float64),
+        Arrow(:tax, Float64),
         Arrow(:returnflag, ASCIIString),
         Arrow(:linestatus, ASCIIString),
         Arrow(:shipdate, Date),
@@ -221,8 +223,8 @@ l_partsupp = Vector{Iso{PS}}()
 l_linenumber = Vector{Iso{Int}}()
 l_quantity = Vector{Iso{Int}}()
 l_extendedprice = Vector{Iso{Monetary{:USD}}}()
-l_discount = Vector{Iso{Monetary{:USD}}}()
-l_tax = Vector{Iso{Monetary{:USD}}}()
+l_discount = Vector{Iso{Float64}}()
+l_tax = Vector{Iso{Float64}}()
 l_returnflag = Vector{Iso{ASCIIString}}()
 l_linestatus = Vector{Iso{ASCIIString}}()
 l_shipdate = Vector{Iso{Date}}()
@@ -367,8 +369,8 @@ for k = 1:size(csv, 1)
     push!(l_linenumber, Iso{Int}(linenumber))
     push!(l_quantity, Iso{Int}(quantity))
     push!(l_extendedprice, Iso{Monetary{:USD}}(extendedprice))
-    push!(l_discount, Iso{Monetary{:USD}}(discount))
-    push!(l_tax, Iso{Monetary{:USD}}(tax))
+    push!(l_discount, Iso{Float64}(discount))
+    push!(l_tax, Iso{Float64}(tax))
     push!(l_returnflag, Iso{ASCIIString}(returnflag))
     push!(l_linestatus, Iso{ASCIIString}(linestatus))
     push!(l_shipdate, Iso{Date}(Date(shipdate)))

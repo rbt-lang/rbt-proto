@@ -29,4 +29,6 @@ Demos
       (`Julia <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/jl/demo/hierarchical-data-with-rabbit.ipynb>`__)
     * Using Rabbit to query the database of employees of the city of Chicago
       (`Julia <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/jl/demo/citydb-with-rabbit.ipynb>`__)
+    * TPC-H queries in Rabbit
+      (`Julia <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/jl/demo/tpch-queries.ipynb>`__)
 
