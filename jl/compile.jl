@@ -203,14 +203,6 @@ function compile(fn::Fn(:before, :and_before, :after, :and_after, :around, :and_
 end
 
 
-function compile(::Fn(:count), base::Scope, flow::Query)
-    reqcomposable(base, flow); reqplural(flow)
-    scope = nest(base, Int)
-    pipe = CountPipe(flow.pipe)
-    return Query(scope, pipe)
-end
-
-
 compile(::Fn(:record), base::Scope, ops::Query...) = record(base, ops...)
 
 
@@ -656,14 +648,16 @@ end
 const SCALAR_OPS = (
     :(+), :(-), :(*), :(/),
     :(<), :(<=), :(>), :(>=),
-    :startswith, :endswith, :contains,
+    :startswith, :endswith, :contains, :substr,
     :date,
     :day, :_day, :days, :_days,
     :month, :_month, :months, :_months,
-    :year, :_year, :years, :_years)
+    :year, :_year, :years, :_years,
+    :_usd)
 
 const AGGREGATE_OPS = (
     :sum, :max, :min, :mean,
+    :count, :exists,
     :all, :any)
 
 
@@ -714,10 +708,18 @@ polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{T}, ::Type{M}) = M
 polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{M}, ::Type{T}) = M
 polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{M}, ::Type{T}, ::Type{T}) = M
 polydomain{M<:Monetary}(::Fn(:(/)), ::Type{M}, ::Type{M}) = Float64
-polydomain{T<:Number}(::Fn(:(<), :(<=), :(>), :(>=)), ::Type{T}, ::Type{T}) = Bool
+polydomain{T<:Number,M<:Monetary}(::Fn(:(/)), ::Type{M}, ::Type{T}) = M
+polydomain{T1<:Number,T2<:Number}(::Fn(:(<), :(<=), :(>), :(>=)), ::Type{T1}, ::Type{T2}) = Bool
+polydomain{M<:Monetary}(::Fn(:(<), :(<=), :(>), :(>=)), ::Type{M}, ::Type{M}) = Bool
 
+_regex_contains(s, r) = ismatch(r, s)
+_substr(s, i, j) = s[i:j]
 polydomain{S1<:AbstractString,S2<:AbstractString}(
     ::Fn(:startswith, :endswith, :contains), ::Type{S1}, ::Type{S2}) = Bool
+polymethod{S<:AbstractString}(::Fn(:contains), ::Type{S}, ::Type{Regex}) = _regex_contains
+polydomain{S<:AbstractString}(::Fn(:contains), ::Type{S}, ::Type{Regex}) = Bool
+polymethod{S<:AbstractString}(::Fn(:substr), ::Type{S}, ::Type{Int}, ::Type{Int}) = _substr
+polydomain{S<:AbstractString}(::Fn(:substr), ::Type{S}, ::Type{Int}, ::Type{Int}) = S
 
 _dates_date(s) = Date(s)
 _dates_day() = Dates.Day(1)
@@ -741,6 +743,9 @@ polydomain{P<:Dates.Period}(::Fn(:(+), :(-)), ::Type{Date}, ::Type{P}) = Date
 polydomain{P<:Dates.Period}(::Fn(:(*)), ::Type{Int}, ::Type{P}) = Dates.Period
 polydomain(::Fn(:(<), :(<=), :(>), :(>=)), ::Type{Date}, ::Type{Date}) = Bool
 
+_usd() = Monetary{:USD}(1, 0)
+polymethod(::Fn(:_usd)) = _usd
+polydomain(::Fn(:_usd)) = Monetary{:USD}
 polydomain{T<:Number}(::Fn(:sum), ::Type{T}) = T
 polydomain{M<:Monetary}(::Fn(:sum), ::Type{M}) = M
 polymethod(::Fn(:max), ::Type) = maximum
@@ -751,7 +756,12 @@ polydomain(::Fn(:mean), ::Type{Int}) = Float64
 polydomain(::Fn(:mean), ::Type{Float64}) = Float64
 polydomain{M<:Monetary}(::Fn(:mean), ::Type{M}) = M
 
+_exists(a) = !isempty(a)
 polydomain(::Fn(:all, :any), ::Type{Bool}) = Bool
+polymethod(::Fn(:exists), ::Type) = _exists
+polydomain(::Fn(:exists), ::Type) = Bool
+polymethod(::Fn(:count), ::Type) = length
+polydomain(::Fn(:count), ::Type) = Int
 
 
 compile(fn::Fn(:json), base::Scope, flow::AbstractSyntax, ops::AbstractSyntax...) =

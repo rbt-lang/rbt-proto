@@ -167,7 +167,7 @@ envsig{Ns,Vs,T}(::EnvRel{Ns,Vs,T}) = Ns
 envtype{Ns,Vs,T}(::Type{EnvRel{Ns,Vs,T}}) = Vs
 envtype{Ns,Vs,T}(::EnvRel{Ns,Vs,T}) = Vs
 
-Kind{K<:EnvRel}(::Type{K}, T::Type) = EnvRel{envsig(K), envtype{K}, T}
+Kind{K<:EnvRel}(::Type{K}, T::Type) = EnvRel{envsig(K), envtype(K), T}
 
 
 #
@@ -378,7 +378,7 @@ bind_env{Ns,Vs,T}(X::Iso{T}, ::Type{Ns}, env::Vs) =
     end
 
 @generated function bind_env{Ns1,Vs1,Ns2,Vs2,T}(X::Env{Ns1,Vs1,T}, ::Type{Ns2}, env2::Vs2)
-    Ns, Ts, idxmap = _envjoin(Ns1,Vs1,Ns2,Vs2)
+    Ns, Vs, idxmap = _envjoin(Ns1,Vs1,Ns2,Vs2)
     return quote
         env1, val = data(X)
         env = $(Expr(:tuple, [idx > 0 ? :( env1[$idx] ) : :( env2[-$idx] ) for idx in idxmap]...))
@@ -387,7 +387,7 @@ bind_env{Ns,Vs,T}(X::Iso{T}, ::Type{Ns}, env::Vs) =
 end
 
 @generated function bind_env{Ns1,Vs1,Ns2,Vs2,T}(X::EnvRel{Ns1,Vs1,T}, ::Type{Ns2}, env2::Vs2)
-    Ns, Ts, idxmap = _envjoin(Ns1,Vs1,Ns2,Vs2)
+    Ns, Vs, idxmap = _envjoin(Ns1,Vs1,Ns2,Vs2)
     return quote
         env1, ptr, vals = data(X)
         env = ($([idx > 0 ? :( env1[$idx] ) : :( env2[-$idx] ) for idx in idxmap]...))
@@ -406,7 +406,7 @@ _envjoin(Ns1,Vs1,Ns2,Vs2) =
         for (j, name) in enumerate(names2)
             idxs[name] = -j
         end
-        names = sort(collect(Symbol, keys(idx)))
+        names = sort(collect(Symbol, keys(idxs)))
         idxmap = Int[idxs[name] for name in names]
         types = Type[idx > 0 ? Vs1.parameters[idx] : Vs2.parameters[-idx] for idx in idxmap]
         Ns = Val{tuple(names...)}

@@ -10,7 +10,7 @@ abstract AbstractSyntax
 syntax(syntax::AbstractSyntax) = syntax
 
 # Literal node.
-typealias Scalar Union{Void,Int,Float64,AbstractString}
+typealias Scalar Union{Void,Int,Float64,AbstractString,Regex}
 
 immutable LiteralSyntax <: AbstractSyntax
     val::Scalar
@@ -73,6 +73,14 @@ function ex2syn(ex::Expr)
                 tail = tail == nothing ? ex2syn(ex.args[2]) : ComposeSyntax(ex2syn(ex.args[2]), tail)
                 ex = ex.args[1]
             end
+            while isa(ex, Expr) && ex.head == :call && length(ex.args) == 2 &&
+                    isa(ex.args[1], Expr) && ex.args[1].head == :(.) && length(ex.args[1].args) == 2
+                tail =
+                    tail == nothing ?
+                        ex2syn(Expr(:call, ex.args[1].args[2], ex.args[2])) :
+                        ComposeSyntax(ex2syn(Expr(:call, ex.args[1].args[2], ex.args[2])), tail)
+                ex = ex.args[1].args[1]
+            end
             if isa(ex, Symbol)
                 syn = ApplySyntax(ex, [syn], true)
             elseif isa(ex, Expr) && ex.head == :call && isa(ex.args[1], Symbol)
@@ -80,6 +88,7 @@ function ex2syn(ex::Expr)
                 append!(args, map(ex2syn, ex.args[2:end]))
                 syn = ApplySyntax(ex.args[1], args, true)
             else
+                dump(ex)
                 error("invalid query postfix notation: $ex")
             end
             if tail != nothing
@@ -113,7 +122,13 @@ function ex2syn(ex::Expr)
             k = k+2
         end
         return op
+    elseif ex.head == :macrocall && length(ex.args) == 2 && ex.args[1] == symbol("@r_str")
+        return LiteralSyntax(eval(ex))
     else
+        dump(ex)
+        println(ex.head == :macrocall)
+        println(length(ex.args) == 2)
+        println(ex.args[1] == :@r_str)
         error("invalid query notation: $ex")
     end
 end

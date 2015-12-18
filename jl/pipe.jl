@@ -1024,7 +1024,7 @@ immutable InPipe <: AbstractPipe
         begin
             F = IsoPipe(F)
             G = SeqPipe(G)
-            @assert odomain(G) <: odomain(F) "$(repr(F)) and $(repr(G)) are not comparable"
+            @assert typejoin(odomain(G), odomain(F)) != Any "$(repr(F)) and $(repr(G)) are not comparable"
             input = max(RBT.input(F), RBT.input(G))
             output = Output(Bool)
             return new(F, G, input, output)
@@ -1412,7 +1412,7 @@ codegen(pipe::FirstByPipe, X, I) =
             quote
                 $Y0 = $Y
                 push!($ws, data($(codegen(pipe.G, Y0, O))))
-                Iso{$T}(data($Y0))
+                Iso{$T}(get($Y0))
             end
         end
         idx = :( ($(pipe.rev) ? indmin : indmax )($ws) )
