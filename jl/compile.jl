@@ -631,7 +631,8 @@ end
 
 
 function compile(fn::Fn(:(==), :(!=)), base::Scope, op1::Query, op2::Query)
-    reqcomposable(base, op1, op2); reqodomain(odomain(op1), op2)
+    reqcomposable(base, op1, op2);
+    typejoin(odomain(op1), odomain(op2)) != Any || reqodomain(odomain(op1), op2)
     ismonic(op1) || reqsingular(op2)
     T = odomain(op1)
     TT = Tuple{T,T}
@@ -643,7 +644,8 @@ end
 
 
 function compile(fn::Fn(:in), base::Scope, op1::Query, op2::Query)
-    reqcomposable(base, op1, op2); reqodomain(odomain(op1), op2)
+    reqcomposable(base, op1, op2);
+    typejoin(odomain(op1), odomain(op2)) != Any || reqodomain(odomain(op1), op2)
     reqsingular(op1); reqnonempty(op1); reqplural(op2)
     scope = nest(base, Bool)
     pipe = InPipe(op1.pipe, op2.pipe)
@@ -654,6 +656,7 @@ end
 const SCALAR_OPS = (
     :(+), :(-), :(*), :(/),
     :(<), :(<=), :(>), :(>=),
+    :startswith, :endswith, :contains,
     :date,
     :day, :_day, :days, :_days,
     :month, :_month, :months, :_months,
@@ -708,8 +711,10 @@ polydomain(::Fn(:(*), :(/)), ::Type{Float64}, ::Type{Float64}) = Float64
 polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{T}, ::Type{M}) = M
 polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{M}, ::Type{T}) = M
 polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{M}, ::Type{T}, ::Type{T}) = M
-
 polydomain(::Fn(:(<), :(<=), :(>), :(>=)), ::Type{Int}, ::Type{Int}) = Bool
+
+polydomain{S1<:AbstractString,S2<:AbstractString}(
+    ::Fn(:startswith, :endswith, :contains), ::Type{S1}, ::Type{S2}) = Bool
 
 _dates_date(s) = Date(s)
 _dates_day() = Dates.Day(1)

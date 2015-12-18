@@ -42,3 +42,26 @@ end
         count_order => count(lineitem)),
     DELTA=90)
 
+@query(
+    partsupp
+    :filter(
+        (part.size == SIZE) &
+        contains(part.type_, TYPE) &
+        (supplier.nation.region.name == REGION))
+    :filter(supplycost == min(and_around(part).supplycost))
+    :sort(
+        supplier.acctbal:desc,
+        supplier.nation.name,
+        part.name,
+        part.id)
+    :select(
+        supplier.acctbal,
+        supplier.name,
+        supplier.nation,
+        part.id,
+        part.mfgr,
+        supplier.address,
+        supplier.phone,
+        supplier.comment),
+    SIZE=8, TYPE="BRASS", REGION="EUROPE")
+

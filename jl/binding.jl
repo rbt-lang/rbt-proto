@@ -67,7 +67,7 @@ immutable EntityIdBinding <: AbstractBinding
 end
 
 call(binding::EntityIdBinding, base::Scope) =
-    let scope = nest(base, Int),
+    let scope = settag(nest(base, Int), :id),
         pipe = ItemPipe(Entity{binding.classname}, :id, runique=true)
         Query(scope, pipe)
     end
