@@ -663,7 +663,8 @@ const SCALAR_OPS = (
     :year, :_year, :years, :_years)
 
 const AGGREGATE_OPS = (
-    :sum, :max, :min, :mean)
+    :sum, :max, :min, :mean,
+    :all, :any)
 
 
 function compile(fn::Fn(SCALAR_OPS...), base::Scope, ops::Query...)
@@ -702,6 +703,7 @@ polydomain(::Fn(:(+), :(-)), ::Type{Int}, ::Type{Int}) = Int
 polydomain(::Fn(:(+), :(-)), ::Type{Int}, ::Type{Float64}) = Float64
 polydomain(::Fn(:(+), :(-)), ::Type{Float64}, ::Type{Int}) = Float64
 polydomain(::Fn(:(+), :(-)), ::Type{Float64}, ::Type{Float64}) = Float64
+polydomain{M<:Monetary}(::Fn(:(+), :(-)), ::Type{M}, ::Type{M}) = M
 polydomain(::Fn(:(*)), ::Type{Int}, ::Type{Int}) = Int
 polymethod(::Fn(:(/)), ::Type{Int}, ::Type{Int}) = div
 polydomain(::Fn(:(/)), ::Type{Int}, ::Type{Int}) = Int
@@ -711,7 +713,8 @@ polydomain(::Fn(:(*), :(/)), ::Type{Float64}, ::Type{Float64}) = Float64
 polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{T}, ::Type{M}) = M
 polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{M}, ::Type{T}) = M
 polydomain{T<:Number,M<:Monetary}(::Fn(:(*)), ::Type{M}, ::Type{T}, ::Type{T}) = M
-polydomain(::Fn(:(<), :(<=), :(>), :(>=)), ::Type{Int}, ::Type{Int}) = Bool
+polydomain{M<:Monetary}(::Fn(:(/)), ::Type{M}, ::Type{M}) = Float64
+polydomain{T<:Number}(::Fn(:(<), :(<=), :(>), :(>=)), ::Type{T}, ::Type{T}) = Bool
 
 polydomain{S1<:AbstractString,S2<:AbstractString}(
     ::Fn(:startswith, :endswith, :contains), ::Type{S1}, ::Type{S2}) = Bool
@@ -720,6 +723,10 @@ _dates_date(s) = Date(s)
 _dates_day() = Dates.Day(1)
 _dates_month() = Dates.Month(1)
 _dates_year() = Dates.Year(1)
+polymethod(::Fn(:year), ::Type{Date}) = Dates.year
+polymethod(::Fn(:month), ::Type{Date}) = Dates.month
+polymethod(::Fn(:day), ::Type{Date}) = Dates.day
+polydomain(::Fn(:year, :month, :day), ::Type{Date}) = Int
 polymethod{S<:AbstractString}(::Fn(:date), ::Type{S}) = _dates_date
 polydomain{S<:AbstractString}(::Fn(:date), ::Type{S}) = Date
 polymethod(::Fn(:day, :_day, :days, :_days)) = _dates_day
@@ -743,6 +750,8 @@ polyhaszero(::Fn(:max, :min, :mean), ::Type) = false
 polydomain(::Fn(:mean), ::Type{Int}) = Float64
 polydomain(::Fn(:mean), ::Type{Float64}) = Float64
 polydomain{M<:Monetary}(::Fn(:mean), ::Type{M}) = M
+
+polydomain(::Fn(:all, :any), ::Type{Bool}) = Bool
 
 
 compile(fn::Fn(:json), base::Scope, flow::AbstractSyntax, ops::AbstractSyntax...) =

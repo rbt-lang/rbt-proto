@@ -91,6 +91,10 @@ function ex2syn(ex::Expr)
         return ApplySyntax(ex.args[1], map(ex2syn, ex.args[2:end]))
     elseif ex.head == :(=>)
         return ApplySyntax(:(=>), map(ex2syn, ex.args))
+    elseif ex.head == :(&&)
+        return ApplySyntax(:(&), map(ex2syn, ex.args))
+    elseif ex.head == :(||)
+        return ApplySyntax(:(|), map(ex2syn, ex.args))
     elseif ex.head == :ref
         return ApplySyntax(:get, map(ex2syn, ex.args))
     elseif ex.head == :vect
