@@ -1,6 +1,58 @@
 Introduction
 ============
 
+.. slide:: Combinators
+   :level: 2
+
+   A *combinator* is an expression without free variables.
+
+   This design technique is used for making compositional
+   domain specific languages, such as parser construction.
+   You could think of it as specifying a generic processing
+   interface so developers can define components which
+   users could then combine into customized data flows.
+
+   We apply this technique to querying databases, and
+   call it *data circuits*.
+
+.. slide:: Combinators are Composible and Extensible
+   :level: 2
+
+   Combinator is a data processing unit with typed input
+   and output.  Combinators with compatible inputs and
+   outputs could be composed to make a derivative.
+
+   Programmers could extend the language with new kinds
+   of combinators.
+
+.. slide:: Incremental Query Construction
+   :level: 2
+
+   Clean compositional semantics makes it friendly
+   for both accidental programmers and professional
+   developers alike because it provide incremental
+   query construction.
+
+.. slide:: Are we there yet? The SEQUEL Dream
+   :level: 2
+
+   There is an increasing need to bring the non-professional
+   user into effective communication with a formatted data base.
+
+   There are some users whose interaction with a computer is so
+   infrequent or unstructured that the user is unwilling to learn a
+   query language.  For these users, natural language or menu
+   selection seem to be the most viable alternatives.  However,
+   there is a large class of users who, while they are not computer
+   specialists, would be willing to learn to interact with a
+   computer in a reasonably high-level, non-procedural query
+   language.  Exmples of such users are accountqants, engineers
+   architects, and urban planners.  This is the class of users for
+   which SEQUEL is intended.  For this reason, SEQUEL emphasizes
+   simple data structures and operations.
+
+   Chamberlin, Donald D; Boyce, Raymond F (1974).
+   "SEQUEL: A Structured English Query Language"
 
 .. slide:: Functional Data Model
    :level: 2
