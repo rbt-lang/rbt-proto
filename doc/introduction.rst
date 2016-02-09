@@ -4,55 +4,59 @@ Introduction
 .. slide:: Combinators
    :level: 2
 
-   A *combinator* is an expression without free variables.
+   **Definition:** *Combinator* is an expression with no free variables.
 
-   This design technique is used for making compositional
-   domain specific languages, such as parser construction.
-   You could think of it as specifying a generic processing
-   interface so developers can define components which
-   users could then combine into customized data flows.
+   **In a broad sense:** a design technique for implementing compositional
+   domain-specific languages.
 
-   We apply this technique to querying databases, and
-   call it *data circuits*.
+   A combinatorial DSL must define:
 
-.. slide:: Combinators are Composible and Extensible
-   :level: 2
+   * *primitives* or atomic combinators.
+   * *composites* constructed from other combinators.
 
-   Combinator is a data processing unit with typed input
-   and output.  Combinators with compatible inputs and
-   outputs could be composed to make a derivative.
+   Well-known examples:
 
-   Programmers could extend the language with new kinds
-   of combinators.
+   * Parsing combinators (building parsers out of smaller parsers).
+   * Reactive graphics (constructing objects and behavior compositionally).
 
-.. slide:: Incremental Query Construction
-   :level: 2
+   We apply this technique to *querying a database*.
 
-   Clean compositional semantics makes it friendly
-   for both accidental programmers and professional
-   developers alike because it provide incremental
-   query construction.
 
-.. slide:: Are we there yet? The SEQUEL Dream
-   :level: 2
+.. slide:: Database queries as combinators.
+   :level: 3
 
-   There is an increasing need to bring the non-professional
-   user into effective communication with a formatted data base.
+   A database query as a combinator with a particular input and output.
 
-   There are some users whose interaction with a computer is so
-   infrequent or unstructured that the user is unwilling to learn a
-   query language.  For these users, natural language or menu
-   selection seem to be the most viable alternatives.  However,
-   there is a large class of users who, while they are not computer
-   specialists, would be willing to learn to interact with a
-   computer in a reasonably high-level, non-procedural query
-   language.  Exmples of such users are accountqants, engineers
-   architects, and urban planners.  This is the class of users for
-   which SEQUEL is intended.  For this reason, SEQUEL emphasizes
-   simple data structures and operations.
+   * **Combinators are composable.**
 
-   Chamberlin, Donald D; Boyce, Raymond F (1974).
-   "SEQUEL: A Structured English Query Language"
+     Combinators with compatible interfaces could be composed in a variety of
+     ways to form a composite data processing pipeline.
+
+   * **Combinators are extensible.**
+
+     A combinatorial query language could be adapted to new domains by
+     extending it with domain-specific combinators.
+
+   But SQL is *the* query language since 1970s.  What combinators can give us
+   that SQL cannot?
+
+
+.. slide:: Why combinators?
+   :level: 3
+
+   **Combinators are composable.**
+
+   In other words, queries can be constructed *incrementally*.  This lets you:
+
+   * Write new queries using *gradial refinement*.
+
+   * Read an unfamiliar query by tracing the author's thoughts step by step.
+
+   * Build queries *programmatically*.
+
+   Can we realize the dream of generations of query language designers: give
+   the specialists direct access to their data?
+
 
 .. slide:: Functional Data Model
    :level: 2
@@ -536,7 +540,7 @@ Now is the time for bullet lists:
 * *Rabbit* is significantly easier to write and comprehend than SQL, which
   makes it an ideal tool for semi-technical domain experts and other
   *accidental programmers*.
- 
+
 * Syntax and semantics of *Rabbit* are complete and unambiguous.  Every query
   and query fragment in *Rabbit* is a function, operators in *Rabbit* are
   function combinators.
