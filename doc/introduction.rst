@@ -14,45 +14,59 @@ Introduction
    * *primitives* or atomic combinators.
    * *composites* constructed from other combinators.
 
-   Well-known examples:
+   **Combinators are composable.**
+
+   Combinators with compatible interfaces could be composed in a variety of
+   ways to form a composite processing pipeline.
+
+   **Combinators are extensible.**
+
+   A combinatorial DSL could be adapted to new domains by extending it with
+   domain-specific combinators.
+
+
+.. slide:: Database Queries as Combinators
+   :level: 3
+
+   Well-known examples of combinatorial DSLs:
 
    * Parsing combinators (building parsers out of smaller parsers).
    * Reactive graphics (constructing objects and behavior compositionally).
 
    We apply this technique to *querying a database*.
 
+   **Database queries as combinators.**  For example, *primitives*:
 
-.. slide:: Database queries as combinators.
-   :level: 3
+    .. math::
 
-   A database query as a combinator with a particular input and output.
+        &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept} \\
+        &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text}
 
-   * **Combinators are composable.**
+    *And a composite:*
 
-     Combinators with compatible interfaces could be composed in a variety of
-     ways to form a composite data processing pipeline.
+    .. math::
 
-   * **Combinators are extensible.**
-
-     A combinatorial query language could be adapted to new domains by
-     extending it with domain-specific combinators.
-
-   But SQL is *the* query language since 1970s.  What combinators can give us
-   that SQL cannot?
+        \operatorname{department}{.}\operatorname{name}: \operatorname{Empl} \to \operatorname{Text} \\
 
 
 .. slide:: Why combinators?
    :level: 3
 
-   **Combinators are composable.**
+   But SQL is *the* query language since 1970s.  What combinators can give us
+   that SQL cannot?
 
-   In other words, queries can be constructed *incrementally*.  This lets you:
+   Because combinators are composable, queries can ba constructed *incrementally*.
+   This lets you:
 
    * Write new queries using *gradial refinement*.
 
-   * Read an unfamiliar query by tracing the author's thoughts step by step.
+   * Read unfamiliar queries by tracing the author's thoughts step by step.
 
    * Build queries *programmatically*.
+
+   *There is an increasing need to bring the non-professional user into
+   effective communication with a formatted data base.*  Chamberlin, D;
+   Boyce, R (1974).
 
    Can we realize the dream of generations of query language designers: give
    the specialists direct access to their data?
