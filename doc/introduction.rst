@@ -233,6 +233,37 @@ Introduction
     * Has no gaps between syntax and semantics (is SQL relational?)
 
 
+In computer science, the term *combinator* is used in a narrow and a broad
+sense.  In a narrow definition, a combinator is any expression with no free
+variables.  That is to say, a combinator expression has its value completely
+determined by its structure.
+
+In a broad sense, *combinator pattern* is a technique for designing
+domain-specific languages (DSLs), which prescribes us to model domain-specific
+operations in terms of self-contained composable processing blocks.  These
+blocks should either come from a set of predefined atomic *primitives* or be
+constructed from other blocks as *composites*.  Operations that combine blocks
+to make composite blocks are often called combinators, which gave the name to
+the technique, but it is the fact that that every block is self-contained that
+connects this usage of the term with the narrow definition.  Going forward, we
+will refer to individual blocks as well as the operations that combine them as
+combinators.
+
+Let us state two properties that make combinators attractive as a design
+technique for DSLs.
+
+* **Combinators are composable.**  A DSL is fully defined by its set of
+  primitives and a set of operations for composing combinators.  Any
+  composition operation must be defined in a generic way so that its operands
+  could be any combinators with compatible interfaces.  This property gives
+  combinatorial DSLs a distinctive feel of a "construction set".
+
+* **Combinators are extensible.**  A combinatorial DSL could be adapted to new
+  domains by extending it with new primitives or composite combinators.
+
+
+
+
 What does it mean to design a database query language?  New *programming*
 languages come in dozens every year and their taxonomy is well known.  Whether
 it is functional vs. object-oriented, compiled or interpreted, statically or
