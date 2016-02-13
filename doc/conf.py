@@ -30,7 +30,7 @@ latex_elements = {
     'pointsize': '12pt',
 }
 latex_documents = [
-    (master_doc, 'rbt-proto.tex', html_title, author, 'howto', True),
+    (master_doc, 'rbt-proto.tex', html_title, author, 'howto', False),
 ]
 slide_theme = 'slides2'
 slide_theme_options = {
