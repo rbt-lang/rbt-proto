@@ -98,28 +98,77 @@ Introduction
       \operatorname{scale}(\operatorname{circle}, \sin(\operatorname{time}))
 
 
-.. slide:: Database Queries as Combinators
+.. slide:: Querying: Data Model
+   :level: 2
+
+   How to apply the combinator pattern to *querying a database?*
+
+   Start with categorical data model:
+
+   * Objects: value and entity types.
+   * Arrows: attributes and relationships.
+
+   Example (textbook "employees & departments" schema):
+
+   .. graphviz:: citydb-functional-data-model.dot
+
+
+.. slide:: Querying: Queries as Combinators
    :level: 3
 
-   Well-known examples of combinatorial DSLs:
+   The idea:
 
-   * Parsing combinators (building parsers out of smaller parsers).
-   * Reactive graphics (constructing objects and behavior compositionally).
+   .. math::
 
-   We apply this technique to *querying a database*.
+      \operatorname{Query}\{A,B\} := A \to B
 
-   **Database queries as combinators.**  For example, *primitives*:
+   Database schema provides primitives:
 
-    .. math::
+   .. math::
 
-        &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept} \\
-        &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text}
+      &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept} \\
+      &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text}
 
-    *And a composite:*
+   (:math:`\operatorname{department}` maps an employee entity to the corresponding department,
+   :math:`\operatorname{name}` maps a department entity to its name)
 
-    .. math::
+   Can use regular composition of arrows:
 
-        \operatorname{department}{.}\operatorname{name}: \operatorname{Empl} \to \operatorname{Text} \\
+   .. math::
+
+      \operatorname{department}{.}\operatorname{name}: \operatorname{Empl} \to \operatorname{Text}
+
+   (maps an employee entity to the name of their department)
+
+
+.. slide:: Querying: Example
+   :level: 3
+
+   Queries with no input have the type:
+
+   .. math::
+
+      \operatorname{Void} \to B
+
+   (:math:`\operatorname{Void}` is a designated singleton object)
+
+   Primitive that gives a list of all employees:
+
+   .. math::
+
+      \operatorname{employee} : \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Empl}\}
+
+   A generic aggregate combinator:
+
+   .. math::
+
+      \operatorname{count} : (A \to \operatorname{Seq}\{B\}) \to (A \to \operatorname{Int})
+
+   The total number of employees:
+
+   .. math::
+
+      \operatorname{count}(\operatorname{employee}) : \operatorname{Void} \to \operatorname{Int}
 
 
 .. slide:: Why combinators?
@@ -143,167 +192,6 @@ Introduction
 
    Can we realize the dream of generations of query language designers: give
    the specialists direct access to their data?
-
-
-.. slide:: Functional Data Model
-   :level: 2
-
-    Uses *sets* & set *functions*.
-
-    * **Sets** model classes of entities.
-
-    * **Functions** model entity attributes and relationships.
-
-    Example: departments & employees of the city of Chicago
-    (`source`_).
-
-    .. graphviz:: citydb-functional-data-model.dot
-
-
-.. slide:: Schema and Instance
-   :level: 2
-
-    .. math::
-
-        \begin{matrix}
-            \begin{matrix}
-                \text{Schema} \\
-                \small (\operatorname{Dept}, \operatorname{Empl},\, \ldots)
-            \end{matrix} &
-            \Rightarrow &
-            \begin{matrix}
-                \text{Instance} \\
-                \small (\langle \texttt{"Rahm Emanuel"}, \texttt{"Mayor"} \rangle,\, \ldots)
-            \end{matrix} \\
-            & & \\
-            \begin{matrix}
-                \text{Type} \\
-                \small (\operatorname{Int})
-            \end{matrix} &
-            \Rightarrow &
-            \begin{matrix}
-                \text{Value} \\
-                \small (42\in\operatorname{Int})
-            \end{matrix}
-        \end{matrix}
-
-    *Database schema* is like a data type.
-
-    *Database instance* is like a value of the data type.
-
-
-.. slide:: Asking Questions
-   :level: 2
-
-    Given a database, we may like to know:
-
-    * *The number of departments in the city of Chicago.*
-    * *The number of employees in each department.*
-    * *The top salary among all the employees.*
-    * *... and for each department.*
-    * *The mean salary by position.*
-    * *and much more...*
-
-    Raw dataset does not contain immediate answers to these questions.
-
-    Has enough information to infer the answers from the data.
-
-    Need to traverse, transform, filter, summarize the data.
-
-    How to ask questions about the data?
-
-
-.. slide:: Query Syntax and Semantics
-   :level: 2
-
-    .. math::
-
-        \begin{matrix}
-            \begin{matrix}
-                \text{Schema} \\
-                \small (\operatorname{Dept}, \operatorname{Empl},\, \ldots)
-            \end{matrix} &
-            \Rightarrow &
-            \begin{matrix}
-                \text{Instance} \\
-                \small (\langle \texttt{"Rahm Emanuel"}, \texttt{"Mayor"} \rangle,\, \ldots)
-            \end{matrix} \\
-            & & \\
-            \Downarrow & & \Downarrow \\
-            & & \\
-            \begin{matrix}
-                \text{Query} \\
-                \small (\operatorname{count}(\operatorname{employee}))
-            \end{matrix} &
-            \Rightarrow &
-            \begin{matrix}
-                \text{Fact} \\
-                \small (32181)
-            \end{matrix}
-        \end{matrix}
-
-    **Query syntax:** How to form a question?
-
-    **Query semantics:** How to interpret a question against some instance?
-
-
-.. slide:: Query Syntax and Semantics: Trivial Database
-   :level: 3
-
-    .. math::
-
-        \begin{matrix}
-            \begin{matrix}
-                \text{Type} \\
-                \small (\operatorname{Int})
-            \end{matrix} &
-            \Rightarrow &
-            \begin{matrix}
-                \text{Value} \\
-                \small (42\in\operatorname{Int})
-            \end{matrix} \\
-            & & \\
-            \Downarrow & & \Downarrow \\
-            & & \\
-            \begin{matrix}
-                \text{Property} \\
-                \small (\operatorname{odd}: \operatorname{Int}\to\operatorname{Bool})
-            \end{matrix} &
-            \Rightarrow &
-            \begin{matrix}
-                \text{Property Value} \\
-                \small (\operatorname{odd}: 42\mapsto\operatorname{false})
-            \end{matrix}
-        \end{matrix}
-
-    .. math::
-
-        \operatorname{odd}(x) := x \bmod 2 = 1
-
-    Math notation is the query syntax.  Algebra is the query semantics.
-
-
-.. slide:: The Objective
-   :level: 2
-
-    *Design syntax and semantics of a query language for functional data
-    model.*
-
-    For relational model: *SQL* and *relational algebra*.
-
-    * Elementary unit: *tuple set*.
-    * Elementary operation: *set product*.
-
-    For functional model: **Rabbit**.
-
-    * Elementary unit: *function*.
-    * Elementary operation: *composition of functions*.
-
-    We claim **Rabbit** is:
-
-    * As powerful as SQL.
-    * Easier to write and comprehend than SQL.
-    * Has no gaps between syntax and semantics (is SQL relational?)
 
 
 In computer science, the term *combinator* is used in a narrow and a broad
