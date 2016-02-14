@@ -25,6 +25,79 @@ Introduction
    domain-specific combinators.
 
 
+.. slide:: Example: Parsing Combinators
+   :level: 3
+
+   Building parsers out of smaller parsers.
+
+   A parser finds all prefixes matching some pattern, returns all suffixes:
+
+   .. math::
+
+      \operatorname{Parser} := \operatorname{Text} \to \operatorname{List}\{\operatorname{Text}\}
+
+   Primitives (recognizes a fixed string, an empty string):
+
+   .. math::
+
+      \operatorname{lit}(\texttt{"goto"}),
+      \quad \operatorname{eps}
+
+   Composites (concatenation, repetition, alternative):
+
+   .. math::
+
+      \operatorname{cat}(p_1, p_2, \ldots), \quad
+      \operatorname{rep}(p), \quad
+      \operatorname{alt}(p_1, p_2, \ldots)
+
+   Example (recognizes nested parentheses):
+
+   .. math::
+
+      \operatorname{parens} :=
+        \operatorname{alt}(
+            \operatorname{cat}(
+                \operatorname{lit}(\texttt{"("}),
+                \operatorname{parens},
+                \operatorname{lit}(\texttt{")"}),
+                \operatorname{parens}),
+            \operatorname{eps})
+
+
+.. slide:: Example: Reactive Graphics
+   :level: 3
+
+   Constructing objects and behavior compositionally.
+
+   Time-varying value:
+
+   .. math::
+
+      \operatorname{Sig}\{A\} := \operatorname{Time} \to A
+
+   Primitives (constants, events, and time):
+
+   .. math::
+
+      \operatorname{circle} : \operatorname{Sig}\{\operatorname{Image}\}, \quad
+      \operatorname{mousex} : \operatorname{Sig}\{\operatorname{Int}\}, \quad
+      \operatorname{time} : \operatorname{Sig}\{\operatorname{Time}\}
+
+   Composites (time and space transformations):
+
+   .. math::
+
+      \operatorname{scale}(\mathit{img},f), \quad
+      \operatorname{delay}(\mathit{sig},t)
+
+   Example (pulsating circle):
+
+   .. math::
+
+      \operatorname{scale}(\operatorname{circle}, \sin(\operatorname{time}))
+
+
 .. slide:: Database Queries as Combinators
    :level: 3
 
