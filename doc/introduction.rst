@@ -11,26 +11,24 @@ Introduction
 
    A combinatorial DSL must define:
 
+   * *interface* for domain objects.
    * *primitives* or atomic combinators.
    * *composites* constructed from other combinators.
 
-   **Combinators are composable.**
+   Well-known examples:
 
-   Combinators with compatible interfaces could be composed in a variety of
-   ways to form a composite processing pipeline.
+   * Parser combinators (building parsers out of smaller parsers).
+   * Reactive graphics (constructing objects and behavior compositionally).
 
-   **Combinators are extensible.**
-
-   A combinatorial DSL could be adapted to new domains by extending it with
-   domain-specific combinators.
+   We will apply this technique to *querying a database*.
 
 
-.. slide:: Example: Parsing Combinators
+.. slide:: Example: Parser Combinators
    :level: 3
 
    Building parsers out of smaller parsers.
 
-   A parser finds all prefixes matching some pattern, returns all suffixes:
+   Interface (finds all prefixes matching some pattern, returns their suffixes):
 
    .. math::
 
@@ -70,19 +68,19 @@ Introduction
 
    Constructing objects and behavior compositionally.
 
-   Time-varying value:
+   Interface (a time-varying value):
 
    .. math::
 
-      \operatorname{Sig}\{A\} := \operatorname{Time} \to A
+      \operatorname{Signal}\{A\} := \operatorname{Time} \to A
 
    Primitives (constants, events, and time):
 
    .. math::
 
-      \operatorname{circle} : \operatorname{Sig}\{\operatorname{Image}\}, \quad
-      \operatorname{mousex} : \operatorname{Sig}\{\operatorname{Int}\}, \quad
-      \operatorname{time} : \operatorname{Sig}\{\operatorname{Time}\}
+      \operatorname{circle} : \operatorname{Signal}\{\operatorname{Image}\}, \quad
+      \operatorname{mousex} : \operatorname{Signal}\{\operatorname{Int}\}, \quad
+      \operatorname{time} : \operatorname{Signal}\{\operatorname{Time}\}
 
    Composites (time and space transformations):
 
@@ -96,6 +94,28 @@ Introduction
    .. math::
 
       \operatorname{scale}(\operatorname{circle}, \sin(\operatorname{time}))
+
+
+.. slide:: Combinators: Summary
+   :level: 3
+
+   Think of combinator pattern as an extensible *"construction set"*.
+
+   1. Define a type that describes domain objects.
+   2. Define elementary objects.
+   3. Define operations to combine objects.
+
+   **Combinators are composable.**
+
+   Combinators with compatible interfaces could be composed in a variety of
+   ways to form a composite processing pipeline.
+
+   **Combinators are extensible.**
+
+   A combinatorial DSL could be adapted to new domains by extending it with
+   domain-specific combinators.
+
+   How can we apply it to querying?
 
 
 .. slide:: Querying: Data Model
@@ -116,7 +136,7 @@ Introduction
 .. slide:: Querying: Queries as Combinators
    :level: 3
 
-   The idea:
+   **A query is a mapping:**
 
    .. math::
 
@@ -132,7 +152,7 @@ Introduction
    (:math:`\operatorname{department}` maps an employee entity to the corresponding department,
    :math:`\operatorname{name}` maps a department entity to its name)
 
-   Can use regular composition of arrows:
+   Can use regular composition of mappings:
 
    .. math::
 
@@ -141,16 +161,22 @@ Introduction
    (maps an employee entity to the name of their department)
 
 
-.. slide:: Querying: Example
+.. slide:: Querying: Values
    :level: 3
 
-   Queries with no input have the type:
+   A query is a mapping?  But I do not expect a query to have input?!
+
+   Designate a singleton type (with a single value of this type):
 
    .. math::
 
-      \operatorname{Void} \to B
+      \operatorname{Void} \quad (\operatorname{nothing} \in \operatorname{Void})
 
-   (:math:`\operatorname{Void}` is a designated singleton object)
+   A query with no input has a type:
+
+   .. math::
+
+      \operatorname{Query}\{\operatorname{Void}, B\} = \operatorname{Void} \to B
 
    Primitive that gives a list of all employees:
 
@@ -158,7 +184,19 @@ Introduction
 
       \operatorname{employee} : \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Empl}\}
 
-   A generic aggregate combinator:
+
+.. slide:: Querying: Example
+   :level: 3
+
+   *Find the total number of employees.*
+
+   Start with the primitive that gives a list of all employees:
+
+   .. math::
+
+      \operatorname{employee} : \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Empl}\}
+
+   Use a generic aggregate combinator:
 
    .. math::
 
