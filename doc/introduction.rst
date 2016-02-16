@@ -118,7 +118,7 @@ Introduction
    How can we apply it to querying?
 
 
-.. slide:: Querying: Data Model
+.. slide:: Querying with Rabbit: Data Model
    :level: 2
 
    How to apply the combinator pattern to *querying a database?*
@@ -133,7 +133,7 @@ Introduction
    .. graphviz:: citydb-functional-data-model.dot
 
 
-.. slide:: Querying: Queries as Combinators
+.. slide:: Querying with Rabbit: Queries as Combinators
    :level: 3
 
    **A query is a mapping:**
@@ -161,7 +161,7 @@ Introduction
    (maps an employee entity to the name of their department)
 
 
-.. slide:: Querying: Values
+.. slide:: Querying with Rabbit: Input-Free Queries
    :level: 3
 
    A query is a mapping?  But I do not expect a query to have input?!
@@ -185,7 +185,7 @@ Introduction
       \operatorname{employee} : \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Empl}\}
 
 
-.. slide:: Querying: Example
+.. slide:: Querying with Rabbit: Example
    :level: 3
 
    *Find the total number of employees.*
@@ -209,6 +209,32 @@ Introduction
       \operatorname{count}(\operatorname{employee}) : \operatorname{Void} \to \operatorname{Int}
 
 
+.. slide:: Query Combinators and Relational Algebra
+   :level: 2
+
+   Compare with relational algebra:
+
+   * Interface: a set of tuples.
+   * Primitives: tables.
+   * Composites: set operations.
+
+   Rabbit has more primitives.  Not only tables (as in SQL):
+
+   .. math::
+
+      \operatorname{employee} : \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Empl}\}
+
+   But also attributes and links are first-class objects (not so in SQL):
+
+   .. math::
+
+      &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept} \\
+      &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text}
+
+   Primitives are so many that variables are not needed.  Expressions in Rabbit are
+   *combinators* in the narrow sense.
+
+
 .. slide:: Why combinators?
    :level: 3
 
@@ -230,6 +256,24 @@ Introduction
 
    Can we realize the dream of generations of query language designers: give
    the specialists direct access to their data?
+
+
+.. slide:: Related Works
+   :level: 2
+
+   * Combinators (Curry); Parser combinators; Reactive graphics (Elliott).
+
+   * Functional data model; Categorical databases, monads (Spivak).
+
+   * Synchronization trees (Milner).
+
+   * SEQUEL (Chamberlin, Boyce).
+
+   * Network data model (Bachman).
+
+   * XPath (Clark).
+
+   * YAML, HTSQL.
 
 
 In computer science, the term *combinator* is used in a narrow and a broad
