@@ -272,6 +272,8 @@ Introduction
 
    * XPath (Clark).
 
+   * Julia programming language.
+
    * Our work on YAML, HTSQL.
 
 
@@ -281,15 +283,28 @@ variables.  That is to say, a combinator expression has its value completely
 determined by its structure.
 
 In a broad sense, *combinator pattern* is a technique for designing
-domain-specific languages (DSLs), which prescribes us to model domain-specific
-operations in terms of self-contained composable processing blocks.  These
-blocks should either come from a set of predefined atomic *primitives* or be
-constructed from other blocks as *composites*.  Operations that combine blocks
-to make composite blocks are often called combinators, which gave the name to
-the technique, but it is the fact that that every block is self-contained that
-connects this usage of the term with the narrow definition.  Going forward, we
-will refer to individual blocks as well as the operations that combine them as
-combinators.
+domain-specific languages (DSLs), which prescribes us to model programs in
+terms of self-contained composable processing blocks.  These blocks should
+either come from a set of predefined atomic *primitives* or be constructed from
+other blocks as *composites*.  Operations that combine blocks to make composite
+blocks are often called combinators, which gave the name to the technique, but
+it is the fact that that every block is self-contained that connects this usage
+of the term with the narrow definition.  Going forward, we will refer to
+individual blocks as well as the operations that combine them as combinators.
+
+A combinator-based DSL is defined by its three constituents: interface,
+primitives and composites.
+
+1. The interface is a type or a type family that characterize DSL programs.
+2. Primitive combinators are atomic programs, irreducible processing blocks
+   from which every program must be constructed.
+3. Specific rules for how programs can be combined together to form a composite
+   program are prescribed by compositing combinators.
+
+Our goal is to show a new design of a combinator-based database query language.
+Before we begin, however, let us recall how combinator pattern is used in
+design of two well-known examples of combinator-based DSLs: parser combinators
+and composite graphics.
 
 Let us state two properties that make combinators attractive as a design
 technique for DSLs.

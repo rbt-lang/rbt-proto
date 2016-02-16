@@ -40,7 +40,7 @@ Querying with Combinators
    * *Prototype Implementation*
 
 
-Rabbit is a combinator based query language for categorical databases. It
+Rabbit is a combinator-based query language for categorical databases. It
 proposes a formal query model using query combinators and has a working
 prototype implemented in Julia. It shows how complex business inquiries can be
 incrementally translated into auditable and succinct federated queries.
