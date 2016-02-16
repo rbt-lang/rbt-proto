@@ -218,21 +218,22 @@ Introduction
    * Primitives: tables.
    * Composites: set operations.
 
-   Rabbit has more primitives.  Not only tables (as in SQL):
+   Rabbit has richer primitives.  Its first-class objects are not just tables
+   (as in SQL):
 
    .. math::
 
       \operatorname{employee} : \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Empl}\}
 
-   But also attributes and links are first-class objects (not so in SQL):
+   But also attributes and relationships (not so in SQL):
 
    .. math::
 
       &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept} \\
       &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text}
 
-   Primitives are so many that variables are not needed.  Expressions in Rabbit are
-   *combinators* in the narrow sense.
+   Richer primitives (and special scoping rules) make variables unnecessary.
+   Expressions in Rabbit are *combinators* in the narrow sense.
 
 
 .. slide:: Why combinators?
@@ -258,22 +259,20 @@ Introduction
    the specialists direct access to their data?
 
 
-.. slide:: Related Works
+.. slide:: References and Related Works
    :level: 2
 
-   * Combinators (Curry); Parser combinators; Reactive graphics (Elliott).
+   * Combinators (Curry); Parser combinators; Reactive graphics (Elliott); KOLA (Cherniack).
 
    * Functional data model; Categorical databases, monads (Spivak).
 
    * Synchronization trees (Milner).
 
-   * SEQUEL (Chamberlin, Boyce).
-
-   * Network data model (Bachman).
+   * Network data model (Bachman); SEQUEL (Chamberlin, Boyce).
 
    * XPath (Clark).
 
-   * YAML, HTSQL.
+   * Our work on YAML, HTSQL.
 
 
 In computer science, the term *combinator* is used in a narrow and a broad
