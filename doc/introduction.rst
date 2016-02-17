@@ -303,8 +303,110 @@ primitives and composites.
 
 Our goal is to show a new design of a combinator-based database query language.
 Before we begin, however, let us recall how combinator pattern is used in
-design of two well-known examples of combinator-based DSLs: parser combinators
-and composite graphics.
+design of two well-known combinator-based DSLs: parser combinators and
+reactive graphics.  Reviewing these familiar examples will let us highlight
+the roles of different aspects of this design pattern.
+
+We start with parser combinators, a method for building a parsing framework.  A
+parser, in its simplest form, is a program that recognizes when the input
+string matches a certain pattern.  This immediately suggests an interface:
+
+.. math::
+
+   \operatorname{Parser} := \operatorname{String} \to \operatorname{Bool}
+
+But this signature does not show a clear way to compose several parsers
+together aside from using simple ``and`` or ``or`` operators.  This is not
+enough to make interesting parsers.  We need to expand the parser interface to
+provide some hooks by which two parsers could be chained together.
+
+We make the interface composable by having a parser emit a list of strings
+instead of a boolean value.  Specifically, our parser recognizes all *prefixes*
+of the input string that match a certain pattern, and returns a list of the
+respective *suffixes*.  Thus, when the parser does not recognize the input
+string or any of its prefixes, it returns an empty list.  When the parser
+recognizes the whole string, but not any if its prefixes, it returns a list
+with one element, an empty string.
+
+Here is the updated parser interface:
+
+.. math::
+
+   \operatorname{Parser} := \operatorname{String} \to \operatorname{Vector}\{\operatorname{String}\}
+
+For primitive parsers, we take a parser that recognizes a fixed character
+and a parser that recognizes an empty string.
+
+.. math::
+
+   & \operatorname{lit}(\texttt{'s'}) : \operatorname{Parser} \\
+   & \operatorname{lit}(\texttt{'s'}) : \texttt{"sql"} \mapsto [\texttt{"ql"}] \\
+   & \operatorname{lit}(\texttt{'s'}) : \texttt{"rabbit"} \mapsto []
+
+.. math::
+
+   & \operatorname{eps} : \operatorname{Parser} \\
+   & \operatorname{eps} : \texttt{"rabbit"} \mapsto [\texttt{"rabbit"}]
+
+As for composition operations, we only need two.  Combinator
+:math:`\operatorname{alt}(p_1,p_2,\ldots,p_n)` recognizes a string when it is
+recognized by any of the parsers :math:`p_1,p_2,\ldots,p_n`.  Combinator
+:math:`\operatorname{cat}(p_1,p_2,\ldots,p_n)` chains the parsers
+:math:`p_1,p_2,\ldots,p_n` in a series; it recognizes such a string that could
+be broken into :math:`n` substrings, each recognized by the corresponding
+parser in :math:`p_1,p_2,\ldots,p_n`.
+
+Here is an illustration:
+
+.. math::
+
+   & \operatorname{alt}(
+        \operatorname{lit}(\texttt{'s'}),
+        \operatorname{lit}(\texttt{'q'}),
+        \operatorname{lit}(\texttt{'l'}))
+        : \texttt{"sql"} \mapsto [\texttt{"ql"}] \\
+   & \operatorname{cat}(
+        \operatorname{lit}(\texttt{'s'}),
+        \operatorname{lit}(\texttt{'q'}),
+        \operatorname{lit}(\texttt{'l'}))
+        : \texttt{"sql"} \mapsto [\texttt{""}]
+
+We omit the implementation of these combinators, but we must note that while
+the the :math:`\operatorname{alt}` combinator can be implemented with the
+parser interface defined as :math:`\operatorname{String} \to
+\operatorname{Bool}`, the :math:`\operatorname{cat}` combinator cannot.  It is
+remarkable how a richer interface enables more interesting operations.
+
+Amazingly, these two primitives and two composites are all that is needed to
+express quite sophisticated parsers.  Indeed, a parser for a context-free
+language can be constructed by transcribing its formal grammar.  For example,
+consider a production rule for a string of well-formed parentheses:
+
+.. math::
+
+   \mathit{parens} ::=
+        \texttt{'('}\;
+        \mathit{parens}\;
+        \texttt{')'}\;
+        \mathit{parens}\;|\;
+        \epsilon
+
+It can be directly converted to a parser:
+
+.. math::
+
+   \operatorname{parens} :=
+        \operatorname{alt}(
+            \operatorname{cat}(
+                \operatorname{lit}(\texttt{"("}),
+                \operatorname{parens},
+                \operatorname{lit}(\texttt{")"}),
+                \operatorname{parens}),
+            \operatorname{eps})
+
+This definition can be mistaken for a formal grammar, but it is, in fact, an
+executable program.  One of the attractive features of combinator-based DSLs is
+that the program code mirrors the program specification.
 
 Let us state two properties that make combinators attractive as a design
 technique for DSLs.
