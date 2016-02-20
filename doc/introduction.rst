@@ -303,9 +303,9 @@ primitives and composites.
 
 Our goal is to show a new design of a combinator-based database query language.
 Before we begin, however, let us recall how combinator pattern is used in
-design of two well-known combinator-based DSLs: parser combinators and
-reactive graphics.  Reviewing these familiar examples will let us highlight
-the roles of different aspects of this design pattern.
+design of two well-known combinator-based DSLs: parser combinators and reactive
+animation.  Reviewing these familiar examples will let us highlight the roles
+of different aspects of this design pattern.
 
 We start with parser combinators, a method for building a parsing framework.  A
 parser, in its simplest form, is a program that recognizes when the input
@@ -334,19 +334,18 @@ Here is the updated parser interface:
 
    \operatorname{Parser} := \operatorname{String} \to \operatorname{Vector}\{\operatorname{String}\}
 
-For primitive parsers, we take a parser that recognizes a fixed character
-and a parser that recognizes an empty string.
+For primitive parsers, we take a parser :math:`\operatorname{lit}(c)` that
+recognizes a fixed character :math:`c` and a parser
+:math:`\operatorname{empty}` that recognizes an empty string.
 
 .. math::
 
-   & \operatorname{lit}(\texttt{'s'}) : \operatorname{Parser} \\
    & \operatorname{lit}(\texttt{'s'}) : \texttt{"sql"} \mapsto [\texttt{"ql"}] \\
    & \operatorname{lit}(\texttt{'s'}) : \texttt{"rabbit"} \mapsto []
 
 .. math::
 
-   & \operatorname{eps} : \operatorname{Parser} \\
-   & \operatorname{eps} : \texttt{"rabbit"} \mapsto [\texttt{"rabbit"}]
+   \operatorname{empty} : \texttt{"rabbit"} \mapsto [\texttt{"rabbit"}]
 
 As for composition operations, we only need two.  Combinator
 :math:`\operatorname{alt}(p_1,p_2,\ldots,p_n)` recognizes a string when it is
@@ -393,20 +392,118 @@ consider a production rule for a string of well-formed parentheses:
 
 It can be directly converted to a parser:
 
-.. math::
+.. code-block:: julia
 
-   \operatorname{parens} :=
-        \operatorname{alt}(
-            \operatorname{cat}(
-                \operatorname{lit}(\texttt{"("}),
-                \operatorname{parens},
-                \operatorname{lit}(\texttt{")"}),
-                \operatorname{parens}),
-            \operatorname{eps})
+    parens() = alt(cat(lit('('), parens, lit(')'), parens), empty)
 
 This definition can be mistaken for a formal grammar, but it is, in fact, an
 executable program.  One of the attractive features of combinator-based DSLs is
 that the program code mirrors the program specification.
+
+Let us complement the review of parser combinators with an example of a
+combinator-based DSL for interactive graphics, known as *reactive animation*.
+It will be instructive to see how reactive animation materializes such an
+abstract concept as behavior and how it makes possible to construct behavior
+compositionally.  As before, we will review three components of the DSL:
+interface, primitives and composites.
+
+Animation is an image changing in time, which can be described as a function
+:math:`\operatorname{Time}\to\operatorname{Image}`.  Image parameters such as
+color, position and size may, too, vary in time.  Time-varying values of
+different types can be modeled with a parametric interface:
+
+.. math::
+
+   \operatorname{Signal}\{A\} := \operatorname{Time} \to A
+
+What signals could be taken for primitives?  All primitive signals could be
+divided on three classes.  First, any scalar value could be regarded as a
+constant signal.  This includes numbers, text values and basic graphics shapes:
+
+.. math::
+   :nowrap:
+
+   \begin{alignat*}{2}
+   & 1 & \;:\; & \operatorname{Signal}\{\operatorname{Int}\} \\
+   & \texttt{"sql"} & \;:\; & \operatorname{Signal}\{\operatorname{String}\} \\
+   & \operatorname{circle} & \;:\; & \operatorname{Signal}\{\operatorname{Image}\}
+   \end{alignat*}
+
+Another class of primitives contains just one signal, the identity function on
+the time domain:
+
+.. math::
+
+   & \operatorname{time} : \operatorname{Time} \to \operatorname{Time} \\
+   & \operatorname{time} : t \mapsto t
+
+The last class of primitive signals describe external events:
+
+.. math::
+
+   \operatorname{mousex},\operatorname{mousey} : \operatorname{Signal}\{\operatorname{Int}\}
+
+What about composites?  Just like a scalar value could be lifted to a constant
+signal, a regular function could be lifted to a time-invariant signal
+combinator.  For example, a scalar function :math:`\sin(t)` becomes a
+combinator:
+
+.. math::
+
+   & \sin : \operatorname{Signal}\{\operatorname{Float}\}
+        \to \operatorname{Signal}\{\operatorname{Float}\} \\
+   & \sin(x) : t \mapsto \sin(x(t))
+
+This way we can get a large number of combinators operating on signals:
+
+.. math::
+
+   (x + y), \quad
+   \operatorname{scale}(i,f), \quad
+   \operatorname{move}(i,x,y)
+
+Other signal combinators operate on time explicitly.  Consider, for example, the
+:math:`\operatorname{delay}(x,T)` combinator, which delays the
+incoming signal :math:`x` for time :math:`T`.  It can be defined by
+
+.. math::
+
+   & \operatorname{delay} :
+        (\operatorname{Signal}\{A\}, \operatorname{Signal}\{\operatorname{Float}\}) \to
+        \operatorname{Signal}\{A\} \\
+   & \operatorname{delay}(x,T) : t \mapsto x(t-T(t))
+
+Finally, let us show simple examples.
+
+A periodic signal:
+
+.. math::
+
+   \sin(2\pi\cdot\operatorname{time})
+
+A pulsating circle:
+
+.. math::
+
+   \operatorname{scale}(\operatorname{circle}, \sin(\operatorname{time}))
+
+A circle on an orbit:
+
+.. math::
+
+   \operatorname{move}(\operatorname{circle}, \sin(\operatorname{time}), \sin(\operatorname{time}+\pi))
+
+An image that follows the mouse cursor:
+
+.. math::
+
+   \operatorname{move}(\operatorname{circle}, \operatorname{mousex}, \operatorname{mousey})
+
+Notice that none of these expressions use variables, even though they look like
+regular variable-based expressions.  For example,
+:math:`\sin(2\pi\cdot\operatorname{time})` resembles expression
+:math:`\sin(2\pi\cdot t)`, where :math:`t` is a variable, however, it does not
+have use any variables.
 
 Let us state two properties that make combinators attractive as a design
 technique for DSLs.
