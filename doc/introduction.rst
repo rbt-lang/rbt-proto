@@ -277,6 +277,14 @@ Introduction
    * Our work on YAML, HTSQL.
 
 
+In this section, we review how the combinator pattern can be used to design
+domain-specific languages, and then apply this pattern to prototype a database
+query language.
+
+
+Combinator pattern
+------------------
+
 In computer science, the term *combinator* is used in a narrow and a broad
 sense.  In a narrow definition, a combinator is any expression with no free
 variables.  That is to say, a combinator expression has its value completely
@@ -516,4 +524,209 @@ technique for DSLs.
 
 * **Combinators are extensible.**  A combinatorial DSL could be adapted to new
   domains by extending it with new primitives or composite combinators.
+
+
+Querying with combinators
+-------------------------
+
+The combinator pattern gives us a roadmap for a design of a database query
+language:
+
+1. Define the query interface.
+2. Describe the set of primitive queries.
+3. Describe operations (combinators) for making composite queries.
+
+A query pulls data from a database, so before we can define what a query is, we
+need to understand how data is structured by the database.  Undestanding of a
+database structure requires three concepts: database model, database schema and
+database instance.
+
+A database model is a set of rules for describing database structure.  In this
+document, we will refer to three models: relational, hierarchical and
+categorical.  The structure of a particular database is called its schema and a
+snapshot of its content is called its instance.
+
+As a starting point, we use the categorical database model.  In this model,
+database schema is represented as a directed graph with nodes and arcs of the
+graph specifying how data is structured in the database.  Namely, the nodes
+correspond to types of entities and types of attribute values; the arcs
+correspond to entity attributes and relationships between entities.  A database
+instance represents data by mapping the nodes and the arcs of the schema graph
+to sets (of entities or values) and functions on sets (that map entities to
+attribute values or related entities).
+
+Let us demonstrate this model on a textbook example of a "departments &
+employees" database schema.
+
+.. graphviz:: citydb-functional-data-model.dot
+
+The schema graph contains four nodes; two of them represent a class of
+department entities and a class of employee entities:
+
+.. math::
+
+   \operatorname{Dept}, \qquad \operatorname{Empl}
+
+The other two represent the type of text values and the type of integer values:
+
+.. math::
+
+   \operatorname{Text}, \qquad \operatorname{Int}
+
+An arc of the schema graph connecting two entity classes represents a
+relationship between entities of these classes.  An arc connecting an entity
+class to a value type corresponds to an entity attribute.  In this schema, we
+see a text attribute of the department entity:
+
+.. math::
+
+    \operatorname{name} : \operatorname{Dept} \to \operatorname{Text}
+
+a collection of attributes of the employee entity:
+
+.. math::
+   :nowrap:
+
+   \begin{alignat*}{2}
+   & \operatorname{name} & \;:\; & \operatorname{Empl} \to \operatorname{Text} \\
+   & \operatorname{surname} & \;:\; & \operatorname{Empl} \to \operatorname{Text} \\
+   & \operatorname{position} & \;:\; & \operatorname{Empl} \to \operatorname{Text} \\
+   & \operatorname{salary} & \;:\; & \operatorname{Empl} \to \operatorname{Int} \\
+   \end{alignat*}
+
+and a relationship that maps each employee to the respective department:
+
+.. math::
+
+   \operatorname{department}: \operatorname{Empl} \to \operatorname{Dept}
+
+Now, we have enough to define the query interface:
+
+.. math:: \operatorname{Query}\{A,B\} := A \to B
+
+Here, each of the parameters :math:`A` and :math:`B` is either a value type or
+an entity class.
+
+This definition immediately gives us a set of primitives and one composition
+operation.  Indeed, each arc of the schema graph becomes a primitive query,
+and, given two queries with compatible inputs and outputs,
+
+.. math::
+
+   f: A \to B, \qquad
+   g: B \to C
+
+we can combine then using function composition:
+
+.. math::
+
+   &f{.}g : A \to C \\
+   &f{.}g : a \mapsto g(f(a))
+
+Let us demonstrate this operation on the sample schema.  We take two primitive
+queries, :math:`\operatorname{department}`, which maps any employee entity to
+the respective department, and :math:`\operatorname{name}`, which maps a
+department entity to the department name:
+
+.. math::
+   :nowrap:
+
+   \begin{alignat*}{3}
+   & \operatorname{department} &\;:\;& \operatorname{Empl} &\;\to\;& \operatorname{Dept} \\
+   & \operatorname{name} &\;:\;& \operatorname{Dept} &\;\to\;& \operatorname{Text}
+   \end{alignat*}
+
+The composition :math:`\operatorname{department}.\operatorname{name}` of these
+two queries maps an employee entity to the name of their department:
+
+.. math::
+
+   \operatorname{department}{.}\operatorname{name}: \operatorname{Empl} \to \operatorname{Text}
+
+Our definition of the query interface may seem unusual.  It appears that to get
+any output from a query, we need to supply it with some input, which does not
+match the conventional notion of a database query that runs and produces a
+result with no input required.  We did construct a query that finds *the name
+of the department given an employee*, but can we express a query that finds
+*the total number of employees*?
+
+To reconcile the query interface with the conventional notion of a database
+query, we introduce a designated singleton type :math:`\operatorname{Void}`,
+which contains exactly one value
+:math:`\operatorname{nothing}\in\operatorname{Void}`.  Then a query with no
+input can be expressed as a mapping from the :math:`\operatorname{Void}` type.
+The query result can be obtained by submitting the value
+:math:`\operatorname{nothing}` for the query input.
+
+For example, let us build a query that finds *the total number of employees*.
+We can already guess the signature of this query:
+
+.. math:: \operatorname{Void} \to \operatorname{Int}
+
+We start with a new primitive, :math:`\operatorname{employee}`, which
+produces a sequence of all employee entities:
+
+.. math::
+
+   & \operatorname{employee} : \operatorname{Void}
+        \to \operatorname{Seq}\{\operatorname{Empl}\} \\
+   & \operatorname{employee} : \operatorname{nothing} \mapsto
+        [e_1, e_2, \ldots]
+
+Here, :math:`\operatorname{Seq}\{A\}` is a parametric sequence type, which
+is used when a query produces a sequence of values.
+
+To count the number of employees, we will use combinator
+:math:`\operatorname{count}`, which has the following signature:
+
+.. math::
+
+   \operatorname{count} : (A \to \operatorname{Seq}\{B\}) \to (A \to \operatorname{Int})
+
+The signature indicates that :math:`\operatorname{count}` transforms any
+sequence-valued query to an integer-valued query, that is,
+:math:`\operatorname{count}(Q)` returns the number of elements produced by the
+query :math:`Q`.
+
+Applying :math:`\operatorname{count}` to :math:`\operatorname{employee}`, we
+get the query that counts the total number of employees:
+
+.. math::
+
+   \operatorname{count}(\operatorname{employee}) : \operatorname{Void}
+        \to \operatorname{Int}
+
+
+Related works and references
+----------------------------
+
+We will continue developing the query language in later chapters, but for now, let
+us review the present query model compares with the most popular query language,
+SQL, and the underlying theory of relational algebra.
+
+How is it different from relational algebra?  Let us consider the query language,
+primitives and composite operations that are provided by relational algebra.
+
+1. In relational algebra, a query is a table, or a set of tuples.
+2. Primitives queries are tables containing all records for a fixed class
+   of entities, e.g., a table of all employees or a table of all departments.
+3. Compositing operations are set product and other set operations.
+
+Let us note one major difference between relational algebra and combinator-based
+approach.  In relational algebra, entity attributes and relationships between
+entities are not first-class objects, in Rabbit, they are.  That's the reason
+why combinator pattern works, we do not need a variable ranging over some
+entities of a particular type.
+
+Still SQL has been holding the position of the most popular query language
+since 1970s.  What makes Rabbit an attractive alternative?
+
+The fact that Rabbit queries are composable and declarative has the following
+implications:
+
+* Queries are easier to write.  Combinators allows one to compose a query
+  as a pipeline of data operations.
+* Equally, or perhaps more importantly, unfamiliar queries are easier to read.
+  In order to understand a query, is has to be decomposed into components
+  each of which could be analyzed independently.
 
