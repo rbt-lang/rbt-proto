@@ -12,13 +12,13 @@ Introduction
    A combinatorial DSL must define:
 
    * *interface* for domain objects.
-   * *primitives* or atomic combinators.
-   * *composites* constructed from other combinators.
+   * *primitives* or atomic objects.
+   * *composites* made of other objects.
 
    Well-known examples:
 
    * Parser combinators (building parsers out of smaller parsers).
-   * Reactive graphics (constructing objects and behavior compositionally).
+   * Reactive graphics (constructing animation compositionally).
 
    We will apply this technique to *querying a database*.
 
@@ -66,7 +66,7 @@ Introduction
 .. slide:: Example: Reactive Graphics
    :level: 3
 
-   Constructing objects and behavior compositionally.
+   Constructing graphics and behavior compositionally.
 
    Interface (a time-varying value):
 
@@ -101,19 +101,15 @@ Introduction
 
    Think of combinator pattern as an extensible *"construction set"*.
 
-   1. Define a type that describes domain objects.
+   1. Define the type that describes domain objects.
    2. Define elementary objects.
    3. Define operations to combine objects.
 
-   **Combinators are composable.**
+   **Combinators are declarative.**
 
-   Combinators with compatible interfaces could be composed in a variety of
-   ways to form a composite processing pipeline.
+   * A combinator program describes *what it does*, not *how it does it*.
 
-   **Combinators are extensible.**
-
-   A combinatorial DSL could be adapted to new domains by extending it with
-   domain-specific combinators.
+   * Attractive property for a DSL designed for *the accidental programmer*.
 
    How can we apply it to querying?
 
@@ -149,8 +145,8 @@ Introduction
       &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept} \\
       &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text}
 
-   (:math:`\operatorname{department}` maps an employee entity to the corresponding department,
-   :math:`\operatorname{name}` maps a department entity to its name)
+   * :math:`\operatorname{department}` maps an employee entity to the corresponding department;
+   * :math:`\operatorname{name}` maps a department entity to its name.
 
    Can use regular composition of mappings:
 
@@ -158,7 +154,7 @@ Introduction
 
       \operatorname{department}{.}\operatorname{name}: \operatorname{Empl} \to \operatorname{Text}
 
-   (maps an employee entity to the name of their department)
+   * This query maps an employee entity to the name of their department.
 
 
 .. slide:: Querying with Rabbit: Input-Free Queries
@@ -166,7 +162,7 @@ Introduction
 
    A query is a mapping?  But I do not expect a query to have input?!
 
-   Designate a singleton type (with a single value of this type):
+   Designate a singleton type (with just one value):
 
    .. math::
 
@@ -277,9 +273,9 @@ Introduction
    * Our work on YAML, HTSQL.
 
 
-In this section, we review how the combinator pattern can be used to design
-domain-specific languages, and then apply this pattern to prototype a database
-query language.
+In this section, we review the combinator pattern and how it is used in design
+of declarative domain-specific languages.  Then we show how combinators can be
+applied to prototype a database query language.
 
 
 Combinator pattern
@@ -303,7 +299,7 @@ individual blocks as well as the operations that combine them as combinators.
 A combinator-based DSL is defined by its three constituents: interface,
 primitives and composites.
 
-1. The interface is a type or a type family that characterize DSL programs.
+1. The interface is a type or a type family that characterizes DSL programs.
 2. Primitive combinators are atomic programs, irreducible processing blocks
    from which every program must be constructed.
 3. Specific rules for how programs can be combined together to form a composite
@@ -328,9 +324,9 @@ together aside from using simple ``and`` or ``or`` operators.  This is not
 enough to make interesting parsers.  We need to expand the parser interface to
 provide some hooks by which two parsers could be chained together.
 
-We make the interface composable by having a parser emit a list of strings
-instead of a boolean value.  Specifically, our parser recognizes all *prefixes*
-of the input string that match a certain pattern, and returns a list of the
+We make the interface composable by having a parser emit not a boolean value,
+but a list of strings.  Specifically, our parser recognizes all *prefixes* of
+the input string that match a certain pattern, and returns a list of the
 respective *suffixes*.  Thus, when the parser does not recognize the input
 string or any of its prefixes, it returns an empty list.  When the parser
 recognizes the whole string, but not any if its prefixes, it returns a list
@@ -481,7 +477,7 @@ incoming signal :math:`x` for time :math:`T`.  It can be defined by
         \operatorname{Signal}\{A\} \\
    & \operatorname{delay}(x,T) : t \mapsto x(t-T(t))
 
-Finally, let us show simple examples.
+Finally, let us show some simple examples.
 
 A periodic signal:
 
@@ -507,23 +503,26 @@ An image that follows the mouse cursor:
 
    \operatorname{move}(\operatorname{circle}, \operatorname{mousex}, \operatorname{mousey})
 
-Notice that none of these expressions use variables, even though they look like
-regular variable-based expressions.  For example,
-:math:`\sin(2\pi\cdot\operatorname{time})` resembles expression
-:math:`\sin(2\pi\cdot t)`, where :math:`t` is a variable, however, it does not
-have use any variables.
+It is tempting to continue with more examples, including ones with real
+interactivity (the "reactive" part of the DSL), but let us stop at this point
+and instead ask ourselves what makes these examples so compelling.
 
-Let us state two properties that make combinators attractive as a design
-technique for DSLs.
+They are remarkably succinct, but it is only a part of the appeal.  More
+importantly, the example programs have the structure that reflects what the
+programs do while leaving out how they do it.  Such programming style is called
+*declarative*.
 
-* **Combinators are composable.**  A DSL is fully defined by its set of
-  primitives and a set of operations for composing combinators.  Any
-  composition operation must be defined in a generic way so that its operands
-  could be any combinators with compatible interfaces.  This property gives
-  combinatorial DSLs a distinctive feel of a "construction set".
+An imperative program is a series of steps that must be executed consecutively
+to obtain the result.  By contrast, a declarative program is a statement that
+describes the result without explicitly enumerating the steps to achieve it.
+This is an desirable property for a DSL, especially the one intended for
+semi-technical domain experts.
 
-* **Combinators are extensible.**  A combinatorial DSL could be adapted to new
-  domains by extending it with new primitives or composite combinators.
+As we design a database query language, we see our users among *accidental
+programmers*, professionals and data experts who are not software engineers by
+trade, but who must write database queries or data processing code to get
+things done.  For them, a natural way to express their problems is provided by
+declarative programming with combinators.
 
 
 Querying with combinators
