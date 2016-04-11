@@ -30,7 +30,7 @@ Querying with Combinators
 
    * :doc:`introduction`
    * :doc:`hierarchical-data`
-   * *Infinite Hierarchy and Monadic Structures*
+   * :doc:`unfolding`
    * *Query Syntax*
    * *Aggregates*
    * *Quotients*
@@ -56,5 +56,6 @@ this challenge.
 
    introduction
    hierarchical-data
+   unfolding
 
 

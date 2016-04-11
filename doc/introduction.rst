@@ -441,7 +441,7 @@ the time domain:
    & \operatorname{time} : \operatorname{Time} \to \operatorname{Time} \\
    & \operatorname{time} : t \mapsto t
 
-The last class of primitive signals describe external events:
+The last class of primitive signals describes external events:
 
 .. math::
 
