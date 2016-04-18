@@ -49,7 +49,7 @@ Unfolding a Schema
 
    Recall *categorical data model:*
 
-   * Objects: value and entity types.
+   * Objects: entity types and value types.
    * Arrows: attributes and relationships.
 
    Example (textbook "employees & departments" schema):
@@ -94,21 +94,26 @@ Unfolding a Schema
 
    * Relationship that associates every employee to their manager.
 
+   * Collection of all departments/all employees.
+
 
 .. slide:: Plural Relationships
    :level: 3
 
-   Consider a relationship:
+   Consider a relationship: *Every employee is associated with their
+   department.*
 
-   *A department is associated with the respective employees.*
-
-   This is inverse to the arrow:
+   It is represented by arrow:
 
    .. math::
 
       \operatorname{department} : \operatorname{Empl}\to\operatorname{Dept}
 
-   What is the signature of this new relationship?  Perhaps:
+   But we could also *invert* this relationship:
+
+   *A department is associated with the respective employees.*
+
+   Is there an arrow representing it?  If so, what is its signature?  Perhaps:
 
    .. math::
 
@@ -116,7 +121,17 @@ Unfolding a Schema
 
    No, because for a given department, there are multiple employees.
 
-   This is *a plural relationship*.
+   This is called *a plural relationship*.
+
+
+.. slide:: Plural Relationships: Schema Diagram
+   :level: 3
+
+   Can we extend the schema diagram with a plural relationship?
+
+   *A department is associated with the respective employees.*
+
+   .. graphviz:: citydb-with-plural-link.dot
 
 
 .. slide:: Partial Relationships
@@ -134,7 +149,55 @@ Unfolding a Schema
 
    But not every employee has a manager! (The CEO doesn't).
 
-   This is *a partial relationship*.
+   This is called *a partial relationship*.
+
+   Note: there is also an inverse relationship :math:`\operatorname{manages}`,
+   which maps employees to their direct subordinates.  It is plural.
+
+
+.. slide:: Partial Relationships: Schema Diagram
+   :level: 3
+
+   Can we extend the schema diagram with a partial relationship?
+
+   *An employee is associated with their manager.*
+
+   .. graphviz:: citydb-with-partial-link.dot
+
+
+.. slide:: Class Relationships
+   :level: 3
+
+   Can we represent the set of all departments?  The set of all employees?
+
+   On the schema graph, they are represented as *nodes:*
+
+   .. math::
+
+      \operatorname{Dept}, \quad
+      \operatorname{Empl}
+
+   Can we possibly represent entity sets as *arrows?*
+
+   In other words, is there a relationship that describes all entities of a
+   particular class?
+
+   If so, what is its signature?
+
+   .. math::
+
+      &\operatorname{department} & : \;?&\to\operatorname{Dept}\;? \\
+      &\operatorname{employee} & : \;?&\to\operatorname{Empl}\;?
+
+
+.. slide:: Class Relationships: Schema Diagram
+   :level: 3
+
+   Can we extend the schema diagram with class relationships?
+
+   *The set of all departments* and *the set of all employees.*
+
+   .. graphviz:: citydb-with-class-links.dot
 
 
 .. slide:: Expressing Plural and Partial Relationships
@@ -190,14 +253,19 @@ Unfolding a Schema
 .. slide:: Monadic Composition
    :level: 3
 
-   A parametric type :math:`M\{T\}` is *a monad* if for any mappings:
+   How to compose two arrows that do not match perfectly?  *Monads* to the
+   rescue!
+
+   Monads extend the notion of composition.  Specifically:
+
+   *If a parametric type* :math:`M\{T\}` *is a monad, then for any mappings:*
 
    .. math::
 
       f : A \to M\{B\}, \quad
       g : B \to M\{C\}
 
-   there is a monadic composition:
+   *there is a monadic composition:*
 
    .. math::
 
@@ -221,13 +289,17 @@ Unfolding a Schema
 
    .. math::
 
-      f{.}g : A \to \operatorname{Opt}\{C\} :
-      x \mapsto \begin{cases}
-        \operatorname{null} & (f(x)=\operatorname{null}) \\
-        g(f(x)) & (f(x)\ne\operatorname{null})
-      \end{cases}
+      f{.}g : A \to \operatorname{Opt}\{C\}
 
    This is just a composition of partial functions.
+
+   .. math::
+
+      f{.}g : x \longmapsto \begin{cases}
+        \operatorname{null} & (\text{when } f(x)=\operatorname{null}) \\
+        \operatorname{null} & (\text{when } f(x)\ne\operatorname{null},\, g(f(x))=\operatorname{null}) \\
+        g(f(x)) & (\text{otherwise})
+      \end{cases}
 
 
 .. slide:: Monadic Composition: :math:`\operatorname{Seq}\{T\}`
@@ -243,23 +315,52 @@ Unfolding a Schema
    Define:
 
    .. math::
-      :nowrap:
 
-      \begin{gather}
-      f{.}g : A \to \operatorname{Seq}\{C\} :
-      x \mapsto [z_{11}, z_{12}, \ldots, z_{21}, z_{22}, \ldots], \\
-      \text{where } f(x) = [y_1, y_2, \ldots],\; g(y_k) = [z_{k1}, z_{k2}, \ldots]
-      \end{gather}
+      f{.}g : A \to \operatorname{Seq}\{C\}
 
-   Evaluating :math:`f(x)`, we get some sequence :math:`[y_1, y_2, \ldots]`.
-   We apply :math:`g` to every element of the sequence, then flatten the
-   result.
+   Hint: use a function that *flattens* a nested list:
 
+   .. math::
 
-.. slide:: Composition: Embedding
+      \operatorname{flat} :
+      \operatorname{Seq}\{\operatorname{Seq}\{C\}\} \to
+      \operatorname{Seq}\{C\}
+
+.. slide:: Monadic Composition: :math:`\operatorname{Seq}\{T\}`
    :level: 3
 
-   We need one more composition rule: How to compose arrows of different kinds?
+   Given :math:`x \in A`, how to evaluate :math:`f{.}g(x) \in \operatorname{Seq}\{C\}`?
+
+   First, evaluate :math:`f` on the input :math:`x`:
+
+   .. math::
+
+      x \overset{f}{\longmapsto} [y_1, y_2, \ldots]
+
+   Then apply :math:`g` to every element of :math:`[y_1,y_2,\ldots]`:
+
+   .. math::
+
+      [y_1, y_2, \ldots]
+      \overset{\operatorname{Seq}\{g\}}{\longmapsto}
+      [[z_{11}, z_{12}, \ldots], [z_{21}, z_{22}, \ldots], \ldots]
+
+   Finally, erase nested brackets:
+
+   .. math::
+
+      [[z_{11}, z_{12}, \ldots], [z_{21}, z_{22}, \ldots], \ldots]
+      \overset{\operatorname{flat}}{\longmapsto}
+      [z_{11}, z_{12}, \ldots, z_{21}, z_{22}, \ldots]
+
+   This is the value of :math:`f{.}g(x)`.
+
+
+.. slide:: Composition: Embedding Rules
+   :level: 3
+
+   Monadic composition is not enough:  How to compose arrows of different
+   kinds?
 
    For example:
 
@@ -268,24 +369,49 @@ Unfolding a Schema
       f : A \to \operatorname{Opt}\{B\}, \quad
       g : B \to \operatorname{Seq}\{C\}.
 
-   Consider:
+   We need one more composition rule.  Consider:
 
    * :math:`T` contains exactly one value.
    * :math:`\operatorname{Opt}\{T\}` contains zero or one value.
    * :math:`\operatorname{Seq}\{T\}` contains zero, one or more values.
 
-   This gives us natural embedding:
+   This gives us *natural embeddings:*
 
    .. math::
 
       T \hookrightarrow \operatorname{Opt}\{T\} \hookrightarrow \operatorname{Seq}\{T\}
 
 
-.. slide:: Composition: Example
+.. slide:: Composition: Embedding Rules
    :level: 3
 
-   With monadic composition and embedding rules, we can compose any mappings
-   with compatible inputs and outputs.
+   Define :math:`T\hookrightarrow\operatorname{Opt}\{T\}` by:
+
+   .. math::
+
+      x \longmapsto x
+
+   Define :math:`T\hookrightarrow\operatorname{Seq}\{T\}` by:
+
+   .. math::
+
+      x \longmapsto [x]
+
+   Define :math:`\operatorname{Opt}\{T\}\hookrightarrow\operatorname{Seq}\{T\}`
+   by:
+
+   .. math::
+      x \longmapsto \begin{cases}
+      [] & (\text{when }x=\operatorname{null}) \\
+      [x] & (\text{when }x\ne\operatorname{null})
+      \end{cases}
+
+
+.. slide:: Composition: Conclusion
+   :level: 3
+
+   Monadic composition and embedding rules let us compose any arrows that have
+   the same base intermediate type.
 
    For example, consider:
 
@@ -310,30 +436,32 @@ Unfolding a Schema
       \operatorname{Dept} \to \operatorname{Seq}\{\operatorname{Text}\}
 
 
-.. slide:: Class Arrows
+.. slide:: Expressing Class Relationships
    :level: 2
 
-   Database schema describes entity classes as objects:
+   Database schema represents entity classes as *objects:*
 
    .. math::
 
       \operatorname{Dept}, \quad \operatorname{Empl}
 
-   Can we also describe them as arrows?
+   Can we also represent them as *arrows?*
 
-   What would be a signature of a class arrow?
+   * What would be the signature of a class arrow?
+
+   * Conveniently, we just defined type :math:`\operatorname{Seq}\{T\}`.
+
+   * We can guess *the output:* a sequence of entities of a particular class.
+
+   * But what is *the input?*
 
    .. math::
 
       &\operatorname{department} & : (?)&\to\operatorname{Seq}\{\operatorname{Dept}\} \\
       &\operatorname{employee} & : (?)&\to\operatorname{Seq}\{\operatorname{Empl}\}
 
-   Output: a sequence of all entities of a particular type.
 
-   But what is the input?
-
-
-.. slide:: Class Arrows: Singleton Type
+.. slide:: Class Relationships: Singleton Type
    :level: 3
 
    Let us introduce *a singleton type* (type with a single value):
@@ -349,20 +477,68 @@ Unfolding a Schema
       &\operatorname{department} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Dept}\} \\
       &\operatorname{employee} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Empl}\}
 
-   Class arrows map :math:`\operatorname{nothing}` (the only value of the
-   :math:`\operatorname{Void}` type) to a sequence of all departments and
-   employees respectively.
+   A class arrow maps value :math:`\operatorname{nothing}` to a sequence of all
+   class entities.
+
+   .. math::
+
+      &\operatorname{department} & : \operatorname{nothing}
+      &\longmapsto [\textit{all department entities}\ldots] \\
+      &\operatorname{employee} & : \operatorname{nothing}
+      &\longmapsto [\textit{all employee entities}\ldots]
+
+   * We got each entity class represented as an arrow.
+
+   * Now they can be *composed* with other arrows!
 
 
 .. slide:: Unfolding a Database Schema
    :level: 2
 
+   The problem: *Can we make any database hierarchical?*  We can now solve it:
+
+   1. Draw the schema graph (omitted some arrows to reduce clutter).
+
+   .. graphviz:: citydb-unfolding-step-1.dot
+
+
+.. slide:: Unfolding a Database Schema: Step 2
+   :level: 3
+
    The problem: *Can we make any database hierarchical?*
 
-   We can now solve it: Start with :math:`\operatorname{Void}` type; then
-   follow all arrows.
+   2. Add all inverse arrows and class arrows.
 
-   We get unfolded database schema:
+   .. graphviz:: citydb-unfolding-step-2.dot
+
+
+.. slide:: Unfolding a Database Schema: Step 3
+   :level: 3
+
+   The problem: *Can we make any database hierarchical?*
+
+   3. Start at the :math:`\operatorname{Void}` node.  Convert each outgoing
+      arrow to an adjacent node.
+
+   .. graphviz:: citydb-unfolding-step-3.dot
+
+
+.. slide:: Unfolding a Database Schema: Step 4
+   :level: 3
+
+   The problem: *Can we make any database hierarchical?*
+
+   4. Continue converting outgoing arrows to nodes indefinitely.
+
+   .. graphviz:: citydb-unfolding-step-4.dot
+
+
+.. slide:: Unfolding a Database Schema: Conclusion
+   :level: 3
+
+   The problem: *Can we make any database hierarchical?*
+
+   We presented the database schema in a form of an infinite hierarchy:
 
    .. graphviz:: citydb-unfolded-data-model.dot
 

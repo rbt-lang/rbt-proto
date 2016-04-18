@@ -1,0 +1,20 @@
+
+digraph {
+    graph [ranksep=1, nodesep=1, pad=.25, bgcolor=transparent]
+    node [fontname="DejaVu Sans", fontsize=12]
+    edge [fontname="DejaVu Sans", fontsize=10]
+    void [label=<<B>?</B>> penwidth=3 color=red]
+    department [label=<<B>Dept</B>>]
+    employee [label=<<B>Empl</B>>]
+    text [label=<<B>Text</B>>]
+    int [label=<<B>Int</B>>]
+    void -> department [label=department penwidth=3 color=red]
+    void -> employee [label=employee penwidth=3 color=red]
+    department -> text [label=name]
+    employee -> department [label=department, constraint=false]
+    employee -> text [label=name]
+    employee -> text [label=surname]
+    employee -> text [label=position]
+    employee -> int [label=salary]
+}
+

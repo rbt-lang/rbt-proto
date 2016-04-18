@@ -1,0 +1,11 @@
+
+digraph {
+    graph [ranksep=.75 nodesep=1.25, pad=.25, bgcolor=transparent]
+    node [fontname="DejaVu Sans", fontsize=8]
+    void [shape=point]
+    dept [label="department"]
+    empl [label="employee"]
+    void -> dept
+    void -> empl
+}
+
