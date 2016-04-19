@@ -31,7 +31,7 @@ Querying with Combinators
    * :doc:`introduction`
    * :doc:`hierarchical-data`
    * :doc:`unfolding`
-   * *Query Syntax*
+   * :doc:`combinators`
    * *Aggregates*
    * *Quotients*
    * *Transitive Closure*
@@ -57,5 +57,6 @@ this challenge.
    introduction
    hierarchical-data
    unfolding
+   combinators
 
 
