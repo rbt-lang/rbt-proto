@@ -21,7 +21,7 @@ Query Combinators
 
    The interface must answer to the question:
 
-   *What is a database query?*
+   * *What is a database query?*
 
    Examples of queries:
 
@@ -32,7 +32,7 @@ Query Combinators
 
    Formally, we need to define a (possibly parametric) type
 
-   .. math:: \operatorname{Query}
+   .. math:: \operatorname{Query} :=\; ?
 
    Can we guess the type of the queries :math:`Q_1` and :math:`Q_2`?
 
@@ -159,5 +159,156 @@ Query Combinators
    .. math::
 
       Q_3 : \operatorname{Dept}\to\operatorname{Int}
+
+
+.. slide:: Primitives
+   :level: 2
+
+   We defined query interface: *a mapping from query input to query output:*
+
+   .. math::
+
+      \operatorname{Query}\{A,B\} := A \to B
+
+   Next step: define atomic or *primitive* queries.
+
+   We can get many primitives from the database schema:
+
+   * *Classes.*
+   * *Attributes.*
+   * *Links.*
+
+   Some primitives are schema-independent:
+
+   * *Constants.*
+   * *Identity.*
+
+
+.. slide:: Primitives: Classes
+   :level: 3
+
+   * Each database describes some material or abstract entities.
+
+   * All entities of the same type form a *class:*
+
+     * class of all departments,
+     * class of all employees,
+     * etc.
+
+   A class primitive produces *all* entities of a specific class.
+
+   Examples:
+
+   .. math::
+
+      &\operatorname{department} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Dept}\} \\
+      &\operatorname{employee} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Empl}\}
+
+
+.. slide:: Primitives: Attributes
+   :level: 3
+
+   We cannot observe an entity directly.  Instead, all we can learn about it is:
+
+   * its attributes;
+   * its relationships with other entities.
+
+   An attribute primitive maps an entity to the value of its attribute.
+
+   Each entity class has its own fixed set of attributes.  Examples:
+
+   .. math::
+
+      &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text} \\
+      &\operatorname{name} & : \operatorname{Empl}&\to\operatorname{Text} \\
+      &\operatorname{surname} & : \operatorname{Empl}&\to\operatorname{Text} \\
+      &\operatorname{position} & : \operatorname{Empl}&\to\operatorname{Text} \\
+      &\operatorname{salary} & : \operatorname{Empl}&\to\operatorname{Int}
+
+
+.. slide:: Primitives: Links
+   :level: 3
+
+   Entities may be in complex relationships with each other.
+
+   For each kind of relationship, we introduce a link primitive.
+
+   A link primitive maps an entity to the related entity or entities.
+
+   In fact, for each relationship, we define *two* links: one in each
+   direction.
+
+   Examples:
+
+   .. math::
+
+      &\operatorname{employee} & : \operatorname{Dept}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
+      &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept} \\
+      &\operatorname{manages} & : \operatorname{Empl}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
+      &\operatorname{managed\_by} & : \operatorname{Empl}&\to\operatorname{Opt}\{\operatorname{Empl}\}
+
+
+.. slide:: Primitives: Homonyms
+   :level: 3
+
+   We introduced different primitives with the same name!
+
+   .. math::
+
+      &\operatorname{department} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Dept}\} \\
+      &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept} \\
+      &\operatorname{employee} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
+      &\operatorname{employee} & : \operatorname{Dept}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
+      &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text} \\
+      &\operatorname{name} & : \operatorname{Empl}&\to\operatorname{Text}
+
+   * But they have different inputs, so we can identify them unambiguously.
+
+   * Within one class, all attributes and links must have a unique name.
+
+
+.. slide:: Primitives: Constants
+   :level: 3
+
+   Any language needs constants:
+
+   .. math::
+
+      \operatorname{true},\; 1024,\; \texttt{"Rabbit"}
+
+   Our constants are primitive queries.
+
+   A *constant* maps any input to a fixed value.
+
+   * Query output: the type of the constant value.
+
+   * Query input?  Could be anything; constants are *polymorphic* in their input.
+
+   .. math::
+
+      &\operatorname{true} & : A&\to\operatorname{Bool} \\
+      &1024 & : A&\to\operatorname{Int} \\
+      &\texttt{"Rabbit"} & : A&\to\operatorname{Text}
+
+
+.. slide:: Primitives: :math:`\operatorname{null}` and :math:`\operatorname{here}`
+   :level: 3
+
+   There is a special constant that indicates lack of any value:
+
+   .. math::
+
+      \operatorname{null} : A \to \operatorname{Opt}\{\operatorname{Union}\{\}\}
+
+   Its output type allows :math:`\operatorname{null}` satisfy any type
+   constraints.
+
+   Our last primitive: the *identity* function.
+
+   Identity primitive maps any value to itself.
+
+   .. math::
+
+      \operatorname{here} : A \to A
 
 
