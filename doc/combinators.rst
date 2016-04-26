@@ -1,17 +1,17 @@
-Query Combinators
-=================
+Combinator Pattern
+==================
 
 
-.. slide:: Query Combinators
+.. slide:: Combinator Pattern
    :level: 2
 
-   We use *combinator pattern* to design a database query language:
+   **Rabbit** is a database query language.
+
+   It is based on a DSL design technique called *combinator pattern:*
 
    1. Define the type of domain objects, *the interface.*
    2. Define atomic objects, so called *primitives.*
    3. Define operations for combining objects, which we call *composites.*
-
-   We call it the **Rabbit** query language.
 
    In examples, we assume a textbook "departments & employees" schema.
 
@@ -19,20 +19,20 @@ Query Combinators
 .. slide:: The Interface
    :level: 2
 
-   The interface must answer to the question:
+   The interface describes domain objects.  Hence it must answer the question:
 
    * *What is a database query?*
 
-   Examples of queries:
+   Let us look at some examples:
 
    :math:`Q_1`. *Show the total number of departments.*
 
    :math:`Q_2`. *For every department, show its name and the number of
    employees.*
 
-   Formally, we need to define a (possibly parametric) type
+   Formally, the interface is a type (possibly parametric):
 
-   .. math:: \operatorname{Query} :=\; ?
+   .. math:: \operatorname{Query}\{?\} :=\; ?
 
    Can we guess the type of the queries :math:`Q_1` and :math:`Q_2`?
 
@@ -69,14 +69,14 @@ Query Combinators
 .. slide:: The Interface: Query Output
    :level: 3
 
-   Let us guess the interface of the examples:
+   What type can we assign to the examples?
 
    :math:`Q_1`. *Show the total number of departments.*
 
    :math:`Q_2`. *For every department, show its name and the number of
    employees.*
 
-   Can we define the query interface as the type of the query output?
+   Perhaps, it's the type of the query output?
 
    .. math::
 
@@ -91,20 +91,21 @@ Query Combinators
 .. slide:: The Interface: Query Input
    :level: 3
 
-   Here is the idea: allow queries to accept *input*.
+   The idea: let queries accept *input*.
 
-   So in addition to these two examples:
+   So, in addition to regular queries:
 
    :math:`Q_1`. *Show the total number of departments.*
 
    :math:`Q_2`. *For every department, show its name and the number of
    employees.*
 
-   The following is also a "query":
+   We also permit "queries" with input:
 
    :math:`Q_3`. *For a given department, get the number of employees.*
 
-   This suggests composability: :math:`Q_3` must be a part of :math:`Q_2`.
+   We see a hint of composability: :math:`Q_3` must be a part of :math:`Q_2`.
+   But:
 
    * The input of :math:`Q_3` is :math:`\operatorname{Dept}`.
    * What is the input of :math:`Q_1` and :math:`Q_2`?
@@ -113,7 +114,7 @@ Query Combinators
 .. slide:: The Interface: Queries without Input
    :level: 3
 
-   Most queries do not have any input:
+   Your typical database query has no input:
 
    :math:`Q_1`. *Show the total number of departments.*
 
@@ -122,12 +123,14 @@ Query Combinators
 
    And yet we'd like to make query input a part of its interface.
 
-   * A trick: for queries without input, declare their input type as
+   Here's the trick:
+
+   * For a query without input, declare its input type as
      :math:`\operatorname{Void}`.
 
    * :math:`\operatorname{Void}` is a singleton type, with only one value.
 
-   * No discretion in choosing the input value is the same as lack of input!
+   * No discretion in choosing the input value is the same as no input!
 
 
 .. slide:: The Interface: Conclusion and Examples
@@ -164,30 +167,32 @@ Query Combinators
 .. slide:: Primitives
    :level: 2
 
-   We defined query interface: *a mapping from query input to query output:*
+   Combinator pattern: interface, primitives, composites.
 
-   .. math::
+   1. We defined query interface: *a mapping from query input to query output:*
 
-      \operatorname{Query}\{A,B\} := A \to B
+      .. math::
 
-   Next step: define atomic or *primitive* queries.
+         \operatorname{Query}\{A,B\} := A \to B
 
-   We can get many primitives from the database schema:
+   2. Next step: define atomic or *primitive* queries.
 
-   * *Classes.*
-   * *Attributes.*
-   * *Links.*
+      We can get many primitives from the database schema:
 
-   Some primitives are schema-independent:
+      * *Classes.*
+      * *Attributes.*
+      * *Links.*
 
-   * *Constants.*
-   * *Identity.*
+      Some primitives are schema-independent:
+
+      * *Constants.*
+      * *Identity.*
 
 
 .. slide:: Primitives: Classes
    :level: 3
 
-   * Each database describes some material or abstract entities.
+   A database describes some material or abstract entities.
 
    * All entities of the same type form a *class:*
 
@@ -195,7 +200,7 @@ Query Combinators
      * class of all employees,
      * etc.
 
-   A class primitive produces *all* entities of a specific class.
+   *Class primitive:* produces *all* entities of a specific class.
 
    Examples:
 
@@ -213,7 +218,7 @@ Query Combinators
    * its attributes;
    * its relationships with other entities.
 
-   An attribute primitive maps an entity to the value of its attribute.
+   *Attribute primitive:* maps an entity to the value of its attribute.
 
    Each entity class has its own fixed set of attributes.  Examples:
 
@@ -231,12 +236,11 @@ Query Combinators
 
    Entities may be in complex relationships with each other.
 
-   For each kind of relationship, we introduce a link primitive.
+   *Link primitive:* maps an entity to the related entity or entities.
 
-   A link primitive maps an entity to the related entity or entities.
+   * For each kind of relationship, we introduce a link primitive.
 
-   In fact, for each relationship, we define *two* links: one in each
-   direction.
+   * In fact, *two* links: one in each direction.
 
    Examples:
 
@@ -276,9 +280,9 @@ Query Combinators
 
       \operatorname{true},\; 1024,\; \texttt{"Rabbit"}
 
-   Our constants are primitive queries.
+   In Rabbit, constants are primitive queries.
 
-   A *constant* maps any input to a fixed value.
+   *Constant primitive:* maps any input to a fixed value.
 
    * Query output: the type of the constant value.
 
@@ -294,21 +298,241 @@ Query Combinators
 .. slide:: Primitives: :math:`\operatorname{null}` and :math:`\operatorname{here}`
    :level: 3
 
-   There is a special constant that indicates lack of any value:
+   There is a special constant that indicates lack of any value.
+
+   *Null primitive:* has no output.
 
    .. math::
 
       \operatorname{null} : A \to \operatorname{Opt}\{\operatorname{Union}\{\}\}
 
-   Its output type allows :math:`\operatorname{null}` satisfy any type
-   constraints.
-
    Our last primitive: the *identity* function.
 
-   Identity primitive maps any value to itself.
+   *Identity primitive:* maps any value to itself.
 
    .. math::
 
       \operatorname{here} : A \to A
+
+
+.. slide:: Composites
+   :level: 2
+
+   Combinator pattern so far:
+
+   1. Query interface: a mapping from query input to query output.
+
+   2. Primitive queries:
+
+      * classes, attributes and links;
+      * constants and identity.
+
+   What is left?
+
+   3. *Query combinators* for constructing new queries.
+
+   A query combinator is a function that:
+
+   * takes one or more queries as input;
+   * produces a new query as output.
+
+   Here, we will introduce just one combinator: *query composition.*
+
+
+.. slide:: Functional Composition
+   :level: 3
+
+   For any functions:
+
+   .. math::
+
+      f : A \to B, \quad g : B \to C
+
+   We denote *composition* of :math:`f` and :math:`g` by:
+
+   .. math::
+
+      f{.}g : A \to C
+
+
+   Functions :math:`f : A \to B` and :math:`g : B \to C` are *composable*
+   because:
+
+   * They share the intermediate domain: :math:`B`.
+
+   Queries are mappings, so can we compose them?
+
+
+.. slide:: Composition Combinator
+   :level: 3
+
+   Composition is a binary query combinator!
+
+   For example, take two primitive queries:
+
+   .. math::
+
+      &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept}, \quad
+      &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text}
+
+   Composing them, we get a new query:
+
+   .. math::
+
+      \operatorname{department}{.}\operatorname{name}: \operatorname{Empl} \to \operatorname{Text}
+
+   Prerequisite: the queries must share the intermediate domain.
+
+   * In practice, this is too restrictive.
+
+   * Can we relax this requirement?
+
+
+.. slide:: Imperfect Composition
+   :level: 3
+
+   Often, components do not perfectly agree on the intermediate domain.
+
+   Example:
+
+   .. math::
+
+      &\operatorname{employee} & : \operatorname{Dept}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
+      &\operatorname{name} & : \operatorname{Empl}&\to\operatorname{Text}
+
+   Example:
+
+   .. math::
+
+      &\operatorname{managed\_by} & : \operatorname{Empl}&\to\operatorname{Opt}\{\operatorname{Empl}\} \\
+      &\operatorname{salary} & : \operatorname{Empl}&\to\operatorname{Int}
+
+   We still want to compose them!
+
+
+.. slide:: Composition Rules
+   :level: 3
+
+   Interface of query composition.
+
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`Q`                                        | :math:`R`                                        | :math:`Q{.}R`                                    |
+   +==================================================+==================================================+==================================================+
+   | :math:`A \to B`                                  | :math:`B \to C`                                  | :math:`A \to C`                                  |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to \operatorname{Opt}\{B\}`            | :math:`B \to C`                                  | :math:`A \to \operatorname{Opt}\{C\}`            |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to B` or                               | :math:`B \to \operatorname{Opt}\{C\}`            | :math:`A \to \operatorname{Opt}\{C\}`            |
+   | :math:`A \to \operatorname{Opt}\{B\}`            |                                                  |                                                  |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to \operatorname{Seq}\{B\}`            | :math:`B \to C` or                               | :math:`A \to \operatorname{Seq}\{C\}`            |
+   |                                                  | :math:`B \to \operatorname{Opt}\{C\}`            |                                                  |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to B` or                               | :math:`B \to \operatorname{Seq}\{C\}`            | :math:`A \to \operatorname{Seq}\{C\}`            |
+   | :math:`A \to \operatorname{Opt}\{B\}` or         |                                                  |                                                  |
+   | :math:`A \to \operatorname{Seq}\{B\}`            |                                                  |                                                  |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+
+   How do we find the rules for imperfect composition?
+
+
+.. slide:: Monadic Composition and Natural Embedding
+   :level: 3
+
+   Imperfect composition is defined as a combination of two rules:
+
+   1. Monadic composition for :math:`\operatorname{Opt}\{T\}` and
+      :math:`\operatorname{Seq}\{T\}`.
+
+      +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+      | :math:`Q`                                        | :math:`R`                                        | :math:`Q{.}R`                                    |
+      +==================================================+==================================================+==================================================+
+      | :math:`A \to \operatorname{Opt}\{B\}`            | :math:`B \to \operatorname{Opt}\{C\}`            | :math:`A \to \operatorname{Opt}\{C\}`            |
+      +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+      | :math:`A \to \operatorname{Seq}\{B\}`            | :math:`B \to \operatorname{Seq}\{C\}`            | :math:`A \to \operatorname{Seq}\{C\}`            |
+      +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+
+   2. Natural embedding:
+
+      .. math::
+
+         T \hookrightarrow \operatorname{Opt}\{T\} \hookrightarrow \operatorname{Seq}\{T\}
+
+
+.. slide:: Composition: Example
+   :level: 3
+
+   Let us compose two primitive queries:
+
+   .. math::
+
+      &\operatorname{managed\_by} & : \operatorname{Empl}&\to\operatorname{Opt}\{\operatorname{Empl}\} \\
+      &\operatorname{salary} & : \operatorname{Empl}&\to\operatorname{Int}
+
+   1. Lift the output of :math:`\operatorname{salary}` to
+      :math:`\operatorname{Opt}\{\operatorname{Int}\}`:
+
+      .. math::
+
+         \operatorname{Empl}\overset{\operatorname{salary}}{\longrightarrow}\operatorname{Int}
+         \hookrightarrow\operatorname{Opt}\{\operatorname{Int}\}
+
+   2. Use monadic composition for :math:`\operatorname{Opt}\{T\}`.  We get:
+
+      .. math::
+
+         \operatorname{managed\_by}{.}\operatorname{salary} :
+         \operatorname{Empl} \to \operatorname{Opt}\{\operatorname{Int}\}
+
+   This query produces, for a given employee, the salary of their manager.
+
+
+.. slide:: Composition: Associativity
+   :level: 3
+
+   Important property: composition of functions is associative.
+
+   Take:
+
+   .. math::
+
+      f : A \to B, \quad g : B \to C, \quad h : C \to D
+
+   Then:
+
+   .. math::
+
+      (f{.}g){.}h = f{.}(g{.}h) = f{.}g{.}h
+
+   * This also holds for imperfect composition of queries.
+
+   * Allows us to write composition chain without parentheses.
+
+   Example:
+
+   .. math::
+
+         \operatorname{employee}{.}\operatorname{managed\_by}{.}\operatorname{salary} :
+         \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Int}\}
+
+
+.. slide:: Conclusion
+   :level: 2
+
+   Combinator pattern:
+
+   1. Query interface: a mapping from query input to query output.
+
+   2. Primitive queries:
+
+      * classes, attributes and links;
+      * constants and identity.
+
+   3. Query combinators:
+
+      * query composition.
+      * ...
+
+   Many more query combinators in the next sections.
 
 

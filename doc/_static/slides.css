@@ -16,3 +16,20 @@ a {
   border-bottom: 0;
 }
 
+table tr > td:first-child {
+  font-weight: normal;
+  color: inherit;
+}
+
+table th {
+  background: #434343;
+}
+
+table tr:nth-child(2n+1) {
+  background: #e6e6e6;
+}
+
+table tr:nth-child(2n+2) {
+  background: #f4f4f4;
+}
+
