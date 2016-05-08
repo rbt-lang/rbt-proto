@@ -133,7 +133,7 @@ Combinator Pattern
    * No discretion in choosing the input value is the same as no input!
 
 
-.. slide:: The Interface: Conclusion and Examples
+.. slide:: The Interface: Definition and Examples
    :level: 3
 
    Define query interface as a mapping from query input to query output.
@@ -162,6 +162,49 @@ Combinator Pattern
    .. math::
 
       Q_3 : \operatorname{Dept}\to\operatorname{Int}
+
+
+.. slide:: The Interface: Components
+   :level: 3
+
+   Let us enumerate the components of query inteface:
+
+   * Input domain.
+   * Basic output domain.
+   * Output (monadic) structure:
+
+     - *plain:* exactly one output value for each input;
+     - *partial:* no output or one output value;
+     - *plural:* zero, one or more output values.
+
+   Example:
+   :math:`Q_2 : \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Tuple}\{\operatorname{Text},\operatorname{Int}\}\}`.
+
+   * Input domain: :math:`\operatorname{Void}`.
+   * Output domain: :math:`\operatorname{Tuple}\{\operatorname{Text},\operatorname{Int}\}`.
+   * Output structure: *plural*.
+
+
+.. slide:: The Interface: Foreshadowing
+   :level: 3
+
+   Inteface components:
+
+   * Input domain.
+   * Basic output domain.
+   * Output structure: plain, partial, plural.
+
+   Later, we will clarify and extend the interface:
+
+   * Clarify output structure:
+
+     - *at least one* output value;
+     - *unique* values.
+
+   * Structure for input:
+
+     - *parameters;*
+     - *past* and *future* values.
 
 
 .. slide:: Primitives
@@ -391,7 +434,7 @@ Combinator Pattern
 .. slide:: Imperfect Composition
    :level: 3
 
-   Often, components do not perfectly agree on the intermediate domain.
+   Often, queries do not perfectly agree on the intermediate domain.
 
    Example:
 
@@ -410,38 +453,19 @@ Combinator Pattern
    We still want to compose them!
 
 
-.. slide:: Composition Rules
+.. slide:: Natural Embedding and Monadic Composition
    :level: 3
 
-   Interface of query composition.
+   Query composition :math:`Q{.}R` is defined as a combination of two rules:
 
-   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
-   | :math:`Q`                                        | :math:`R`                                        | :math:`Q{.}R`                                    |
-   +==================================================+==================================================+==================================================+
-   | :math:`A \to B`                                  | :math:`B \to C`                                  | :math:`A \to C`                                  |
-   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
-   | :math:`A \to \operatorname{Opt}\{B\}`            | :math:`B \to C`                                  | :math:`A \to \operatorname{Opt}\{C\}`            |
-   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
-   | :math:`A \to B` or                               | :math:`B \to \operatorname{Opt}\{C\}`            | :math:`A \to \operatorname{Opt}\{C\}`            |
-   | :math:`A \to \operatorname{Opt}\{B\}`            |                                                  |                                                  |
-   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
-   | :math:`A \to \operatorname{Seq}\{B\}`            | :math:`B \to C` or                               | :math:`A \to \operatorname{Seq}\{C\}`            |
-   |                                                  | :math:`B \to \operatorname{Opt}\{C\}`            |                                                  |
-   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
-   | :math:`A \to B` or                               | :math:`B \to \operatorname{Seq}\{C\}`            | :math:`A \to \operatorname{Seq}\{C\}`            |
-   | :math:`A \to \operatorname{Opt}\{B\}` or         |                                                  |                                                  |
-   | :math:`A \to \operatorname{Seq}\{B\}`            |                                                  |                                                  |
-   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   1. Natural embedding that lifts both queries to the common monadic structure.
 
-   How do we find the rules for imperfect composition?
+      .. math::
+
+         T \hookrightarrow \operatorname{Opt}\{T\} \hookrightarrow \operatorname{Seq}\{T\}
 
 
-.. slide:: Monadic Composition and Natural Embedding
-   :level: 3
-
-   Imperfect composition is defined as a combination of two rules:
-
-   1. Monadic composition for :math:`\operatorname{Opt}\{T\}` and
+   2. Monadic composition for :math:`\operatorname{Opt}\{T\}` and
       :math:`\operatorname{Seq}\{T\}`.
 
       +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
@@ -451,12 +475,6 @@ Combinator Pattern
       +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
       | :math:`A \to \operatorname{Seq}\{B\}`            | :math:`B \to \operatorname{Seq}\{C\}`            | :math:`A \to \operatorname{Seq}\{C\}`            |
       +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
-
-   2. Natural embedding:
-
-      .. math::
-
-         T \hookrightarrow \operatorname{Opt}\{T\} \hookrightarrow \operatorname{Seq}\{T\}
 
 
 .. slide:: Composition: Example
@@ -485,6 +503,54 @@ Combinator Pattern
          \operatorname{Empl} \to \operatorname{Opt}\{\operatorname{Int}\}
 
    This query produces, for a given employee, the salary of their manager.
+
+
+.. slide:: Composition Rules (1 of 3)
+   :level: 3
+
+   We can summarize query composition rules in the following table:
+
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`Q`                                        | :math:`R`                                        | :math:`Q{.}R`                                    |
+   +==================================================+==================================================+==================================================+
+   | :math:`A \to B`                                  | :math:`B \to C`                                  | :math:`A \to C`                                  |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to B`                                  | :math:`B \to \operatorname{Opt}\{C\}`            | :math:`A \to \operatorname{Opt}\{C\}`            |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to B`                                  | :math:`B \to \operatorname{Seq}\{C\}`            | :math:`A \to \operatorname{Seq}\{C\}`            |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+
+
+.. slide:: Composition Rules (2 of 3)
+   :level: 3
+
+   We can summarize query composition rules in the following table:
+
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`Q`                                        | :math:`R`                                        | :math:`Q{.}R`                                    |
+   +==================================================+==================================================+==================================================+
+   | :math:`A \to \operatorname{Opt}\{B\}`            | :math:`B \to C`                                  | :math:`A \to \operatorname{Opt}\{C\}`            |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to \operatorname{Opt}\{B\}`            | :math:`B \to \operatorname{Opt}\{C\}`            | :math:`A \to \operatorname{Opt}\{C\}`            |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to \operatorname{Opt}\{B\}`            | :math:`B \to \operatorname{Seq}\{C\}`            | :math:`A \to \operatorname{Seq}\{C\}`            |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+
+
+.. slide:: Composition Rules (3 of 3)
+   :level: 3
+
+   We can summarize query composition rules in the following table:
+
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`Q`                                        | :math:`R`                                        | :math:`Q{.}R`                                    |
+   +==================================================+==================================================+==================================================+
+   | :math:`A \to \operatorname{Seq}\{B\}`            | :math:`B \to C`                                  | :math:`A \to \operatorname{Seq}\{C\}`            |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to \operatorname{Seq}\{B\}`            | :math:`B \to \operatorname{Opt}\{C\}`            | :math:`A \to \operatorname{Seq}\{C\}`            |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
+   | :math:`A \to \operatorname{Seq}\{B\}`            | :math:`B \to \operatorname{Seq}\{C\}`            | :math:`A \to \operatorname{Seq}\{C\}`            |
+   +--------------------------------------------------+--------------------------------------------------+--------------------------------------------------+
 
 
 .. slide:: Composition: Associativity
@@ -531,7 +597,7 @@ Combinator Pattern
    3. Query combinators:
 
       * query composition.
-      * ...
+      * ...?
 
    Many more query combinators in the next sections.
 
