@@ -167,7 +167,7 @@ Combinator Pattern
 .. slide:: The Interface: Components
    :level: 3
 
-   Let us enumerate the components of query inteface:
+   Let us enumerate the components of query interface:
 
    * Input domain.
    * Basic output domain.

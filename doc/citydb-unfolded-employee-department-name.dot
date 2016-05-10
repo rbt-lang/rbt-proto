@@ -1,0 +1,47 @@
+
+digraph {
+    graph [ranksep=.25 nodesep=.25, pad=.1, bgcolor=transparent]
+    node [fontname="DejaVu Sans", fontsize=8]
+    void [shape=point penwidth=3 color=red]
+    dept [label=department]
+    empl [label=employee penwidth=3 color=red]
+    dept_name [label=name]
+    dept_empl [label=employee]
+    empl_name [label=name]
+    empl_position [label=position]
+    empl_salary [label=salary]
+    empl_dept [label=department penwidth=3 color=red]
+    dept_empl_name [label=name]
+    dept_empl_position [label=position]
+    dept_empl_salary [label=salary]
+    dept_empl_dept [label=department]
+    empl_dept_name [label=name penwidth=3 color=red]
+    empl_dept_empl [label=employee]
+    dept_empl_dept_name [shape=none label="&hellip;" fontsize=16]
+    dept_empl_dept_empl [shape=none label="&hellip;" fontsize=16]
+    empl_dept_empl_name [shape=none label="&hellip;" fontsize=16]
+    empl_dept_empl_position [shape=none label="&hellip;" fontsize=16]
+    empl_dept_empl_salary [shape=none label="&hellip;" fontsize=16]
+    empl_dept_empl_dept [shape=none label="&hellip;" fontsize=16]
+    void -> dept
+    void -> empl [penwidth=3 color=red]
+    dept -> dept_name
+    dept -> dept_empl
+    empl -> empl_name
+    empl -> empl_position
+    empl -> empl_salary
+    empl -> empl_dept [penwidth=3 color=red]
+    dept_empl -> dept_empl_name
+    dept_empl -> dept_empl_position
+    dept_empl -> dept_empl_salary
+    dept_empl -> dept_empl_dept
+    empl_dept -> empl_dept_name [penwidth=3 color=red]
+    empl_dept -> empl_dept_empl
+    dept_empl_dept -> dept_empl_dept_name
+    dept_empl_dept -> dept_empl_dept_empl
+    empl_dept_empl -> empl_dept_empl_name
+    empl_dept_empl -> empl_dept_empl_position
+    empl_dept_empl -> empl_dept_empl_salary
+    empl_dept_empl -> empl_dept_empl_dept
+}
+

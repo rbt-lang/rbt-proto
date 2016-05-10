@@ -32,6 +32,7 @@ Querying with Combinators
    * :doc:`hierarchical-data`
    * :doc:`unfolding`
    * :doc:`combinators`
+   * :doc:`traversal`
    * *Aggregates*
    * *Quotients*
    * *Transitive Closure*
@@ -58,5 +59,6 @@ this challenge.
    hierarchical-data
    unfolding
    combinators
+   traversal
 
 
