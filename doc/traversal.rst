@@ -72,18 +72,27 @@ Traversal, Aggregates, Selection, Filtering
       &\operatorname{department} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Dept}\} \\
       &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text}
 
-   Their composition has the signature:
+   Their composition is a query with signature:
 
    .. math::
 
       \operatorname{department}{.}\operatorname{name} :
       \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Text}\}
 
+   What exactly does it do?  We can express it with an imperative program:
+
+   .. math::
+
+      &\textbf{for each }\; d\in\operatorname{Dept} \\
+      &\qquad\textbf{print }\; d{.}\operatorname{name}
+
 
 .. slide:: :math:`\operatorname{department}{.}\operatorname{name}` (Output)
    :level: 3
 
    *Show the name of each department.*
+
+   Let us run it:
 
    .. code-block:: jlcon
 
@@ -135,6 +144,15 @@ Traversal, Aggregates, Selection, Filtering
       &\operatorname{employee} & : \operatorname{Dept}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
       &\operatorname{name} & : \operatorname{Empl}&\to\operatorname{Text}
 
+   And it represents the following program:
+
+   .. math::
+
+      &\textbf{for each }\; d\in\operatorname{Dept} \\
+      &\qquad\textbf{for each }\; e\in\operatorname{Empl} \textbf{ such that }
+        e{.}\operatorname{department} = d \\
+      &\qquad\qquad\textbf{print }\; e{.}\operatorname{name}
+
 
 .. slide:: :math:`\operatorname{department}{.}\operatorname{employee}{.}\operatorname{name}` (Output)
    :level: 3
@@ -180,7 +198,7 @@ Traversal, Aggregates, Selection, Filtering
 
    *Show the name of each employee.*
 
-   The signature of this query is:
+   We have a query with signature:
 
    .. math::
 
@@ -194,12 +212,12 @@ Traversal, Aggregates, Selection, Filtering
       &\operatorname{employee} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
       &\operatorname{name} & : \operatorname{Empl}&\to\operatorname{Text}
 
-   Notably, the :math:`\operatorname{employee}` primitive is different from the
-   one in the previous query, even though they have the same name:
+   And it represents a program:
 
    .. math::
 
-      \operatorname{employee} : \operatorname{Dept}&\to\operatorname{Seq}\{\operatorname{Empl}\}
+      &\textbf{for each }\; e\in\operatorname{Empl} \\
+      &\qquad\textbf{print }\; e{.}\operatorname{name}
 
 
 .. slide:: :math:`\operatorname{employee}{.}\operatorname{name}` (Output)
@@ -263,6 +281,13 @@ Traversal, Aggregates, Selection, Filtering
       &\operatorname{department} & : \operatorname{Empl}&\to\operatorname{Dept} \\
       &\operatorname{name} & : \operatorname{Dept}&\to\operatorname{Text}
 
+   And it represents a program:
+
+   .. math::
+
+      &\textbf{for each }\; e\in\operatorname{Empl} \\
+      &\qquad\textbf{print }\; e{.}\operatorname{department}{.}\operatorname{name}
+
 
 .. slide:: :math:`\operatorname{employee}{.}\operatorname{department}{.}\operatorname{name}` (Output)
    :level: 3
@@ -282,7 +307,7 @@ Traversal, Aggregates, Selection, Filtering
       ⋮
       "DoIT"
 
-   This is *not* the same as: *Show the name of each department.*
+   This is *not* the same as the query ``department.name``.
 
    * One line for each *employee* entity.
    * Most department names appear more than once.
@@ -320,6 +345,13 @@ Traversal, Aggregates, Selection, Filtering
 
       &\operatorname{employee} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
       &\operatorname{position} & : \operatorname{Empl}&\to\operatorname{Text}
+
+   It represents a program:
+
+   .. math::
+
+      &\textbf{for each }\; e\in\operatorname{Empl} \\
+      &\qquad\textbf{print }\; e{.}\operatorname{position}
 
 
 .. slide:: :math:`\operatorname{employee}{.}\operatorname{position}` (Output)
@@ -377,12 +409,23 @@ Traversal, Aggregates, Selection, Filtering
    .. math::
 
       &\operatorname{employee}{.}(
-      \operatorname{name},
-      \operatorname{department}{.}\operatorname{name},
-      \operatorname{position},
+      \operatorname{name},\;
+      \operatorname{department}{.}\operatorname{name},\;
+      \operatorname{position},\;
       \operatorname{salary}): \\
       &\qquad\qquad \operatorname{Void} \to
       \operatorname{Seq}\{\operatorname{Tuple}\{\operatorname{Text},\operatorname{Text},\operatorname{Text},\operatorname{Int}\}\}
+
+   The formatted query corresponds to a program:
+
+   .. math::
+
+      &\textbf{for each }\; e\in\operatorname{Empl} \\
+      &\qquad\textbf{print }\;
+      e{.}\operatorname{name},\;
+      e{.}\operatorname{department}{.}\operatorname{name},\;
+      e{.}\operatorname{position},\;
+      e{.}\operatorname{salary}\;
 
 
 .. slide:: :math:`\operatorname{employee}` (Output)
@@ -402,5 +445,109 @@ Traversal, Aggregates, Selection, Filtering
       ("KIMBERLEI A","GENERAL SERVICES","CHIEF CONTRACT EXPEDITER",84780)
       ⋮
       ("DARIUSZ Z","DoIT","CHIEF DATA BASE ANALYST",110352)
+
+
+.. slide:: Summarizing Data
+   :level: 2
+
+   We learned to use composition to traverse the data.
+
+   How can we *summarize* data?
+
+   Consider a query:
+
+   *Show the number of all departments.*
+
+   * We know how to get a sequence of all departments:
+
+     .. math::
+
+        \operatorname{department} : \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Dept}\}
+
+   * How to get *the number* of all departments?
+
+
+.. slide:: Number of Departments
+   :level: 3
+
+   *Show the number of all departments.*
+
+   What is the signature of this query?  It produces a single number, so:
+
+   .. math::
+
+      \operatorname{Void} \to \operatorname{Int}
+
+   We start with a sequence of all departments:
+
+   .. math::
+
+      \operatorname{department} : \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Dept}\}
+
+   We need to transform it to *the number* of departments.
+
+   That is, we need an operation with a signature:
+
+   .. math::
+
+      (\operatorname{Void} \to \operatorname{Seq}\{\operatorname{Dept}\})
+      \to (\operatorname{Void} \to \operatorname{Int})
+
+   We call this operation: the :math:`\operatorname{count}` combinator.
+
+
+.. slide:: The :math:`\operatorname{count}` Combinator
+   :level: 3
+
+   Combinator :math:`\operatorname{count}` has signature:
+
+   .. math::
+
+      \operatorname{count} : (A \to \operatorname{Seq}\{B\})
+      \to (A \to \operatorname{Int})
+
+   Here, :math:`A`, :math:`B` stand for arbitrary types.
+
+   Compare it with a familiar function:
+
+   .. math:: \operatorname{length} : \operatorname{Seq}\{T\} \to \operatorname{Int}
+
+   * :math:`\operatorname{length}(s)` returns an integer, the number of
+     elements in sequence :math:`s`.
+
+   * :math:`\operatorname{count}(Q)` returns a *query* represented by a function:
+
+     .. math::
+
+        &\textbf{function }\; (a:A) \\
+        &\qquad\textbf{return }\; \operatorname{length}(Q(a))
+
+.. slide:: :math:`\operatorname{count}(\operatorname{department})`
+   :level: 3
+
+   *Show the number of all departments.*
+
+   Use the combinator:
+
+   .. math::
+
+      \operatorname{count}(Q:A\to\operatorname{Seq}\{B\}) : A\to\operatorname{Int}
+
+   Substitute: :math:`Q` with :math:`\operatorname{department}`, :math:`A` with
+   :math:`\operatorname{Void}`, :math:`B` with :math:`\operatorname{Dept}`.
+
+   We obtain query:
+
+   .. math::
+
+      \operatorname{count}(\operatorname{department}) : \operatorname{Void} \to \operatorname{Int}
+
+   .. code-block:: jlcon
+
+      >>> count(department)
+
+   .. code-block:: jlcon
+
+      35
 
 
