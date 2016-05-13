@@ -510,7 +510,7 @@ Traversal, Aggregates, Selection, Filtering
 
    Compare it with a familiar function:
 
-   .. math:: \operatorname{length} : \operatorname{Seq}\{T\} \to \operatorname{Int}
+   .. math:: \operatorname{length} : \operatorname{Seq}\{B\} \to \operatorname{Int}
 
    * :math:`\operatorname{length}(s)` returns an integer, the number of
      elements in sequence :math:`s`.
@@ -549,5 +549,120 @@ Traversal, Aggregates, Selection, Filtering
    .. code-block:: jlcon
 
       35
+
+
+.. slide:: Aggregates
+   :level: 2
+
+    A combinator that maps a plural query to a singular query is called an
+    *aggregate*.
+
+    Examples:
+
+   .. math::
+
+      &\operatorname{count} & : (A\to\operatorname{Seq}\{B\})&\to(A\to\operatorname{Int}) \\
+      &\operatorname{exists} & : (A\to\operatorname{Seq}\{B\})&\to(A\to\operatorname{Bool}) \\
+      &\operatorname{any},\operatorname{all} & :
+      (A\to\operatorname{Seq}\{\operatorname{Bool}\})&\to(A\to\operatorname{Bool}) \\
+      &\operatorname{sum} & :
+      (A\to\operatorname{Seq}\{\operatorname{Int}\})&\to(A\to\operatorname{Int}) \\
+      &\operatorname{max},\operatorname{min} & :
+      (A\to\operatorname{Seq}\{B\})&\to(A\to\operatorname{Opt}\{B\})
+
+   Why :math:`\operatorname{Opt}` on the output of :math:`\operatorname{max}`
+   and :math:`\operatorname{min}`?  What if the input is empty?
+
+
+.. slide:: Aggregate over Composition
+   :level: 3
+
+   Just with aggregates and composition, we can construct complex queries.
+
+   Example (an aggregate over composition):
+
+   *Show the highest salary among all employees.*
+
+   1. All salaries:
+
+      .. math::
+
+         \operatorname{employee}{.}\operatorname{salary} : \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}
+
+   2. The maximum of all salaries:
+
+      .. math::
+
+         \operatorname{max}(\operatorname{employee}{.}\operatorname{salary}) : \operatorname{Void}\to\operatorname{Opt}\{\operatorname{Int}\}
+
+   .. code-block:: jlcon
+
+      >>> max(employee.salary)
+
+   .. code-block:: jlcon
+
+      260004
+
+
+.. slide:: Composition with Aggregate
+   :level: 3
+
+   Example (composition with an aggregate):
+
+   *Show the number of employees in each department.*
+
+   1. Number of employees for the given department:
+
+      .. math::
+
+         \operatorname{count}(\operatorname{employee}) : \operatorname{Dept}\to\operatorname{Int}
+
+   2. Number of employees for each department:
+
+      .. math::
+
+         \operatorname{department}{.}\operatorname{count}(\operatorname{employee}) :
+         \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}
+
+   .. code-block:: jlcon
+
+      >>> department.count(employee)
+
+   .. code-block:: jlcon
+
+      1848
+      13570
+      ⋮
+      1
+
+
+.. slide:: Nested Aggregates
+   :level: 3
+
+   We can even aggregate over an aggregated query.
+
+   *Show the highest number of employees per department.*
+
+   1. Number of employees for each department:
+
+      .. math::
+
+         \operatorname{department}{.}\operatorname{count}(\operatorname{employee}) :
+         \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}
+
+   2. The highest number of employees for each department:
+
+      .. math::
+
+         \operatorname{max}(\operatorname{department}{.}\operatorname{count}(\operatorname{employee})) :
+         \operatorname{Void}\to\operatorname{Opt}\{\operatorname{Int}\}
+
+   .. code-block:: jlcon
+
+      >>> max(department.count(employee))
+
+   .. code-block:: jlcon
+
+      32181
 
 
