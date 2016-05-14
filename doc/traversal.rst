@@ -636,10 +636,108 @@ Traversal, Aggregates, Selection, Filtering
       1
 
 
-.. slide:: Nested Aggregates
+.. slide:: Name Binding
+   :level: 2
+
+   *Show the number of employees in each department.*
+
+   .. math::
+
+      \operatorname{department}{.}\operatorname{count}(\operatorname{employee}) :
+      \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}
+
+   But there are *two* primitives called :math:`\operatorname{employee}`:
+
+   .. math::
+
+      &\operatorname{employee} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
+      &\operatorname{employee} & : \operatorname{Dept}&\to\operatorname{Seq}\{\operatorname{Empl}\}
+
+   Which one is in the query?
+
+   *Requirement:*
+
+   * For a fixed input type, a primitive is uniquely determined by its name.
+
+   This rule directs the name binding algorithm of Rabbit.
+
+
+.. slide:: Name Binding Example (1 of 3)
    :level: 3
 
-   We can even aggregate over an aggregated query.
+   1. The whole query has input of type :math:`\operatorname{Void}`:
+
+      .. math::
+
+         \underbrace{\operatorname{department}{.}\operatorname{count}(\operatorname{employee})}_{\operatorname{Void}\to ?}
+
+
+   2. Input of a composition is the input of its left component:
+
+      .. math::
+
+         \underbrace{\operatorname{department}}_{\operatorname{Void}\to ?}{.}\operatorname{count}(\operatorname{employee})
+
+   3. There is only one primitive :math:`\operatorname{department}` with input
+      :math:`\operatorname{Void}`:
+
+      .. math::
+
+         \underbrace{\operatorname{department}}_{\operatorname{Void}\to \operatorname{Seq}\{\operatorname{Dept}\}}{.}\operatorname{count}(\operatorname{employee})
+
+
+.. slide:: Name Binding Example (2 of 3)
+   :level: 3
+
+   4. In composition, left and right components agree on their intermediate
+      type:
+
+      .. math::
+
+         \operatorname{department}{.}\underbrace{\operatorname{count}(\operatorname{employee})}_{\operatorname{Dept}\to ?}
+
+   5. Input of an aggregate is the input of the aggregated query:
+
+      .. math::
+
+         \operatorname{department}{.}\operatorname{count}(\underbrace{\operatorname{employee}}_{\operatorname{Dept}\to ?})
+
+
+   6. There is only one primitive :math:`\operatorname{employee}` with input
+      :math:`\operatorname{Dept}`:
+
+      .. math::
+
+         \operatorname{department}{.}\operatorname{count}(\underbrace{\operatorname{employee}}_{\operatorname{Dept}\to\operatorname{Seq}\{\operatorname{Empl}\}})
+
+
+.. slide:: Name Binding Example (3 of 3)
+   :level: 3
+
+
+   7. Signature of a combinator is determined by its components:
+
+      .. math::
+
+         \operatorname{department}{.}\underbrace{\operatorname{count}(\operatorname{employee})}_{\operatorname{Dept}\to\operatorname{Int}}
+
+   8. Now we know the types of both components of composition:
+
+      .. math::
+
+         \underbrace{\operatorname{department}}_{\operatorname{Void}\to\operatorname{Seq}\{\operatorname{Dept}\}}{.}\underbrace{\operatorname{count}(\operatorname{employee})}_{\operatorname{Dept}\to\operatorname{Int}}
+
+   9. So we can deduce the signature of the whole query:
+
+      .. math::
+
+         \underbrace{\operatorname{department}{.}\operatorname{count}(\operatorname{employee})}_{\operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}}
+
+
+.. slide:: Aggregates: Conclusion
+   :level: 2
+
+   We conclude with an example of an aggregate over another aggregate.
 
    *Show the highest number of employees per department.*
 
