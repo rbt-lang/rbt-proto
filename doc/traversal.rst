@@ -94,13 +94,13 @@ Traversal, Aggregates, Selection, Filtering
 
    Let us run it:
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> department.name
+      department.name
 
    Output is a sequence of text values:
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       "WATER MGMNT"
       "POLICE"
@@ -159,11 +159,11 @@ Traversal, Aggregates, Selection, Filtering
 
    *For each department, show the name of each employee.*
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> department.employee.name
+      department.employee.name
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       "ELVIA A"
       "VICENTE A"
@@ -225,11 +225,11 @@ Traversal, Aggregates, Selection, Filtering
 
    *Show the name of each employee.*
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> employee.name
+      employee.name
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       "ELVIA A"
       "JEFFERY A"
@@ -240,9 +240,9 @@ Traversal, Aggregates, Selection, Filtering
 
    Compare this with the output of:
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> department.employee.name
+      department.employee.name
 
    We got a list of the same items, but not necessarily in the same order.
 
@@ -294,11 +294,11 @@ Traversal, Aggregates, Selection, Filtering
 
    *For each employee, show the name of their department.*
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> employee.department.name
+      employee.department.name
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       "WATER MGMNT"
       "POLICE"
@@ -359,11 +359,11 @@ Traversal, Aggregates, Selection, Filtering
 
    *Show the position of each employee.*
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> employee.position
+      employee.position
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       "WATER RATE TAKER"
       "POLICE OFFICER"
@@ -433,11 +433,11 @@ Traversal, Aggregates, Selection, Filtering
 
    *Show all employees.*
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> employee
+      employee
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
       ("JEFFERY A","POLICE","POLICE OFFICER",80778)
@@ -542,11 +542,11 @@ Traversal, Aggregates, Selection, Filtering
 
       \operatorname{count}(\operatorname{department}) : \operatorname{Void} \to \operatorname{Int}
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> count(department)
+      count(department)
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       35
 
@@ -595,11 +595,11 @@ Traversal, Aggregates, Selection, Filtering
 
          \operatorname{max}(\operatorname{employee}{.}\operatorname{salary}) : \operatorname{Void}\to\operatorname{Opt}\{\operatorname{Int}\}
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> max(employee.salary)
+      max(employee.salary)
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       260004
 
@@ -624,11 +624,11 @@ Traversal, Aggregates, Selection, Filtering
          \operatorname{department}{.}\operatorname{count}(\operatorname{employee}) :
          \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> department.count(employee)
+      department.count(employee)
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       1848
       13570
@@ -755,12 +755,350 @@ Traversal, Aggregates, Selection, Filtering
          \operatorname{max}(\operatorname{department}{.}\operatorname{count}(\operatorname{employee})) :
          \operatorname{Void}\to\operatorname{Opt}\{\operatorname{Int}\}
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
-      >>> max(department.count(employee))
+      max(department.count(employee))
 
-   .. code-block:: jlcon
+   .. code-block:: julia
 
       32181
+
+
+.. slide:: Selection
+   :level: 2
+
+   Consider one of the previous examples:
+
+   *Show the number of employees in each department.*
+
+   We already constructed a query:
+
+   .. code-block:: julia
+
+      department.count(employee)
+
+   .. code-block:: julia
+
+      1848
+      13570
+      ⋮
+      1
+
+   But this is not very informative... Can we add the name of the department?
+
+   *For every department, show its name and the number of employees.*
+
+   Need a way to *select* fields for output.
+
+
+.. slide:: Selection: Demonstration
+   :level: 3
+
+   Example:
+
+   *For every department, show its name and the number of employees.*
+
+   Here is how we will write this query:
+
+   .. code-block:: julia
+
+      department
+      :select(name, count(employee))
+
+   .. code-block:: julia
+
+      ("WATER MGMNT",1848)
+      ("POLICE",13570)
+      ⋮
+      ("LICENSE APPL COMM",1)
+
+   This query introduces two new concepts:
+
+   * Pipeline notation (the ``:`` symbol).
+   * The :math:`\operatorname{select}` combinator.
+
+
+.. slide:: Pipeline Notation
+   :level: 2
+
+   Example:
+
+   .. code-block:: julia
+
+      department:select(name, count(employee))
+
+   Let us explain the meaning of ``:`` in front of ``select``.
+
+   This is *the pipeline notation* for query combinators:
+
+   .. math::
+
+      &Q{:}F \quad &\text{is desugared to} \quad &F(Q) \\
+      &Q_1{:}F(Q_2,\ldots) \quad &\text{is desugared to} \quad &F(Q_1,Q_2,\ldots)
+
+   Thus, this query is desugared to:
+
+   .. code-block:: julia
+
+      select(department, name, count(employee))
+
+   How is the pipeline notation used in practice?
+
+
+.. slide:: Pipeline Notation: Usage
+   :level: 3
+
+   Pipeline notation:
+
+   .. math::
+
+      &Q{:}F \quad &\text{is desugared to} \quad &F(Q) \\
+      &Q_1{:}F(Q_2,\ldots) \quad &\text{is desugared to} \quad &F(Q_1,Q_2,\ldots)
+
+   How is this notation used in practice?
+
+   * In principle, any combinator can be written using pipeline notation.
+
+     For example, the query
+     :math:`\operatorname{count}(\operatorname{department})` can be written as:
+
+     .. math::
+
+        \operatorname{department}{:}\operatorname{count}
+
+   * In practice, we use pipeline notation to chain a sequence of combinators.
+
+     What does it mean?
+
+
+.. slide:: Building a Pipeline
+   :level: 3
+
+   We use pipeline notation to chain a sequence of combinators.
+
+   Typical usage:
+
+   .. code-block:: julia
+
+      employee
+      :filter(department.name == "POLICE")
+      :group(position)
+      :select(position, count(employee), mean(employee.salary))
+
+   This example uses combinators we have not yet covered.  But the intent is
+   clear:
+
+   * start with a list of all employees;
+   * filter the list by a predicate condition;
+   * group it by an attribute;
+   * select fields for output.
+
+
+.. slide:: Building a Pipeline: Desugaring Example
+   :level: 3
+
+   Example (before and after desugaring):
+
+   .. code-block:: julia
+
+      employee
+      :filter(department.name == "POLICE")
+      :group(position)
+      :select(position, count(employee), mean(employee.salary))
+
+   .. code-block:: julia
+
+      select(
+          group(
+              filter(
+                  employee,
+                  department.name == "POLICE"),
+              position),
+          position,
+          count(employee),
+          mean(employee.salary))
+
+   Pipeline notation emphasises the structure and the intent of the query.
+
+
+.. slide:: The :math:`\operatorname{select}` Combinator
+   :level: 2
+
+   Back to the example:
+
+   *For every department, show its name and the number of employees.*
+
+   The query, after desugaring, has the form:
+
+   .. math::
+
+      \operatorname{select}(
+      \operatorname{department},
+      \operatorname{name},
+      \operatorname{count}(\operatorname{employee}))
+
+   It produces a sequence of pairs, so its signature is:
+
+   .. math::
+
+      \operatorname{Void} \to
+      \operatorname{Seq}\{\operatorname{Tuple}\{\operatorname{Text},\operatorname{Int}\}\}
+
+   * How does it work?
+   * What is its general form?
+   * More examples?
+
+
+.. slide:: The :math:`\operatorname{select}` Combinator: Components
+   :level: 3
+
+   *For every department, show its name and the number of employees:*
+
+   .. math::
+
+      \operatorname{select}(
+      \operatorname{department},
+      \operatorname{name},
+      \operatorname{count}(\operatorname{employee}))
+
+   * *Show each department:*
+
+     .. math::
+
+        \operatorname{department}:\operatorname{Void}\to\operatorname{Seq}\{\operatorname{Dept}\}
+
+   * *For the given department, show its name:*
+
+   .. math::
+
+      \operatorname{name}:\operatorname{Dept}\to\operatorname{Text}
+
+   * *For the given department, show the number of employees:*
+
+     .. math::
+
+        \operatorname{count}(\operatorname{employee}):\operatorname{Dept}\to\operatorname{Int}
+
+   How does :math:`\operatorname{select}` combines these components?
+
+
+.. slide:: The :math:`\operatorname{select}` Combinator: Signature
+   :level: 3
+
+   In general, the :math:`\operatorname{select}` combinator has the form:
+
+   .. math::
+
+      \operatorname{select}(Q,F_1,F_2,\ldots,F_n)
+
+   * The first component is the base of selection:
+
+     .. math::
+
+        Q : A \to \operatorname{Seq}\{B\}
+
+   * The remaining components are selected fields:
+
+     .. math::
+
+        F_k : B \to C_k \quad (k=1,2,\ldots,n)
+
+   The :math:`\operatorname{select}` combinator has the signature:
+
+   .. math::
+
+      \operatorname{select}(Q,F_1,F_2,\ldots,F_n) :
+      A \to \operatorname{Seq}\{\operatorname{Tuple}\{C_1,C_2,\ldots,C_n\}\}
+
+
+.. slide:: The :math:`\operatorname{select}` Combinator: Implementation
+   :level: 3
+
+   The :math:`\operatorname{select}` combinator has the signature:
+
+   .. math::
+
+      \operatorname{select}(
+      &Q : A \to \operatorname{Seq}\{B\}, \\
+      &F_1 : B \to C_1, \\
+      &F_2 : B \to C_2, \\
+      &\ldots, \\
+      &F_n : B \to C_n) :
+      A \to \operatorname{Seq}\{\operatorname{Tuple}\{C_1,C_2,\ldots,C_n\}\}
+
+   It represents the following query:
+
+   .. math::
+
+      &\textbf{function }\; (a:A) \\
+      &\qquad\textbf{for each }\; b \in Q(a) \\
+      &\qquad\qquad\textbf{yield }\; (F_1(b),F_2(b),\ldots,F_n(b))
+
+
+.. slide:: The :math:`\operatorname{select}` Combinator: Clarification
+   :level: 3
+
+   .. math::
+
+      \operatorname{select}(
+      &Q : A \to \operatorname{Seq}\{B\}, \\
+      &F_1 : B \to C_1, \\
+      &F_2 : B \to C_2, \\
+      &\ldots, \\
+      &F_n : B \to C_n) :
+      A \to \operatorname{Seq}\{\operatorname{Tuple}\{C_1,C_2,\ldots,C_n\}\}
+
+   In fact, this signature is a lie:
+
+   * The base :math:`Q` does not have to be plural.
+   * Fields :math:`F_k` could be partial or plural.
+   * The output of :math:`\operatorname{select}` also includes the base value.
+
+   We will tell the full story later.
+
+
+.. slide:: The :math:`\operatorname{select}` Combinator: Example
+   :level: 3
+
+   *For every employee, show their name, department, position and salary.*
+
+   .. code-block:: julia
+
+      employee
+      :select(
+          name,
+          department.name,
+          position,
+          salary)
+
+   .. code-block:: julia
+
+      ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
+      ("JEFFERY A","POLICE","POLICE OFFICER",80778)
+      ("KARINA A","POLICE","POLICE OFFICER",80778)
+      ("KIMBERLEI A","GENERAL SERVICES","CHIEF CONTRACT EXPEDITER",84780)
+      ⋮
+      ("DARIUSZ Z","DoIT","CHIEF DATA BASE ANALYST",110352)
+
+
+.. slide:: The :math:`\operatorname{select}` Combinator: Another Example
+   :level: 3
+
+   *For every department, show its name and the name and the position of its
+   employees.*
+
+   .. code-block:: julia
+
+      department
+      :select(
+          name,
+          employee:select(name,position))
+
+   .. code-block:: julia
+
+      ("WATER MGMNT",[("ELVIA A","WATER RATE TAKER"),("VICENTE A","CIVIL ENGINEER IV"),…])
+      ("POLICE",[("JEFFERY A","POLICE OFFICER"),("KARINA A","POLICE OFFICER"),…])
+      ⋮
+      ("LICENSE APPL COMM",[("MICHELLE G","STAFF ASST")])
 
 
