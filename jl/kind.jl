@@ -371,12 +371,6 @@ bind_env{Ns,Vs,T}(X::Iso{T}, ::Type{Ns}, env::Vs) =
         Env{Ns,Vs,T}(env, val)
     end
 
-bind_env{Ns,Vs,T}(X::Iso{T}, ::Type{Ns}, env::Vs) =
-    begin
-        val = data(X)
-        Env{Ns,Vs,T}(env, val)
-    end
-
 @generated function bind_env{Ns1,Vs1,Ns2,Vs2,T}(X::Env{Ns1,Vs1,T}, ::Type{Ns2}, env2::Vs2)
     Ns, Vs, idxmap = _envjoin(Ns1,Vs1,Ns2,Vs2)
     return quote

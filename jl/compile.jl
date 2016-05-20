@@ -85,7 +85,7 @@ end
 select(q::Query) =
     let out = lookup(q, (:__out, 0)),
         tag = q.scope.tag
-        q = !isnull(out) ? q >> get(out)(q.scope, AbstractSyntax[]) : q
+        q = !isnull(out) ? q >> compile(get(out), q.scope, AbstractSyntax[]) : q
         if !isnull(tag)
             q = Query(q, scope=settag(q.scope, get(tag)))
         end
@@ -95,7 +95,7 @@ select(q::Query) =
 
 identify(q::Query) =
     let id = lookup(q, (:__id, 0))
-        !isnull(id) ? q >> get(id)(q.scope, AbstractSyntax[]) : q
+        !isnull(id) ? q >> compile(get(id), q.scope, AbstractSyntax[]) : q
     end
 
 
@@ -147,7 +147,7 @@ end
 function compile(base::Scope, syntax::ApplySyntax)
     binding = lookup(base, (syntax.fn, length(syntax.args)))
     !isnull(binding) ?
-        Query(get(binding)(base, syntax.args), syntax=syntax) :
+        Query(compile(get(binding), base, syntax.args), syntax=syntax) :
         error("undefined combinator $(syntax.fn)")
 end
 
@@ -234,7 +234,7 @@ function compile(::Fn(:select), base::Scope, flow::Query, ops::Query...)
     end
     maybe_id = lookup(flow, :__id)
     if !isnull(maybe_id)
-        identity = get(maybe_id)(flow.scope)
+        identity = compile(get(maybe_id), flow.scope)
         identity = Query(identity, pipe=right_field >> identity.pipe)
     else
         identity = Query(flow, pipe=right_field)
@@ -242,7 +242,7 @@ function compile(::Fn(:select), base::Scope, flow::Query, ops::Query...)
     scope = addlocal(scope, :__id, identity)
     maybe_out = lookup(left, :__out)
     if !isnull(maybe_out)
-        selector = get(maybe_out)(left.scope)
+        selector = compile(get(maybe_out), left.scope)
         selector = Query(selector, pipe=left_field >> selector.pipe)
     else
         selector = Query(left, pipe=left_field)
@@ -336,7 +336,7 @@ function compile(::Fn(:get), base::Scope, flow::Query, idx::Query)
     reqcomposable(base, flow); reqplural(flow); reqmonic(flow); reqidentity(flow)
     reqcomposable(base, idx); reqsingular(idx); reqnonempty(idx)
     maybe_id = lookup(flow, :__id)
-    identity = get(maybe_id)(flow.scope)
+    identity = compile(get(maybe_id), flow.scope)
     reqodomain(odomain(identity), idx)
     pipe = GetPipe(flow.pipe, identity.pipe, idx.pipe)
     return Query(flow, pipe=pipe)
@@ -364,7 +364,7 @@ function compile(fn::Fn(:sort), base::Scope, flow::Query, ops::Query...)
     if isempty(ops)
         maybe_id = lookup(flow, :__id)
         if !isnull(maybe_id)
-            identity = Query(get(maybe_id)(flow.scope))
+            identity = Query(compile(get(maybe_id), flow.scope))
             identity = Query(identity, scope=setrev(identity.scope, flow.scope.rev))
             return compile(fn, base, flow, identity)
         end
@@ -405,7 +405,7 @@ function compile(::Fn(:sort_connect), base::Scope, flow::Query, op::Query)
     if isnull(maybe_id)
         pipe = SortConnectPipe(flow.pipe, op.pipe)
     else
-        identity = get(maybe_id)(op.scope)
+        identity = compile(get(maybe_id), op.scope)
         pipe = SortConnectPipe(flow.pipe, identity.pipe, op.pipe)
     end
     return Query(flow, pipe=pipe)
@@ -416,7 +416,7 @@ function compile(::Fn(:unique), base::Scope, flow::Query)
     reqcomposable(base, flow); reqplural(flow)
     maybe_id = lookup(flow, :__id)
     if !isnull(maybe_id)
-        identity = get(maybe_id)(flow.scope)
+        identity = compile(get(maybe_id), flow.scope)
         PipeType = ismonic(flow) ? SortByPipe : UniquePipe
         pipe = PipeType(flow.pipe, identity.pipe, flow.scope.rev)
     else
@@ -451,7 +451,7 @@ function compile(
             if isnull(maybe_id)
                 push!(groups, (op.pipe, op.scope.rev))
             else
-                identity = get(maybe_id)(op.scope)
+                identity = compile(get(maybe_id), op.scope)
                 push!(groups, (op.pipe, identity.pipe, op.scope.rev))
             end
         end
@@ -460,13 +460,13 @@ function compile(
         for op in ops
             img = lookup(flow, get(op.scope.tag))
             !isnull(img) || error("undefined attribute $(get(op.tag)): $flow")
-            img = get(img)(base)
+            img = compile(get(img), base)
             reqsingular(img); reqnonempty(img); reqodomain(odomain(op), img)
             maybe_id = lookup(op, :__id)
             if isnull(maybe_id)
                 push!(groups, (op.pipe, img.pipe, op.scope.rev))
             else
-                identity = get(maybe_id)(op.scope)
+                identity = compile(get(maybe_id), op.scope)
                 push!(groups, (op.pipe, img.pipe, identity.pipe, op.scope.rev))
             end
         end
@@ -553,10 +553,10 @@ function compile(::Fn(:pack), base::Scope, ops::Query...)
         end
         maybe_id = lookup(op, :__id)
         identitymap[tag] =
-            !isnull(maybe_id) ? get(maybe_id)(op.scope).pipe : HerePipe(T)
+            !isnull(maybe_id) ? compile(get(maybe_id), op.scope).pipe : HerePipe(T)
         maybe_out = lookup(op, :__out)
         selectormap[tag] =
-            !isnull(maybe_out) ? get(maybe_out)(op.scope).pipe : HerePipe(T)
+            !isnull(maybe_out) ? compile(get(maybe_out), op.scope).pipe : HerePipe(T)
     end
     pipe = PackPipe(Fs...)
     scope = nest(base, odomain(pipe))

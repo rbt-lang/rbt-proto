@@ -31,7 +31,7 @@ foreach(f, pipe::AbstractPipe) =
     end
 
 # Executes the combinator.
-call(pipe::AbstractPipe, args...; params...) =
+execute(pipe::AbstractPipe, args...; params...) =
     let plan = plan(pipe),
         X = convert(ikind(pipe), args...; params...),
         Y = plan(X)
@@ -96,7 +96,7 @@ plan(pipe::AbstractPipe) =
         def = quote
             $typedef
             show(io::IO, _::$name) = show(io, $showdef)
-            call(_::$name, $X::$I) = $code
+            (_::$name)($X::$I) = $code
             $name
         end
         Plan = eval(def)

@@ -169,12 +169,12 @@ format(base::Scope, q::Query) = select(q)
 
 # Executes the query.
 execute(q::Query, args...; params...) =
-    pipe(optimize(select(q)))(args...; params...)
+    execute(pipe(optimize(select(q))), args...; params...)
 call(q::Query, args...; params...) = execute(q, args...; params...)
 
 # Builds initial execution pipeline.
-compile(base::Query, expr::AbstractSyntax) =
-    error("compile() is not implemented for $(typeof(expr))")
+#compile(base::Query, expr::AbstractSyntax) =
+#    error("compile() is not implemented for $(typeof(expr))")
 
 # Optimizes the execution pipeline.
 optimize(q::Query) = q

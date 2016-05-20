@@ -4,7 +4,7 @@ immutable NullToNAPipe <: AbstractPipe
     input::Input
     output::Output
 
-    NullToVoidPipe(F::AbstractPipe) =
+    NullToNAPipe(F::AbstractPipe) =
         begin
             if isnonempty(F)
                 return F

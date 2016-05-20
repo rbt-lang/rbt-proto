@@ -2,15 +2,15 @@
 # Implementation of scope operations for the toy backend.
 #
 
-call(binding::AbstractBinding, base::Scope, args::Vector{AbstractSyntax}) =
-    call(binding, base, args...)
+compile(binding::AbstractBinding, base::Scope, args::Vector{AbstractSyntax}) =
+    compile(binding, base, args...)
 
 
 immutable SimpleBinding <: AbstractBinding
     query::Query
 end
 
-call(binding::SimpleBinding, base::Scope) = binding.query
+compile(binding::SimpleBinding, base::Scope) = binding.query
 
 
 immutable ParamBinding <: AbstractBinding
@@ -18,7 +18,7 @@ immutable ParamBinding <: AbstractBinding
     output::Output
 end
 
-call(binding::ParamBinding, base::Scope) =
+compile(binding::ParamBinding, base::Scope) =
     let scope = nest(base, domain(binding.output)),
         pipe = ParamPipe(domain(base), binding.tag, binding.output)
         Query(scope, pipe)
@@ -30,7 +30,7 @@ immutable ClassBinding <: AbstractBinding
     classname::Symbol
 end
 
-call(binding::ClassBinding, base::Scope) =
+compile(binding::ClassBinding, base::Scope) =
     let scope = nest(base, Entity{binding.classname}),
         class = binding.db.schema.name2class[binding.classname],
         set = binding.db.instance.sets[binding.classname],
@@ -45,7 +45,7 @@ immutable ArrowBinding <: AbstractBinding
     arrowname::Symbol
 end
 
-call(binding::ArrowBinding, base::Scope) =
+compile(binding::ArrowBinding, base::Scope) =
     let class = binding.db.schema.name2class[binding.classname],
         arrow = class.name2arrow[binding.arrowname],
         scope = nest(base, odomain(arrow)),
@@ -66,7 +66,7 @@ immutable EntityIdBinding <: AbstractBinding
     classname::Symbol
 end
 
-call(binding::EntityIdBinding, base::Scope) =
+compile(binding::EntityIdBinding, base::Scope) =
     let scope = settag(nest(base, Int), :id),
         pipe = ItemPipe(Entity{binding.classname}, :id, runique=true)
         Query(scope, pipe)
@@ -77,7 +77,7 @@ immutable GlobalBinding <: AbstractBinding
     fn::Symbol
 end
 
-call(binding::GlobalBinding, base::Scope, args::Vector{AbstractSyntax}) =
+compile(binding::GlobalBinding, base::Scope, args::Vector{AbstractSyntax}) =
     compile(Fn{binding.fn}, base, args...)
 
 
@@ -88,7 +88,7 @@ scope(db::ToyDatabase) =
             if length(m.sig.parameters) < 1
                 continue
             end
-            p = m.sig.parameters[1]
+            p = m.sig.parameters[2]
             ps =
                 isa(p, Union) ? collect(Type, p.types) :
                 p <: Type ? Type[p.parameters[1]] : Type[]
@@ -146,7 +146,7 @@ nest(db::ToyDatabase, base::Scope, domain::Type) =
 
 mkselect(base::Scope, name::Symbol, finish::Bool=true) =
     let binding = get(lookup(base, (name, 0)))
-        finish ? select(binding(base)) : binding(base)
+        finish ? select(compile(binding, base)) : compile(binding, base)
     end
 
 mkselect(base::Scope, names::Tuple, finish::Bool=true) =
