@@ -574,7 +574,7 @@ Traversal, Aggregates, Selection, Filtering
    and :math:`\operatorname{min}`?  What if the input is empty?
 
 
-.. slide:: Aggregate over Composition
+.. slide:: Example: Aggregate over Composition
    :level: 3
 
    Just with aggregates and composition, we can construct complex queries.
@@ -604,7 +604,7 @@ Traversal, Aggregates, Selection, Filtering
       260004
 
 
-.. slide:: Composition with Aggregate
+.. slide:: Example: Composition with Aggregate
    :level: 3
 
    Example (composition with an aggregate):
@@ -636,6 +636,36 @@ Traversal, Aggregates, Selection, Filtering
       1
 
 
+.. slide:: Example: Aggregate over a Query with an Aggregate
+   :level: 3
+
+   We conclude with an example of an aggregate over another aggregate.
+
+   *Show the highest number of employees per department.*
+
+   1. Number of employees for each department:
+
+      .. math::
+
+         \operatorname{department}{.}\operatorname{count}(\operatorname{employee}) :
+         \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}
+
+   2. The highest number of employees for each department:
+
+      .. math::
+
+         \operatorname{max}(\operatorname{department}{.}\operatorname{count}(\operatorname{employee})) :
+         \operatorname{Void}\to\operatorname{Opt}\{\operatorname{Int}\}
+
+   .. code-block:: julia
+
+      max(department.count(employee))
+
+   .. code-block:: julia
+
+      32181
+
+
 .. slide:: Name Binding
    :level: 2
 
@@ -646,20 +676,20 @@ Traversal, Aggregates, Selection, Filtering
       \operatorname{department}{.}\operatorname{count}(\operatorname{employee}) :
       \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}
 
-   But there are *two* primitives called :math:`\operatorname{employee}`:
+   But the database has *two* primitives called :math:`\operatorname{employee}`:
 
    .. math::
 
       &\operatorname{employee} & : \operatorname{Void}&\to\operatorname{Seq}\{\operatorname{Empl}\} \\
       &\operatorname{employee} & : \operatorname{Dept}&\to\operatorname{Seq}\{\operatorname{Empl}\}
 
-   Which one is in the query?
+   In the presence of homonyms, how do we associate names with primitives?
 
-   *Requirement:*
+   * For any database, its collection of primitives must obey the rule:
 
-   * For a fixed input type, a primitive is uniquely determined by its name.
+     *A primitive is uniquely determined by its name and input type.*
 
-   This rule directs the name binding algorithm of Rabbit.
+   * This rule directs the name binding algorithm.
 
 
 .. slide:: Name Binding Example (1 of 3)
@@ -734,147 +764,51 @@ Traversal, Aggregates, Selection, Filtering
          \underbrace{\operatorname{department}{.}\operatorname{count}(\operatorname{employee})}_{\operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}}
 
 
-.. slide:: Aggregates: Conclusion
-   :level: 2
-
-   We conclude with an example of an aggregate over another aggregate.
-
-   *Show the highest number of employees per department.*
-
-   1. Number of employees for each department:
-
-      .. math::
-
-         \operatorname{department}{.}\operatorname{count}(\operatorname{employee}) :
-         \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Int}\}
-
-   2. The highest number of employees for each department:
-
-      .. math::
-
-         \operatorname{max}(\operatorname{department}{.}\operatorname{count}(\operatorname{employee})) :
-         \operatorname{Void}\to\operatorname{Opt}\{\operatorname{Int}\}
-
-   .. code-block:: julia
-
-      max(department.count(employee))
-
-   .. code-block:: julia
-
-      32181
-
-
-.. slide:: Selection
-   :level: 2
-
-   Consider one of the previous examples:
-
-   *Show the number of employees in each department.*
-
-   We already constructed a query:
-
-   .. code-block:: julia
-
-      department.count(employee)
-
-   .. code-block:: julia
-
-      1848
-      13570
-      ⋮
-      1
-
-   But this is not very informative... Can we add the name of the department?
-
-   *For every department, show its name and the number of employees.*
-
-   Need a way to *select* fields for output.
-
-
-.. slide:: Selection: Demonstration
-   :level: 3
-
-   Example:
-
-   *For every department, show its name and the number of employees.*
-
-   Here is how we will write this query:
-
-   .. code-block:: julia
-
-      department
-      :select(name, count(employee))
-
-   .. code-block:: julia
-
-      ("WATER MGMNT",1848)
-      ("POLICE",13570)
-      ⋮
-      ("LICENSE APPL COMM",1)
-
-   This query introduces two new concepts:
-
-   * Pipeline notation (the ``:`` symbol).
-   * The :math:`\operatorname{select}` combinator.
-
-
 .. slide:: Pipeline Notation
    :level: 2
 
-   Example:
+   What we covered so far: *traversal*, *aggregates*.
 
-   .. code-block:: julia
+   What is left: *selection*, *filtering*.
 
-      department:select(name, count(employee))
+   Before we proceed, let us introduce a new syntax construction.
 
-   Let us explain the meaning of ``:`` in front of ``select``.
+   *Pipeline notation* lets you chain combinators to form a data processing
+   pipeline.
 
-   This is *the pipeline notation* for query combinators:
+   Analogy: shell pipeline.
+
+
+.. slide:: Pipeline Notation: Syntax
+   :level: 3
+
+   The idea: place the argument in front of the combinator.
 
    .. math::
 
       &Q{:}F \quad &\text{is desugared to} \quad &F(Q) \\
       &Q_1{:}F(Q_2,\ldots) \quad &\text{is desugared to} \quad &F(Q_1,Q_2,\ldots)
 
-   Thus, this query is desugared to:
+   A simple example (before and after desugaring):
 
    .. code-block:: julia
 
-      select(department, name, count(employee))
+      department:count
 
-   How is the pipeline notation used in practice?
+   .. code-block:: julia
+
+      count(department)
+
+   Both examples are equivalent.
+
+   How to use this notation to build a data pipeline?
 
 
-.. slide:: Pipeline Notation: Usage
+.. slide:: Pipeline Notation: Example
    :level: 3
 
-   Pipeline notation:
-
-   .. math::
-
-      &Q{:}F \quad &\text{is desugared to} \quad &F(Q) \\
-      &Q_1{:}F(Q_2,\ldots) \quad &\text{is desugared to} \quad &F(Q_1,Q_2,\ldots)
-
-   How is this notation used in practice?
-
-   * In principle, any combinator can be written using pipeline notation.
-
-     For example, the query
-     :math:`\operatorname{count}(\operatorname{department})` can be written as:
-
-     .. math::
-
-        \operatorname{department}{:}\operatorname{count}
-
-   * In practice, we use pipeline notation to chain a sequence of combinators.
-
-     What does it mean?
-
-
-.. slide:: Building a Pipeline
-   :level: 3
-
-   We use pipeline notation to chain a sequence of combinators.
+   We use pipeline notation to chain combinators into a data processing
+   pipeline.
 
    Typical usage:
 
@@ -885,16 +819,15 @@ Traversal, Aggregates, Selection, Filtering
       :group(position)
       :select(position, count(employee), mean(employee.salary))
 
-   This example uses combinators we have not yet covered.  But the intent is
-   clear:
+   This data pipeline contains four steps:
 
-   * start with a list of all employees;
-   * filter the list by a predicate condition;
-   * group it by an attribute;
-   * select fields for output.
+   1. Start with a list of all employees.
+   2. Filter the list by a predicate condition.
+   3. Group it by an attribute.
+   4. Select fields for output.
 
 
-.. slide:: Building a Pipeline: Desugaring Example
+.. slide:: Pipeline Notation: Desugaring Example
    :level: 3
 
    Example (before and after desugaring):
@@ -918,17 +851,55 @@ Traversal, Aggregates, Selection, Filtering
           count(employee),
           mean(employee.salary))
 
-   Pipeline notation emphasises the structure and the intent of the query.
+   Next, we will describe :math:`\operatorname{select}` and
+   :math:`\operatorname{filter}` combinators.
 
 
-.. slide:: The :math:`\operatorname{select}` Combinator
+.. slide:: Selection
    :level: 2
 
-   Back to the example:
+   Consider one of the previous examples:
+
+   *Show the number of employees in each department.*
+
+   .. code-block:: julia
+
+      department.count(employee)
+
+   .. code-block:: julia
+
+      1848
+      13570
+      ⋮
+      1
+
+   But which department corresponds to each number?  An alternative query:
 
    *For every department, show its name and the number of employees.*
 
-   The query, after desugaring, has the form:
+   Need a way to *select* fields for output.
+
+
+.. slide:: Selection: Example
+   :level: 3
+
+   *For every department, show its name and the number of employees.*
+
+   We write this query using the :math:`\operatorname{select}` combinator:
+
+   .. code-block:: julia
+
+      department
+      :select(name, count(employee))
+
+   .. code-block:: julia
+
+      ("WATER MGMNT",1848)
+      ("POLICE",13570)
+      ⋮
+      ("LICENSE APPL COMM",1)
+
+   After desugaring pipeline notation, the query has the form:
 
    .. math::
 
@@ -937,96 +908,47 @@ Traversal, Aggregates, Selection, Filtering
       \operatorname{name},
       \operatorname{count}(\operatorname{employee}))
 
-   It produces a sequence of pairs, so its signature is:
-
-   .. math::
-
-      \operatorname{Void} \to
-      \operatorname{Seq}\{\operatorname{Tuple}\{\operatorname{Text},\operatorname{Int}\}\}
-
-   * How does it work?
-   * What is its general form?
-   * More examples?
+   How does it work?
 
 
-.. slide:: The :math:`\operatorname{select}` Combinator: Components
+.. slide:: The :math:`\operatorname{select}` Combinator
    :level: 3
 
-   *For every department, show its name and the number of employees:*
+   The :math:`\operatorname{select}` combinator is one of the most complex
+   query combinators.  Here, we present a simplified account; full description
+   will be given in a separate section.
+
+   The :math:`\operatorname{select}` combinator has the form:
 
    .. math::
 
-      \operatorname{select}(
-      \operatorname{department},
-      \operatorname{name},
-      \operatorname{count}(\operatorname{employee}))
+      \operatorname{select}(Q, F_1, F_2, \ldots, F_n)
 
-   * *Show each department:*
-
-     .. math::
-
-        \operatorname{department}:\operatorname{Void}\to\operatorname{Seq}\{\operatorname{Dept}\}
-
-   * *For the given department, show its name:*
+   Typically, written in pipeline notation as:
 
    .. math::
 
-      \operatorname{name}:\operatorname{Dept}\to\operatorname{Text}
+      Q{:}\operatorname{select}(F_1, F_2, \ldots, F_n)
 
-   * *For the given department, show the number of employees:*
-
-     .. math::
-
-        \operatorname{count}(\operatorname{employee}):\operatorname{Dept}\to\operatorname{Int}
-
-   How does :math:`\operatorname{select}` combines these components?
-
-
-.. slide:: The :math:`\operatorname{select}` Combinator: Signature
-   :level: 3
-
-   In general, the :math:`\operatorname{select}` combinator has the form:
-
-   .. math::
-
-      \operatorname{select}(Q,F_1,F_2,\ldots,F_n)
-
-   * The first component is the base of selection:
-
-     .. math::
-
-        Q : A \to \operatorname{Seq}\{B\}
-
-   * The remaining components are selected fields:
-
-     .. math::
-
-        F_k : B \to C_k \quad (k=1,2,\ldots,n)
-
-   The :math:`\operatorname{select}` combinator has the signature:
-
-   .. math::
-
-      \operatorname{select}(Q,F_1,F_2,\ldots,F_n) :
-      A \to \operatorname{Seq}\{\operatorname{Tuple}\{C_1,C_2,\ldots,C_n\}\}
+   * :math:`Q` is the base of the selection.
+   * :math:`F_1,F_2,\ldots,F_n` are selected fields.
 
 
 .. slide:: The :math:`\operatorname{select}` Combinator: Implementation
    :level: 3
 
-   The :math:`\operatorname{select}` combinator has the signature:
+   The :math:`\operatorname{select}` combinator:
 
    .. math::
 
-      \operatorname{select}(
-      &Q : A \to \operatorname{Seq}\{B\}, \\
-      &F_1 : B \to C_1, \\
-      &F_2 : B \to C_2, \\
-      &\ldots, \\
-      &F_n : B \to C_n) :
-      A \to \operatorname{Seq}\{\operatorname{Tuple}\{C_1,C_2,\ldots,C_n\}\}
+      \operatorname{select}(Q, F_1, F_2, \ldots, F_n)
 
-   It represents the following query:
+   How does :math:`\operatorname{select}` combine its components?
+
+   The idea: For each value of :math:`Q`, emit a record of values of
+   :math:`F_1,F_2,\ldots,F_n`.
+
+   We can represent this query as a function:
 
    .. math::
 
@@ -1034,30 +956,76 @@ Traversal, Aggregates, Selection, Filtering
       &\qquad\textbf{for each }\; b \in Q(a) \\
       &\qquad\qquad\textbf{yield }\; (F_1(b),F_2(b),\ldots,F_n(b))
 
+   Can we describe the signature of this query and its components?
 
-.. slide:: The :math:`\operatorname{select}` Combinator: Clarification
+
+.. slide:: The :math:`\operatorname{select}` Combinator: Signature
    :level: 3
+
+   Let us describe the signature of the :math:`\operatorname{select}`
+   combinator:
 
    .. math::
 
+      \operatorname{select}(Q, F_1, F_2, \ldots, F_n)
+
+   * The base of selection is any plural query:
+
+     .. math::
+
+        Q : A \to \operatorname{Seq}\{B\}
+
+   * Selected fields operate on the output of :math:`Q`:
+
+     .. math::
+
+        F_k : B \to C_k \quad (k=1,2,\ldots,n)
+
+   * :math:`\operatorname{select}` accepts the input of :math:`Q` and emits the
+     combined output of all fields:
+
+     .. math::
+
+        \operatorname{select}(Q,F_1,F_2,\ldots,F_n) :
+        A \to \operatorname{Seq}\{\operatorname{Tuple}\{C_1,C_2,\ldots,C_n\}\}
+
+
+.. slide:: The :math:`\operatorname{select}` Combinator: Signature Example
+   :level: 3
+
+   *For every department, show its name and the number of employees:*
+
+   .. math::
+      :nowrap:
+
+      \begin{multline}
+      \operatorname{department}{:}
       \operatorname{select}(
-      &Q : A \to \operatorname{Seq}\{B\}, \\
-      &F_1 : B \to C_1, \\
-      &F_2 : B \to C_2, \\
-      &\ldots, \\
-      &F_n : B \to C_n) :
-      A \to \operatorname{Seq}\{\operatorname{Tuple}\{C_1,C_2,\ldots,C_n\}\}
+      \operatorname{name},
+      \operatorname{count}(\operatorname{employee})) : \\
+      \operatorname{Void}\to\operatorname{Seq}\{\operatorname{Tuple}\{\operatorname{Text},\operatorname{Int}\}\}
+      \end{multline}
 
-   In fact, this signature is a lie:
+   * Base: *Show each department:*
 
-   * The base :math:`Q` does not have to be plural.
-   * Fields :math:`F_k` could be partial or plural.
-   * The output of :math:`\operatorname{select}` also includes the base value.
+     .. math::
 
-   We will tell the full story later.
+        \operatorname{department}:\operatorname{Void}\to\operatorname{Seq}\{\operatorname{Dept}\}
+
+   * Field 1: *For the given department, show its name:*
+
+   .. math::
+
+      \operatorname{name}:\operatorname{Dept}\to\operatorname{Text}
+
+   * Field 2: *For the given department, show the number of employees:*
+
+     .. math::
+
+        \operatorname{count}(\operatorname{employee}):\operatorname{Dept}\to\operatorname{Int}
 
 
-.. slide:: The :math:`\operatorname{select}` Combinator: Example
+.. slide:: Selection: Example
    :level: 3
 
    *For every employee, show their name, department, position and salary.*
@@ -1081,7 +1049,7 @@ Traversal, Aggregates, Selection, Filtering
       ("DARIUSZ Z","DoIT","CHIEF DATA BASE ANALYST",110352)
 
 
-.. slide:: The :math:`\operatorname{select}` Combinator: Another Example
+.. slide:: Selection: Example with Nested :math:`\operatorname{select}`
    :level: 3
 
    *For every department, show its name and the name and the position of its

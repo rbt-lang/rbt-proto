@@ -258,7 +258,8 @@ Introduction
 .. slide:: References and Related Works
    :level: 2
 
-   * Combinators (Curry); Parser combinators; Reactive graphics (Elliott); KOLA (Cherniack).
+   * Combinators (Curry); FP (Backus); Parser combinators; Reactive graphics
+     (Elliott); KOLA (Cherniack).
 
    * Functional data model; Categorical databases, monads (Spivak).
 
