@@ -522,6 +522,7 @@ Traversal, Aggregates, Selection, Filtering
         &\textbf{function }\; (a:A) \\
         &\qquad\textbf{return }\; \operatorname{length}(Q(a))
 
+
 .. slide:: :math:`\operatorname{count}(\operatorname{department})`
    :level: 3
 
@@ -969,7 +970,7 @@ Traversal, Aggregates, Selection, Filtering
 
       \operatorname{select}(Q, F_1, F_2, \ldots, F_n)
 
-   * The base of selection is any plural query:
+   * The base of selection could be any plural query:
 
      .. math::
 
@@ -1068,5 +1069,283 @@ Traversal, Aggregates, Selection, Filtering
       ("POLICE",[("JEFFERY A","POLICE OFFICER"),("KARINA A","POLICE OFFICER"),…])
       ⋮
       ("LICENSE APPL COMM",[("MICHELLE G","STAFF ASST")])
+
+
+.. slide:: Filtering
+   :level: 2
+
+   We learned how to produce all entities of a particular class.
+
+   Example: *Show all employees.*
+
+   .. math::
+
+      \operatorname{employee}
+
+   How can we produce entities that satisfy a particular condition?
+
+   Example: *Show all employees with salary higher than $200k.*
+
+   We use the :math:`\operatorname{filter}` combinator:
+
+   .. math::
+
+      \operatorname{employee}{:}\operatorname{filter}(\operatorname{salary}>200000)
+
+
+.. slide:: Filtering: Example
+   :level: 3
+
+   *Show all employees with salary higher than $200k.*
+
+   .. math::
+
+      \operatorname{employee}{:}\operatorname{filter}(\operatorname{salary}>200000)
+
+   After desugaring, this query transforms to:
+
+   .. math::
+
+      \operatorname{filter}(\operatorname{employee},{>}(\operatorname{salary},200000))
+
+   New concepts:
+
+   * Constant primitive: :math:`200000`.
+   * Predicate combinator: :math:`>`.
+   * Filtering combinator: :math:`\operatorname{filter}`.
+
+
+.. slide:: Constants
+   :level: 3
+
+   Any constant is a primitive query.
+
+   A constant query maps any input to the same output.
+
+   Signature:
+
+   * Input could be of any type.
+   * Output has the type of the constant value.
+
+   Examples:
+
+   .. math::
+
+      &200000 &: A &\to \operatorname{Int} \\
+      &\texttt{"POLICE"} &: A &\to \operatorname{Text} \\
+      &\operatorname{true} &: A &\to \operatorname{Bool}
+
+
+.. slide:: Scalar Combinators
+   :level: 3
+
+   This query fragment is an application of the :math:`>` combinator:
+
+   .. math::
+
+      \operatorname{salary}>200000
+
+   We know a predicate function:
+
+   .. math::
+
+      {>} : \operatorname{Int}\times\operatorname{Int}\to\operatorname{Bool}
+
+   How is it transformed into a query combinator?
+
+   .. math::
+
+      {>}(Q_1, Q_2)
+
+   The idea: apply the predicate to the output of :math:`Q_1` and :math:`Q_2`.
+
+   .. math::
+
+      &\textbf{function }\; (a:A) \\
+      &\qquad\textbf{return }\; Q_1(a) > Q_2(a)
+
+
+.. slide:: Scalar Combinators: Signature
+   :level: 3
+
+   What is the signature of this predicate combinator?
+
+   .. math::
+
+      {>}(Q_1, Q_2)
+
+   * :math:`Q_1` and :math:`Q_2` have input of any type and integer output:
+
+     .. math::
+
+        Q_1, Q_2 : A \to \operatorname{Int}
+
+   * The :math:`>` combinator has the same input as :math:`Q_1` and :math:`Q_2`
+     and Boolean output:
+
+     .. math::
+
+        {>}(Q_1, Q_2) : A \to \operatorname{Bool}
+
+   We write the signature of the :math:`>` combinator as follows:
+
+   .. math::
+
+      {>} : (A\to\operatorname{Int}) \times (A\to\operatorname{Int}) \to (A\to\operatorname{Bool})
+
+
+.. slide:: Scalar Combinators: Examples
+   :level: 3
+
+   Any scalar function could be converted to a combinator.
+
+   Examples:
+
+   .. math::
+
+      &{=},{\ne} &: (A \to B) \times (A \to B) &\to (A \to \operatorname{Bool}) \\
+      &{\&},{|} &: (A \to \operatorname{Bool}) \times (A \to \operatorname{Bool}) &\to (A \to \operatorname{Bool}) \\
+      &\operatorname{contains} &: (A \to \operatorname{Text}) \times (A \to \operatorname{Text}) &\to (A \to \operatorname{Bool}) \\
+      &{+},{-} &: (A \to \operatorname{Int}) \times (A \to \operatorname{Int}) &\to (A \to \operatorname{Int}) \\
+      &\operatorname{round} &: (A \to \operatorname{Float}) &\to (A \to \operatorname{Int})
+
+
+.. slide:: The :math:`\operatorname{filter}` Combinator
+   :level: 3
+
+   The :math:`\operatorname{filter}` combinator has the form:
+
+   .. math::
+
+      \operatorname{filter}(Q, P)
+
+   Typically written in pipeline notation:
+
+   .. math::
+
+      Q{:}\operatorname{filter}(P)
+
+   How does it work?  The idea: Emit values of :math:`Q` that satisfy the
+   predicate :math:`P`.
+
+   .. math::
+
+      &\textbf{function }\; (a:A) \\
+      &\qquad\textbf{for each }\; b \in Q(a) \\
+      &\qquad\qquad\textbf{if }\; P(b) \\
+      &\qquad\qquad\qquad\textbf{yield }\; b
+
+
+.. slide:: The :math:`\operatorname{filter}` Combinator: Signature
+   :level: 3
+
+   What is the signature of the combinator :math:`filter(Q, P)`?
+
+   * The base :math:`Q` is any plural query:
+
+     .. math::
+
+        Q : A \to \operatorname{Seq}\{B\}
+
+   * The predicate :math:`P` is a Boolean query operating on values of
+     :math:`Q`:
+
+     .. math::
+
+        P : B \to \operatorname{Bool}
+
+   The :math:`\operatorname{filter}` combinator has the same signature as its
+   base:
+
+   .. math::
+
+      \operatorname{filter}(Q, P) : A \to \operatorname{Seq}\{B\}
+
+
+.. slide:: Filtering Example: Pipeline
+   :level: 3
+
+   Often, filtering is one of the steps in a data pipeline.
+
+   *For each employee with salary higher than $200K, show their name, position
+   and salary.*
+
+   .. code-block:: julia
+
+      employee
+      :filter(salary > 200000)
+      :select(name, position, salary)
+
+   .. code-block:: julia
+
+      ("RAHM E","MAYOR",216210)
+      ("GARRY M","SUPERINTENDENT OF POLICE",260004)
+      ("JOSE S","FIRE COMMISSIONER",202728)
+
+
+.. slide:: Filtering Example: Predicate with Aggregate
+   :level: 3
+
+   The filter condition may contain complex expressions including aggregates.
+
+   *Show the names of departments with more than 1000 employees.*
+
+   .. code-block:: julia
+
+      department
+      :filter(count(employee)>1000)
+      .name
+
+   .. code-block:: julia
+
+      "WATER MGMNT"
+      "POLICE"
+      ⋮
+      "TRANSPORTN"
+
+
+.. slide:: Filtering Example: Aggregate Over Filtering
+   :level: 3
+
+   A filtered expression can be used as a component of an aggregate.
+
+   *Find the number of departments with more than 1000 employees.*
+
+   .. code-block:: julia
+
+      count(
+          department
+          :filter(count(employee) > 1000))
+
+   .. code-block:: julia
+
+      7
+
+
+.. slide:: Conclusion
+   :level: 2
+
+   The example from the beginning of this section:
+
+   *For each department, show the number of employees with salary higher than
+   100k.*
+
+   We can now write this query:
+
+   .. code-block:: julia
+
+      department
+      :select(
+          name,
+          count(
+              employee
+              :filter(salary > 100000)))
+
+   .. code-block:: julia
+
+      ("WATER MGMNT",179)
+      ("POLICE",1493)
+      ⋮
+      ("LICENSE APPL COMM",0)
 
 
