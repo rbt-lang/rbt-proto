@@ -33,12 +33,12 @@ Querying with Combinators
    * :doc:`unfolding`
    * :doc:`combinators`
    * :doc:`traversal`
-   * *Aggregates*
+   * :doc:`sorting`
    * *Quotients*
-   * *Transitive Closure*
-   * *Sorting*
-   * *Running Aggregates and Comonads*
-   * *Prototype Implementation*
+   * *Hierarchical Queries*
+   * *Parameters and Context*
+   * *Namespaces*
+   * *Query Interface*
 
 
 Rabbit is a combinator-based query language for categorical databases. It
@@ -60,5 +60,6 @@ this challenge.
    unfolding
    combinators
    traversal
+   sorting
 
 

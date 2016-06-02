@@ -1239,7 +1239,7 @@ Traversal, Aggregates, Selection, Filtering
 .. slide:: The :math:`\operatorname{filter}` Combinator: Signature
    :level: 3
 
-   What is the signature of the combinator :math:`filter(Q, P)`?
+   What is the signature of the combinator :math:`\operatorname{filter}(Q, P)`?
 
    * The base :math:`Q` is any plural query:
 
