@@ -1,0 +1,21 @@
+
+digraph {
+    graph [ranksep=.25 nodesep=.25, pad=.1, bgcolor=transparent]
+    node [fontname="DejaVu Sans", fontsize=8]
+    void [shape=point penwidth=3 color=red]
+    posn [label=position penwidth=3 color=red]
+    posn_empl [label=employee penwidth=3 color=red]
+    posn_empl_name [label=name penwidth=3 color=red]
+    posn_empl_salary [label=salary]
+    posn_empl_dept [label=department]
+    posn_empl_dept_name [shape=none label="&hellip;" fontsize=16]
+    posn_empl_dept_empl [shape=none label="&hellip;" fontsize=16]
+    void -> posn [penwidth=3 color=red]
+    posn -> posn_empl [penwidth=3 color=red]
+    posn_empl -> posn_empl_name [penwidth=3 color=red]
+    posn_empl -> posn_empl_salary
+    posn_empl -> posn_empl_dept
+    posn_empl_dept -> posn_empl_dept_name
+    posn_empl_dept -> posn_empl_dept_empl
+}
+

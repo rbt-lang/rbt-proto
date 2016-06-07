@@ -34,7 +34,7 @@ Querying with Combinators
    * :doc:`combinators`
    * :doc:`traversal`
    * :doc:`sorting`
-   * *Quotients*
+   * :doc:`quotients`
    * *Hierarchical Queries*
    * *Parameters and Context*
    * *Namespaces*
@@ -61,5 +61,6 @@ this challenge.
    combinators
    traversal
    sorting
+   quotients
 
 
