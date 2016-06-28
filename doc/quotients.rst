@@ -193,3 +193,111 @@ Quotients
       ("LICENSE APPL COMM",1,1)
 
 
+.. slide:: Unique Values with Extra Data
+   :level: 2
+
+   Now let us ask for extra information about each position:
+
+   *Show a list of all positions, and, for each position, a list of respective
+   employees.*
+
+   We produced a list of all positions:
+
+   .. math::
+
+      \operatorname{unique}(\operatorname{employee}{.}\operatorname{position})
+
+   But how can we relate each position to the respective employees?
+
+   The :math:`\operatorname{unique}` combinator cannot do it.
+
+
+.. slide:: The :math:`\operatorname{Posn}` Class (1 of 4)
+   :level: 3
+
+   *Show a list of all positions, and, for each position, a list of respective
+   employees.*
+
+   In this database, employee position is represented as an attribute:
+
+   .. math::
+
+      \operatorname{position} : \operatorname{Empl} \to \operatorname{Text}
+
+   But let us assume, for a moment, that we can change the database schema.
+
+   What if, instead, we represent employee positions as a separate entity
+   class:
+
+   .. math::
+
+      \operatorname{Posn}
+
+
+.. slide:: The :math:`\operatorname{Posn}` Class (2 of 4)
+   :level: 3
+
+   *Show a list of all positions, and, for each position, a list of respective
+   employees.*
+
+   Suppose employee positions form a separate entity class:
+
+   .. math::
+
+      \operatorname{Posn}
+
+   Then a list of all position entities is produced by a class primitive:
+
+   .. math::
+
+      \operatorname{position} : \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Posn}\}
+
+   Position title becomes an attribute:
+
+   .. math::
+
+      \operatorname{title} : \operatorname{Posn} \to \operatorname{Text}
+
+   Positions and employees are related by a pair of links:
+
+   .. math::
+
+      &\operatorname{position} &: \operatorname{Empl} &\to \operatorname{Posn} \\
+      &\operatorname{employee} &: \operatorname{Posn} &\to \operatorname{Seq}\{\operatorname{Empl}\}
+
+
+.. slide:: The :math:`\operatorname{Posn}` Class (3 of 4)
+   :level: 3
+
+   *Show a list of all positions, and, for each position, a list of respective
+   employees.*
+
+   Suppose employee positions form an entity class.
+
+   Then we can easily map this query to the schema tree:
+
+   .. graphviz:: citydb-unfolded-position-title-employee-name.dot
+
+
+.. slide:: The :math:`\operatorname{Posn}` Class (4 of 4)
+   :level: 3
+
+   *Show a list of all positions, and, for each position, a list of respective
+   employees.*
+
+   Suppose employee positions form an entity class.
+
+   Then this query can be written as follows:
+
+   .. math::
+
+      \operatorname{position}
+      {:}\operatorname{select}(\operatorname{title},\operatorname{employee}{.}\operatorname{name})
+
+   Back to reality: there is no class of employee positions.
+
+   Nor are we allowed to modify the schema to add this class.
+
+   Or, perhaps, we are?
+
+
