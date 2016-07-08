@@ -46,7 +46,7 @@ ctxgen(pipe::AbstractPipe) = Pair{Symbol,Any}[]
 
 codegen(pipe::AbstractPipe) = codegen(pipe, gensym(:X), ikind(pipe))
 
-codegen{I<:Kind}(pipe::AbstractPipe, X, ::Type{I}) =
+codegen(pipe::AbstractPipe, X, I) =
     let I0 = ikind(pipe)
         if I <: I0
             codegen(pipe, X)
@@ -296,12 +296,12 @@ output(pipe::SetPipe) =
         rtotal=pipe.iscovering)
 
 ctxgen(pipe::SetPipe) =
-    let set = symbol("#set#", pipe.tag)
+    let set = Symbol("#set#", pipe.tag)
         [Pair{Symbol,Any}(set, pipe.set)]
     end
 
 codegen(pipe::SetPipe, X) =
-    let set = symbol("#set#", pipe.tag),
+    let set = Symbol("#set#", pipe.tag),
         T = eltype(pipe.set)
         quote
             Seq{$T}(_.$set)
@@ -338,7 +338,7 @@ output(pipe::IsoMapPipe) =
         rtotal=pipe.iscovering)
 
 ctxgen(pipe::IsoMapPipe) =
-    let map = symbol("#map#", pipe.tag)
+    let map = Symbol("#map#", pipe.tag)
         if keytype(pipe.map) <: Entity
             mapvec = Vector{valtype(pipe.map)}(length(pipe.map))
             for (key, val) in pipe.map
@@ -351,7 +351,7 @@ ctxgen(pipe::IsoMapPipe) =
     end
 
 codegen(pipe::IsoMapPipe, X) =
-    let map = symbol("#map#", pipe.tag),
+    let map = Symbol("#map#", pipe.tag),
         T = valtype(pipe.map)
         if keytype(pipe.map) <: Entity
             quote
@@ -394,12 +394,12 @@ output(pipe::OptMapPipe) =
         rtotal=pipe.iscovering)
 
 ctxgen(pipe::OptMapPipe) =
-    let map = symbol("#map#", pipe.tag)
+    let map = Symbol("#map#", pipe.tag)
         [Pair{Symbol,Any}(map, pipe.map)]
     end
 
 codegen(pipe::OptMapPipe, X) =
-    let map = symbol("#map#", pipe.tag),
+    let map = Symbol("#map#", pipe.tag),
         S = keytype(pipe.map),
         T = valtype(pipe.map),
         x = gensym(:x)
@@ -443,12 +443,12 @@ output(pipe::SeqMapPipe) =
         rtotal=pipe.iscovering)
 
 ctxgen(pipe::SeqMapPipe) =
-    let map = symbol("#map#", pipe.tag)
+    let map = Symbol("#map#", pipe.tag)
         [Pair{Symbol,Any}(map, pipe.map)]
     end
 
 codegen(pipe::SeqMapPipe, X) =
-    let map = symbol("#map#", pipe.tag),
+    let map = Symbol("#map#", pipe.tag),
         S = keytype(pipe.map),
         T = eltype(valtype(pipe.map)),
         x = gensym(:x)
@@ -477,12 +477,12 @@ input(pipe::EntityMapPipe) = Input(pipe.domain)
 output(pipe::EntityMapPipe) = Output(eltype(eltype(pipe.map)), pipe.mode)
 
 ctxgen(pipe::EntityMapPipe) =
-    let map = symbol("#map#", pipe.tag)
+    let map = Symbol("#map#", pipe.tag)
         [Pair{Symbol,Any}(map, pipe.map)]
     end
 
 codegen(pipe::EntityMapPipe, X) =
-    let map = symbol("#map#", pipe.tag)
+    let map = Symbol("#map#", pipe.tag)
         quote
             _.$map[data($X).id]
         end
@@ -911,8 +911,8 @@ codegen(pipe::OpPipe, X, I) =
         T = odomain(pipe)
         N = length(pipe.itypes)
         @gensym X0 Z
-        Ys = [gensym(symbol(:Y, n)) for n = 1:N]
-        ys = [gensym(symbol(:y, n)) for n = 1:N]
+        Ys = [gensym(Symbol(:Y, n)) for n = 1:N]
+        ys = [gensym(Symbol(:y, n)) for n = 1:N]
         body =
             isplural(pipe) ? :( push!(data($Z), $(pipe.op)($(ys...))) ) :
             ispartial(pipe) ? :( $Z = Opt{$T}($(pipe.op)($(ys...))) ) :

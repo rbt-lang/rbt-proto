@@ -121,9 +121,6 @@ Query(db::AbstractDatabase; params...) =
             output =
                 T <: Vector ? Output(eltype(T), lunique=false, ltotal=false) :
                 T <: Nullable ? Output(eltype(T), ltotal=false) : Output(T)
-            if output.domain == ASCIIString
-                output = Output(UTF8String, output.mode)
-            end
             scope = addglobal(scope, tag, ParamBinding(tag, output))
         end
         Query(scope, HerePipe(domain(scope)))

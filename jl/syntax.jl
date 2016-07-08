@@ -57,10 +57,7 @@ syntax(ex::Union{Symbol,QuoteNode,Scalar,Expr}) =
 
 ex2syn(ex::Symbol) = ex == :null ? LiteralSyntax(nothing) : ApplySyntax(ex, [])
 ex2syn(ex::QuoteNode) = ApplySyntax(ex.value, [])
-ex2syn(ex::Scalar) =
-    let ex = isa(ex, AbstractString) ? UTF8String(ex) : ex
-        LiteralSyntax(ex)
-    end
+ex2syn(ex::Scalar) = LiteralSyntax(ex)
 
 function ex2syn(ex::Expr)
     if ex.head == :(.) && length(ex.args) == 2
@@ -122,7 +119,7 @@ function ex2syn(ex::Expr)
             k = k+2
         end
         return op
-    elseif ex.head == :macrocall && length(ex.args) == 2 && ex.args[1] == symbol("@r_str")
+    elseif ex.head == :macrocall && length(ex.args) == 2 && ex.args[1] == Symbol("@r_str")
         return LiteralSyntax(eval(ex))
     else
         dump(ex)

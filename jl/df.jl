@@ -122,14 +122,14 @@ end
 function mkdffields(flow::Query)
     fields = ()
     for item in get(flow.scope.items)
-        field = item(flow.scope)
+        field = compile(item, flow.scope)
         if !issingular(field)
             field = compile(Fn{:dataframe}, flow.scope, field)
         end
         if !isnull(field.scope.items)
             fields = (fields..., mkdffields(field)...)
         else
-            name = get(field.scope.tag, symbol(""))
+            name = get(field.scope.tag, Symbol(""))
             F = field.pipe
             fields = (fields..., (name, F))
         end

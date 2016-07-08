@@ -231,7 +231,9 @@ convert{Ns,Vs,T}(K::Type{EnvRel{Ns,Vs,T}}, params::Dict{Symbol,Any}, ptr::Int, v
 convert{Ns,Vs,T}(K::Type{EnvRel{Ns,Vs,T}}, ptr::Int, vals) =
     K(Dict{Symbol,Any}(), ptr, vals)
 convert{Ns,Vs,T}(K::Type{EnvRel{Ns,Vs,T}}, params::Dict{Symbol,Any}=Dict{Symbol,Any}(), val=nothing) =
-    K(params, 1, T[val])
+    let env = convertparams(Ns, Vs, params)
+        K(env, 1, T[val])
+    end
 convert{Ns,Vs,T}(K::Type{EnvRel{Ns,Vs,T}}, args...; params...) =
     K(Dict{Symbol,Any}(params), args...)
 

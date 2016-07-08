@@ -31,19 +31,17 @@ q3 = syntax("""
         employee)
 """)
 
-@test string(q3) ==
-    "select(" *
-        "sort(filter(department,>(count(employee),100)),desc(count(employee)))," *
-        "name," *
-        "count(employee)," *
-        "employee)"
 @test typeof(q3) == ApplySyntax
 @test q3.fn == :select
+@test string(q3.args[1]) == "department:filter(>(count(employee),100)):sort(count(employee):desc)"
+@test string(q3.args[2]) == "name"
+@test string(q3.args[3]) == "count(employee)"
+@test string(q3.args[4]) == "employee"
 
 
 q4 = syntax("""
     employee
-    :by(position)
+    :group(position)
     :select(
         position,
         count(employee),
@@ -51,29 +49,28 @@ q4 = syntax("""
         mean(employee.salary))
 """)
 
-@test string(q4) ==
-    "select(" *
-        "by(employee,position)," *
-        "position," *
-        "count(employee)," *
-        "max(employee.salary)," *
-        "mean(employee.salary))"
+@test typeof(q4) == ApplySyntax
+@test q4.fn == :select
+@test string(q4.args[1]) == "employee:group(position)"
+@test string(q4.args[2]) == "position"
+@test string(q4.args[3]) == "count(employee)"
+@test string(q4.args[4]) == "max(employee.salary)"
+@test string(q4.args[5]) == "mean(employee.salary)"
 
 
 q5 = syntax("""
-    department
-    :filter(count(employee)>100)
-    .employee
-    .name
+    department:filter(count(employee)>100).employee.name
 """)
 
-@test string(q5) == "filter(department,>(count(employee),100)).employee.name"
+@test typeof(q5) == ComposeSyntax
+@test string(q5.f) == "department:filter(>(count(employee),100))"
+@test string(q5.g) == "employee.name"
 
 
 q6 = syntax("6 * (3 + 4)")
 
 @test string(q6) == "*(6,+(3,4))"
 @test typeof(q6) == ApplySyntax
-@test typeof(q6.args[1]) == LiteralSyntax{Int}
+@test typeof(q6.args[1]) == LiteralSyntax
 @test q6.args[1].val == 6
 

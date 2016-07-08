@@ -533,7 +533,7 @@ end
 
 function compile(fn::Fn(:left, :right), base::Scope)
     reqfields(Query(base, HerePipe(base.domain)))
-    return (get(base.items)[fn == Fn{:left} ? 1 : end])(base)
+    return compile(get(base.items)[fn == Fn{:left} ? 1 : end], base)
 end
 
 
@@ -777,7 +777,7 @@ function compile(fn::Fn(:json), base::Scope, flow::Query)
         parts = ()
         fields = ()
         for item in get(flow.scope.items)
-            field = compile(fn, flow.scope, item(flow.scope))
+            field = compile(fn, flow.scope, compile(item, flow.scope))
             if !isnull(field.scope.tag)
                 fields = (fields..., Pair{Symbol,AbstractPipe}(get(field.scope.tag), field.pipe))
             end

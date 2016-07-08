@@ -18,7 +18,7 @@ ACCS = ["AUDITOR IV", "ACCOUNTANT IV", "ACCOUNTANT III", "STAFF ASST", "ACCOUNTA
 schema = Schema(
     Class(
         :department,
-        Arrow(:name, UTF8String, runique=true),
+        Arrow(:name, String, runique=true),
         Arrow(
             :employee,
             lunique=false, ltotal=false, runique=true, rtotal=true,
@@ -26,9 +26,9 @@ schema = Schema(
         select=(:name,)),
     Class(
         :employee,
-        Arrow(:name, UTF8String),
-        Arrow(:surname, UTF8String),
-        Arrow(:position, UTF8String),
+        Arrow(:name, String),
+        Arrow(:surname, String),
+        Arrow(:position, String),
         Arrow(:salary, Int),
         Arrow(:department, select=:name),
         Arrow(
@@ -49,12 +49,12 @@ E = Entity{:employee}
 dept = Vector{D}()
 empl = Vector{E}()
 
-dept_name = Vector{Iso{UTF8String}}()
+dept_name = Vector{Iso{String}}()
 dept_empl = Vector{Seq{E}}()
 
-empl_name = Vector{Iso{UTF8String}}()
-empl_surname = Vector{Iso{UTF8String}}()
-empl_position = Vector{Iso{UTF8String}}()
+empl_name = Vector{Iso{String}}()
+empl_surname = Vector{Iso{String}}()
+empl_position = Vector{Iso{String}}()
 empl_salary = Vector{Iso{Int}}()
 empl_dept = Vector{Iso{D}}()
 empl_managed_by = Vector{Opt{E}}()
@@ -67,13 +67,13 @@ accs = []
 
 
 csv = readcsv(CSV_PATH, header=true)[1]
-did_by_name = Dict{UTF8String, D}()
+did_by_name = Dict{String, D}()
 for i = 1:size(csv, 1)
     department_name, name, surname, position, salary = csv[i, :]
     if !haskey(did_by_name, department_name)
         did = D(length(dept)+1)
         push!(dept, did)
-        push!(dept_name, Iso{UTF8String}(department_name))
+        push!(dept_name, Iso{String}(department_name))
         push!(dept_empl, Seq{E}(E[]))
         did_by_name[department_name] = did
     end
@@ -81,9 +81,9 @@ for i = 1:size(csv, 1)
     eid = E(length(empl)+1)
     push!(empl, eid)
     push!(dept_empl[did.id].data, eid)
-    push!(empl_name, Iso{UTF8String}(name))
-    push!(empl_surname, Iso{UTF8String}(surname))
-    push!(empl_position, Iso{UTF8String}(position))
+    push!(empl_name, Iso{String}(name))
+    push!(empl_surname, Iso{String}(surname))
+    push!(empl_position, Iso{String}(position))
     push!(empl_salary, Iso{Int}(salary))
     push!(empl_dept, Iso{D}(did))
     if department_name == TREASURER_DEPT
