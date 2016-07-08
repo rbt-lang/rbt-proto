@@ -301,3 +301,107 @@ Quotients
    Or, perhaps, we are?
 
 
+.. slide:: Constructing Virtual Entities
+   :level: 2
+
+   *Show a list of all positions, and, for each position, a list of respective
+   employees.*
+
+   To write this query, we need a "virtual" class of *position* entities.
+
+   It is created with the :math:`\operatorname{group}` combinator:
+
+   .. math::
+
+      \operatorname{group}(\operatorname{employee}, \operatorname{position})
+
+   This combinator is constructed of two components:
+
+   * :math:`\operatorname{employee}`, the base query;
+   * :math:`\operatorname{position}`, an expression that partitions the base.
+
+   We commonly write it in pipeline notation:
+
+   .. math::
+
+      \operatorname{employee}{:}\operatorname{group}(\operatorname{position})
+
+
+.. slide:: Constructing Virtual Entities: Attributes and Links
+   :level: 3
+
+   *Show a list of all positions, and, for each position, a list of respective
+   employees.*
+
+   We construct "virtual" *position* entities with the
+   :math:`\operatorname{group}` combinator:
+
+   .. math::
+
+      \operatorname{group}(\operatorname{employee}, \operatorname{position}) :
+      \operatorname{Void} \to \operatorname{Seq}\{\operatorname{Posn}\}
+
+   The :math:`\operatorname{group}` combinator also creates two primitives:
+
+   1. An attribute that relates each position entity to the respective position
+      value:
+
+      .. math::
+
+         \operatorname{position} : \operatorname{Posn} \to \operatorname{Text}
+
+   2. A plural link that relates each entity to a list of respective employees:
+
+      .. math::
+
+         \operatorname{employee} : \operatorname{Posn} \to \operatorname{Seq}\{\operatorname{Empl}\}
+
+
+.. slide:: Using the :math:`\operatorname{group}` Combinator
+   :level: 3
+
+   *Show a list of all positions, and, for each position, a list of respective
+   employees.*
+
+   Finally, we have all the components necessary for constructing this query:
+
+   .. math::
+
+      &\operatorname{group}(\operatorname{employee}, \operatorname{position}) &:
+      \operatorname{Void} &\to \operatorname{Seq}\{\operatorname{Posn}\} \\
+      &\operatorname{position} &: \operatorname{Posn} &\to \operatorname{Text} \\
+      &\operatorname{employee} &: \operatorname{Posn} &\to \operatorname{Seq}\{\operatorname{Empl}\}
+
+   We write it as follows:
+
+   .. math::
+
+      &\operatorname{employee} \\
+      &{:}\operatorname{group}(\operatorname{position}) \\
+      &{:}\operatorname{select}(\operatorname{position}, \operatorname{employee}{.}\operatorname{name})
+
+
+.. slide:: Using the :math:`\operatorname{group}` Combinator: Output
+   :level: 3
+
+   *Show a list of all positions, and, for each position, a list of respective
+   employees.*
+
+   .. code-block:: julia
+
+      employee
+      :group(position)
+      :select(
+          position,
+          employee.name)
+
+   .. code-block:: julia
+
+      ("1ST DEPUTY INSPECTOR GENERAL",["SHARON F"])
+      ("A/MGR COM SVC-ELECTIONS",["LAURA G"])
+      ("A/MGR OF MIS-ELECTIONS",["TIEN T"])
+      ("A/MGR WAREHOUSE-ELECTIONS",["DERRICK H"])
+      ⋮
+      ("ZONING PLAN EXAMINER",["KYLE B","PETER B","SHOSHA C",…])
+
+
