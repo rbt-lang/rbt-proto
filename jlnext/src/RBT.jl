@@ -9,6 +9,7 @@ module RBT
 include("export.jl")
 include("importbase.jl")
 include("type.jl")
+include("data.jl")
 
 end
 

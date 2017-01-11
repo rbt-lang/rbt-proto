@@ -241,6 +241,7 @@ function testcase(file, start, code, output)
     Base.link_pipe(pipe, julia_only_read=true, julia_only_write=true)
     redirect_stdout(pipe.in)
     redirect_stderr(pipe.in)
+    pushdisplay(TextDisplay(IOContext(pipe.in, limit=true)))
     try
         ans = try
             eval(mod, body)
@@ -253,6 +254,7 @@ function testcase(file, start, code, output)
         end
         println()
     finally
+        popdisplay()
         redirect_stdout(orig_stdout)
         redirect_stderr(orig_stderr)
     end
@@ -260,10 +262,44 @@ function testcase(file, start, code, output)
     append!(out, readavailable(pipe))
     close(pipe)
     expected = rstrip(output)
-    actual = rstrip(String(out))
-    return expected == actual ?
+    actual = rstrip(join(map(rstrip, eachline(IOBuffer(String(out)))), "\n"))
+    return expected == actual || ismatch(asregex(expected), actual) ?
         Pass(file, start, code, expected) :
         Fail(file, start, code, expected, actual)
+end
+
+function asregex(pat::String)
+    buf = IOBuffer()
+    space = false
+    skipspace = false
+    print(buf, "\\A")
+    for ch in pat
+        if ch == ' '
+            if !skipspace
+                space = true
+            end
+        elseif ch == '…'
+            print(buf, ".*")
+            space = false
+            skipspace = true
+        elseif ch == '⋮'
+            print(buf, "(.|\\n)*")
+            space = false
+            skipspace = true
+        else
+            if space
+                print(buf, "\\s+")
+                space = false
+            end
+            skipspace = false
+            if !('0' <= ch <= '9' || 'a' <= ch <= 'z' || 'A' <= ch <= 'Z')
+                print(buf, "\\")
+            end
+            print(buf, ch)
+        end
+    end
+    print(buf, "\\z")
+    return Regex(String(buf))
 end
 
 push!(LOAD_PATH, joinpath(dirname(@__FILE__), "../src"))

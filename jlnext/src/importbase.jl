@@ -2,7 +2,10 @@
 import Base:
     convert,
     get,
-    show
-
-
+    getindex,
+    length,
+    size,
+    show,
+    summary,
+    values
 
