@@ -85,3 +85,78 @@ values(flow::InputFlow) = flow.vals
 frameoffsets(flow::InputFlow) = get(flow.frameoffs)
 parameterflows(flow::InputFlow) = flow.paramflows
 
+# Converting to a smaller input signature.
+
+function narrow(flow::InputFlow, sig::Input)
+    if mode(flow.sig) == mode(sig)
+        return flow
+    end
+    @assert fits(mode(flow.sig), mode(sig))
+    frameoffs = !isrelative(sig) ? InputFrame() : flow.frameoffs
+    paramflows =
+        if length(flow.paramflows) == length(parameters(sig))
+            flow.paramflows
+        elseif length(parameters(sig)) == 0
+            ()
+        else
+            keep = Set(n for (n, param) in parameters(sig))
+            filter(p -> p.first in keep, flow.paramflows)
+        end
+    return InputFlow(flow.ctx, domain(sig), flow.vals, frameoffs, paramflows)
+end
+
+# Converting output flow to a new input flow.
+
+function distribute(iflow::InputFlow, oflow::OutputFlow)
+    @assert length(iflow) == length(oflow)
+    return InputFlow(
+        iflow.ctx,
+        domain(oflow),
+        values(oflow),
+        !isnull(iflow.frameoffs) ?
+            InputFrame(dist_frameoffs(get(iflow.frameoffs), offsets(oflow))) :
+            iflow.frameoffs,
+        !isempty(iflow.paramflows) ?
+            dist_paramflows(iflow.paramflows, offsets(oflow)) :
+            iflow.paramflows)
+end
+
+function dist_frameoffs(frameoffs::AbstractVector{Int}, offs::AbstractVector{Int})
+    len = 1
+    for i = 2:endof(frameoffs)
+        l = offs[frameoffs[i-1]]
+        r = offs[frameoffs[i]]
+        if l < r
+            len += 1
+        end
+    end
+    distoffs = Vector{Int}(len)
+    distoffs[1] = 1
+    k = 1
+    for i = 2:endof(frameoffs)
+        l = offs[frameoffs[i-1]]
+        r = offs[frameoffs[i]]
+        if l < r
+            k += 1
+            distoffs[k] = r
+        end
+    end
+    return distoffs
+end
+
+dist_frameoffs(frameoffs::AbstractVector{Int}, ::OneTo) = frameoffs
+
+function dist_paramflows(paramflows::InputParameterFlows, offs::AbstractVector{Int})
+    remap = Vector{Int}(offs[end]-1)
+    for i = 1:endof(offs)-1
+        l = offs[i]
+        r = offs[i+1]
+        for k = l:r-1
+            remap[k] = i
+        end
+    end
+    return InputParameterFlow[n => pflow[remap] for (n, pflow) in paramflows]
+end
+
+dist_paramflows(paramflows::InputParameterFlows, ::OneTo) = paramflows
+

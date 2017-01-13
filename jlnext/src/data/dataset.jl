@@ -22,11 +22,21 @@ DataSet(flow1::OutputFlow, flows::OutputFlow...) =
 # Array interface.
 
 size(ds::DataSet) = (ds.len,)
+
 length(ds::DataSet) = ds.len
+
 getindex(ds::DataSet, i::Int) =
     ((flow[i] for flow in ds.flows)...)
+
+getindex(ds::DataSet, idxs::AbstractVector{Int}) =
+    DataSet(length(idxs), OutputFlow[flow[idxs] for flow in ds.flows])
+
+Base.linearindexing(::Type{DataSet}) = Base.LinearFast()
+
 Base.array_eltype_show_how(::DataSet) = (true, "")
+
 Base.array_eltype_show_how{T,N,P<:DataSet,I,L}(::SubArray{T,N,P,I,L}) = (true, "")
+
 summary(ds::DataSet) = "DataSet[$(ds.len) \ud7 $(ds.dom)]"
 
 # Properties.

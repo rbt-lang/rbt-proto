@@ -7,5 +7,15 @@ import Base:
     size,
     show,
     summary,
-    values
+    values,
+    >>,
+    .==,
+    .!=,
+    .>,
+    .>=,
+    .<,
+    .<=,
+    ~,
+    &,
+    |
 

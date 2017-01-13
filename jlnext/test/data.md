@@ -9,6 +9,7 @@ A vector of data values together with a vector of offsets is called a *column*.
 
     using RBT:
         Column,
+        OneTo,
         offsets,
         values
 
@@ -19,12 +20,12 @@ have multiple attribute values.  To support optional and plural attributes, the
 data vector is indexed by an associated vector of offsets, which maps an entity
 to the respective attribute values.
 
-    iso_col = Column(1:11, 1:10)
+    iso_col = Column(OneTo(11), 1:10)
     #-> [[1],[2],[3],[4],[5],[6],[7],[8],[9],[10]]
 
     display(iso_col)
     #=>
-    10-element RBT.Column{Int64,UnitRange{Int64},UnitRange{Int64}}:
+    10-element RBT.Column{Int64,Base.OneTo{Int64},UnitRange{Int64}}:
      [1]
      [2]
      [3]
@@ -70,11 +71,48 @@ to the respective attribute values.
      [9,10]
     =#
 
+Columns could also be constructed out of a single vector of data.
+
+    Column([2,3,5])
+    #-> [[2],[3],[5]]
+
+    Column([Nullable{Int}(), Nullable(2), Nullable(3), Nullable{Int}(), Nullable(5)])
+    #-> [Int64[],[2],[3],Int64[],[5]]
+
+    Column([Int[], [2], [3,5]])
+    #-> [Int64[],[2],[3,5]]
+
+Columns could be reordered.
+
+    display(iso_col[[1,3,5]])
+    #=>
+    3-element RBT.Column{Int64,Base.OneTo{Int64},Array{Int64,1}}:
+     [1]
+     [3]
+     [5]
+    =#
+
+    display(opt_col[[1,3,5]])
+    #=>
+    3-element RBT.Column{Int64,Array{Int64,1},Array{Int64,1}}:
+     Int64[]
+     [2]
+     [4]
+    =#
+
+    display(seq_col[[1,3,5]])
+    #=>
+    3-element RBT.Column{Int64,Array{Int64,1},Array{Int64,1}}:
+     [1,2]
+     [5,6]
+     [9,10]
+    =#
+
 The components of the column could be obtained using functions
 `offsets()` and `values()`.
 
     offsets(iso_col)
-    #-> 1:11
+    #-> Base.OneTo(11)
 
     values(opt_col)
     #-> 1:10
@@ -172,13 +210,17 @@ Input flow
 The query input is represented as an *input flow*.
 
     using RBT:
+        Input,
         InputContext,
         InputFlow,
         InputFrame,
+        InputParameter,
         InputParameterFlow,
         context,
+        distribute,
         frameoffsets,
         input,
+        narrow,
         parameterflows,
         values
 
@@ -224,16 +266,19 @@ to specify the values of the parameters.
         ctx,
         Int64,
         1:10,
-        [InputParameterFlow(:X, OutputFlow(Int64, 1:11, 10:10:100))])
+        [
+            InputParameterFlow(:X, OutputFlow(Int64, 1:11, 10:10:100)),
+            InputParameterFlow(:Y, OutputFlow(Int64, 1:11, 100:100:1000)),
+        ])
     display(param_flow)
     #=>
-    InputFlow[10 × {Int64, X => Int64}]:
-     (1,:X=>10)
-     (2,:X=>20)
-     (3,:X=>30)
+    InputFlow[10 × {Int64, X => Int64, Y => Int64}]:
+     (1,:X=>10,:Y=>100)
+     (2,:X=>20,:Y=>200)
+     (3,:X=>30,:Y=>300)
      ⋮
-     (9,:X=>90)
-     (10,:X=>100)
+     (9,:X=>90,:Y=>900)
+     (10,:X=>100,:Y=>1000)
     =#
 
 We can easily extract individual components of the input flow.
@@ -251,7 +296,87 @@ We can easily extract individual components of the input flow.
     #-> 1:2:11
 
     parameterflows(param_flow)
-    #-> Pair{Symbol,RBT.OutputFlow}[:X=>[10,20,30,40,50,60,70,80,90,100]]
+    #-> Pair{Symbol,RBT.OutputFlow}[:X=>[10  …  100],:Y=>[100  …  1000]]
+
+The input flow could be narrowed to a smaller input signature.
+
+    nrel_flow = narrow(rel_flow, Input(Int64, relative=false))
+    display(nrel_flow)
+    #=>
+    InputFlow[10 × Int64]:
+      1
+      2
+      ⋮
+     10
+    =#
+
+    nparam_flow = narrow(param_flow, Input(Int64, parameters=(InputParameter(:X, Int64),)))
+    display(nparam_flow)
+    #=>
+    InputFlow[10 × {Int64, X => Int64}]:
+     (1,:X=>10)
+     (2,:X=>20)
+     ⋮
+     (10,:X=>100)
+    =#
+
+Given an input flow and the corresponding output flow, we can form a new input
+flow.
+
+    iflow = InputFlow(
+        ctx,
+        Int64,
+        1:10,
+        InputFrame(1:2:11),
+        [InputParameterFlow(:X, OutputFlow(Int64, 1:11, 10:10:100))])
+    display(iflow)
+    #=>
+    InputFlow[10 × {(Int64...), X => Int64}]:
+     ((1,[1,2]),:X=>10)
+     ((2,[1,2]),:X=>20)
+     ((1,[3,4]),:X=>30)
+     ((2,[3,4]),:X=>40)
+     ((1,[5,6]),:X=>50)
+     ((2,[5,6]),:X=>60)
+     ((1,[7,8]),:X=>70)
+     ((2,[7,8]),:X=>80)
+     ((1,[9,10]),:X=>90)
+     ((2,[9,10]),:X=>100)
+    =#
+
+    oflow = OutputFlow(
+        Output(Int64, optional=true, plural=true),
+        [1,1,1,2,2,3,4,6,9,11,11],
+        -1:-1:-10)
+    display(oflow)
+    #=>
+    OutputFlow[10 × Int64*]:
+     Int64[]
+     Int64[]
+     [-1]
+     Int64[]
+     [-2]
+     [-3]
+     [-4,-5]
+     [-6,-7,-8]
+     [-9,-10]
+     Int64[]
+    =#
+
+    display(distribute(iflow, oflow))
+    #=>
+    InputFlow[10 × {(Int64...), X => Int64}]:
+     ((1,[-1]),:X=>30)
+     ((1,[-2,-3]),:X=>50)
+     ((2,[-2,-3]),:X=>60)
+     ((1,[-4,-5,-6,-7,-8]),:X=>70)
+     ((2,[-4,-5,-6,-7,-8]),:X=>70)
+     ((3,[-4,-5,-6,-7,-8]),:X=>80)
+     ((4,[-4,-5,-6,-7,-8]),:X=>80)
+     ((5,[-4,-5,-6,-7,-8]),:X=>80)
+     ((1,[-9,-10]),:X=>90)
+     ((2,[-9,-10]),:X=>90)
+    =#
 
 
 Datasets
@@ -303,5 +428,16 @@ Datasets could be nested.
     DataSet[2 × {Int64, {Int64, Int64?, Int64+}+}]:
      (1,[(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (5,5,[21,22,23,24,25])])
      (2,[(6,6,[26,27,28,29,30]),(7,7,[31,32,33,34,35])  …  (10,#NULL,[46,47,48,49,50])])
+    =#
+
+Datasets could be rearranged.
+
+    display(tree_ds[[2,1,2,1]])
+    #=>
+    DataSet[4 × {Int64, {Int64, Int64?, Int64+}+}]:
+     (2,[(6,6,[26,27,28,29,30]),(7,7,[31,32,33,34,35])  …  (10,#NULL,[46,47,48,49,50])])
+     (1,[(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (5,5,[21,22,23,24,25])])
+     (2,[(6,6,[26,27,28,29,30]),(7,7,[31,32,33,34,35])  …  (10,#NULL,[46,47,48,49,50])])
+     (1,[(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (5,5,[21,22,23,24,25])])
     =#
 

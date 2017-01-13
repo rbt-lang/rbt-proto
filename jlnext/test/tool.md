@@ -1,0 +1,114 @@
+Primitives and combinators
+==========================
+
+
+Identity
+--------
+
+The identity primitive maps any value to itself.
+
+    using RBT:
+        HereTool,
+        run
+
+    t = HereTool(Int64)
+    #-> Int64 -> Int64
+
+    run(t, 1:10)
+    #-> [1,2,3,4,5,6,7,8,9,10]
+
+
+Constant
+--------
+
+The constant primitive produces the same value on any input.
+
+    using RBT:
+        CollectionTool,
+        ConstTool,
+        NullConstTool,
+        run
+
+    t = ConstTool(7)
+    #-> Any -> Int64
+
+    run(t, 1:10)
+    #-> [7,7,7,7,7,7,7,7,7,7]
+
+The `null` constant produces no value on any input.
+
+    t = NullConstTool()
+    #-> Any -> Zero?
+
+    run(t, 1:10)
+    #-> [#NULL,#NULL  …  #NULL]
+
+The collection primitive produces a plural constant value.
+
+    t = CollectionTool([2,3,5,7])
+    #-> Any -> Int64*
+
+    run(t, 1:10)
+    #-> [[2,3,5,7],[2,3,5,7]  …  [2,3,5,7]]
+
+
+Mappings
+--------
+
+Attributes and relationships could be encoded using the mapping primitive.
+
+    using RBT:
+        MappingTool,
+        Output,
+        run
+
+    t = MappingTool(Int, Int, 1:11, 10:10:100)
+    #-> Int64 -> Int64
+
+    run(t, [2,3,5,7])
+    #-> [20,30,50,70]
+
+Optional and plural attributes could also be represented.
+
+    t = MappingTool(
+        Int,
+        Output(Int, optional=true),
+        [1; 1:11; 11],
+        10:10:100)
+    #-> Int64 -> Int64?
+
+    run(t, [1,2,3,5,7])
+    #-> [#NULL,10,20,40,60]
+
+    t = MappingTool(
+        Int,
+        Output(Int, plural=true),
+        1:2:11,
+        10:10:100)
+    #-> Int64 -> Int64+
+
+    run(t, [3,5])
+    #-> [[50,60],[90,100]]
+
+
+Composition
+-----------
+
+Two queries with compatible input and output could be composed.
+
+    using RBT:
+        CollectionTool,
+        MappingTool
+
+    t1 = CollectionTool([2,3,5])
+    #-> Any -> Int64*
+
+    t2 = MappingTool(Int, Output(Int, plural=true), 1:2:11, 10:10:100)
+    #-> Int64 -> Int64+
+
+    t = t1 >> t2
+    #-> Any -> Int64*
+
+    run(t, [nothing])
+    #-> [[30,40,50,60,90,100]]
+

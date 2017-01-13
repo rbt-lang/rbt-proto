@@ -11,30 +11,57 @@ OutputFlow(sig, offs, vals) = OutputFlow(sig, Column(offs, vals))
 
 # Array interface.
 
-size(data::OutputFlow) = (data.col.len,)
-length(data::OutputFlow) = data.col.len
-getindex(data::OutputFlow, i::Int) =
-    let offs = offsets(data), vals = values(data),
-        l = offs[i], r = offs[i+1], T = eltype(vals)
-        isplural(data.sig) ?
+size(flow::OutputFlow) = (flow.col.len,)
+
+length(flow::OutputFlow) = flow.col.len
+
+function getindex(flow::OutputFlow, i::Int)
+    offs = offsets(flow)
+    vals = values(flow)
+    l = offs[i]
+    r = offs[i+1]
+    T = eltype(vals)
+    item =
+        isplural(flow.sig) && length(flow) == 1 ?
+            vals :
+        isplural(flow.sig) ?
             view(vals, l:r-1) :
-        isoptional(data.sig) ?
+        isoptional(flow.sig) ?
             (l < r ? Nullable{T}(vals[l]) : Nullable{T}()) :
             vals[l]
+    if isentity(flow.sig)
+        E = Entity{classname(domain(flow.sig))}
+        item =
+            isplural(flow.sig) ?
+                E[E(i) for i in item] :
+            isoptional(flow.sig) && isnull(item) ?
+                Nullable{E}() :
+            isoptional(flow.sig) ?
+                Nullable{E}(get(item)) :
+            E(item)
     end
+    return item
+end
+
+getindex(flow::OutputFlow, idxs::AbstractVector{Int}) =
+    OutputFlow(flow.sig, flow.col[idxs])
+
+Base.linearindexing(flow::OutputFlow) = Base.LinearFast()
+
 Base.array_eltype_show_how(::OutputFlow) = (true, "")
-summary(data::OutputFlow) = "OutputFlow[$(length(data.col)) \ud7 $(data.sig)]"
+
+summary(flow::OutputFlow) = "OutputFlow[$(length(flow.col)) \ud7 $(flow.sig)]"
 
 # Data components.
 
-column(data::OutputFlow) = data.col
-offsets(data::OutputFlow) = offsets(data.col)
-values(data::OutputFlow) = values(data.col)
+column(flow::OutputFlow) = flow.col
+offsets(flow::OutputFlow) = offsets(flow.col)
+values(flow::OutputFlow) = values(flow.col)
 
 # Output signature and its properties.
 
-output(data::OutputFlow) = data.sig
-domain(data::OutputFlow) = domain(data.sig)
-mode(data::OutputFlow) = mode(data.sig)
-decorations(data::OutputFlow) = decorations(data.sig)
+output(flow::OutputFlow) = flow.sig
+domain(flow::OutputFlow) = domain(flow.sig)
+mode(flow::OutputFlow) = mode(flow.sig)
+decorations(flow::OutputFlow) = decorations(flow.sig)
 
