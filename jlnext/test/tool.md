@@ -98,7 +98,9 @@ Two queries with compatible input and output could be composed.
 
     using RBT:
         CollectionTool,
-        MappingTool
+        MappingTool,
+        Output,
+        run
 
     t1 = CollectionTool([2,3,5])
     #-> Any -> Int64*
@@ -111,4 +113,97 @@ Two queries with compatible input and output could be composed.
 
     run(t, [nothing])
     #-> [[30,40,50,60,90,100]]
+
+
+Records and fields
+------------------
+
+The record constructor generates record values.
+
+    using RBT:
+        FieldTool,
+        MappingTool,
+        Output,
+        RecordTool,
+        domain,
+        output,
+        run
+
+    t1 = MappingTool(Int, Int, 1:11, 10:10:100)
+    #-> Int64 -> Int64
+
+    t2 = MappingTool(
+        Int,
+        Output(Int, optional=true),
+        [1; 1:11; 11],
+        10:10:100)
+    #-> Int64 -> Int64?
+
+    t3 = MappingTool(
+        Int,
+        Output(Int, plural=true),
+        1:2:11,
+        10:10:100)
+    #-> Int64 -> Int64+
+
+    t = RecordTool(t1, t2, t3)
+    #-> Int64 -> {Int64, Int64?, Int64+}
+
+    display(run(t, [1,3,5]))
+    #=>
+    OutputFlow[3 × {Int64, Int64?, Int64+}]:
+     (10,#NULL,[10,20])
+     (30,20,[50,60])
+     (50,40,[90,100])
+    =#
+
+Individual fields could be extracted.
+
+    dom = domain(output(t))
+
+    t1 = t >> FieldTool(dom, 1)
+    #-> Int64 -> Int64
+
+    run(t1, [1,3,5])
+    #-> [10,30,50]
+
+    t2 = t >> FieldTool(dom, 2)
+    #-> Int64 -> Int64?
+
+    run(t2, [1,3,5])
+    #-> [#NULL,20,40]
+
+    t3 = t >> FieldTool(dom, 3)
+    #-> Int64 -> Int64+
+
+    run(t3, [1,3,5])
+    #-> [[10,20],[50,60],[90,100]]
+
+
+The count aggregate
+-------------------
+
+The count aggregate counts the number of values in a sequence.
+
+    using RBT:
+        CountTool
+        MappingTool,
+        Output,
+        run
+
+    t0 = MappingTool(
+        Int,
+        Output(Int, optional=true, plural=true),
+        [1,1,2,4,7,11],
+        1:10)
+    #-> Int64 -> Int64*
+
+    run(t0, 1:5)
+    #-> [Int64[],[1],[2,3],[4,5,6],[7,8,9,10]]
+
+    t = CountTool(t0)
+    #-> Int64 -> Int64
+
+    run(t, 1:5)
+    #-> [0,1,2,3,4]
 

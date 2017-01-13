@@ -205,3 +205,18 @@ Extracting data
      Emp(32181)
     =#
 
+
+Summarizing data
+----------------
+
+    using RBT:
+        Count
+
+*Show the number of departments.*
+
+    q = Start() |> Count(UnitDepartment())
+    #-> Unit -> Int64
+
+    execute(q)
+    #-> 35
+

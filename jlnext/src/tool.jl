@@ -68,4 +68,7 @@ include("tool/nullconst.jl")
 include("tool/collection.jl")
 include("tool/mapping.jl")
 include("tool/compose.jl")
+include("tool/record.jl")
+include("tool/field.jl")
+include("tool/count.jl")
 

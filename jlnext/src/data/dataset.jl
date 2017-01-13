@@ -45,4 +45,7 @@ domain(ds::DataSet) = ds.dom
 fields(ds::DataSet) = fields(ds.dom)
 flows(ds::DataSet) = ds.flows
 flow(ds::DataSet, i::Int) = ds.flows[i]
+column(ds::DataSet, i::Int) = column(flow(ds, i))
+offsets(ds::DataSet, i::Int) = offsets(flow(ds, i))
+values(ds::DataSet, i::Int) = values(flow(ds, i))
 
