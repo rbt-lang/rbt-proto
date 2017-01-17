@@ -31,6 +31,8 @@ function execute{T}(tool::AbstractTool, val::T=nothing)
     return oflow[1]
 end
 
+prim(tool::AbstractTool) = tool
+
 # Query wrapper.
 
 immutable Tool <: AbstractTool
@@ -49,6 +51,8 @@ input(tool::Tool) = tool.isig
 output(tool::Tool) = tool.osig
 
 run(tool::Tool, iflow::InputFlow)::OutputFlow = run(tool.tool, iflow)
+
+prim(tool::Tool) = Tool(prim(tool.tool))
 
 # Unary combinator interface.
 
@@ -75,4 +79,5 @@ include("tool/record.jl")
 include("tool/field.jl")
 include("tool/count.jl")
 include("tool/op.jl")
+include("tool/aggregate.jl")
 

@@ -48,7 +48,7 @@ run(tool::OpTool, iflow::InputFlow) =
 
 prim(tool::OpTool) =
     let omode = obound(OutputMode, (mode(output(F)) for F in tool.Fs)...)
-        RecordTool(tool.Fs) >> OpPrimTool(tool.op, tool.itypes, tool.otype, omode)
+        RecordTool(map(prim, tool.Fs)) >> OpPrimTool(tool.op, tool.itypes, tool.otype, omode)
     end
 
 Op(op::Function, itypes::Tuple{Type}, otype::Type, Fs::Combinator...) =

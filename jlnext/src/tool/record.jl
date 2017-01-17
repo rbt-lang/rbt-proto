@@ -31,3 +31,6 @@ Record(Fs...) =
                 P >> RecordTool((F(Q) for F in Fs)...)
             end)
 
+Summarize(Fs...) =
+    Combinator(P -> RecordTool((F(P) for F in Fs)...))
+

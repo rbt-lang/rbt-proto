@@ -7,7 +7,7 @@ immutable ComposeTool <: AbstractTool
     G::Tool
 
     function ComposeTool(F::Tool, G::Tool)
-        @assert fits(output(F), input(G))
+        @assert fits(output(F), input(G)) "($F) >> ($G)"
         return new(F, G)
     end
 

@@ -83,11 +83,10 @@ Next, we convert this data to primitive queries.
 Finally, we will convert the queries to combinators.
 
     using RBT:
-        Combinator,
-        Start
+        Combinator
 
-    UnitDepartment() = Combinator(dept_query)
-    UnitEmployee() = Combinator(emp_query)
+    Department() = Combinator(dept_query)
+    Employee() = Combinator(emp_query)
 
     DeptName() = Combinator(dept_name_query)
     DeptEmployee() = Combinator(dept_employee_query)
@@ -99,19 +98,17 @@ Finally, we will convert the queries to combinators.
     EmpManager() = Combinator(emp_manager_query)
     EmpSubordinate() = Combinator(emp_subordinate_query)
 
-    Department() = Start() |> UnitDepartment()
-    Employee() = Start() |> UnitEmployee()
-
 
 Extracting data
 ---------------
 
     using RBT:
+        Start,
         execute
 
 *Show the name of each department.*
 
-    q = Department() |> DeptName()
+    q = Start() |> Department() |> DeptName()
     #-> Unit -> String*
 
     display(execute(q))
@@ -127,7 +124,7 @@ Extracting data
 
 *For each department, show the name of each employee.*
 
-    q = Department() |> DeptEmployee() |> EmpName()
+    q = Start() |> Department() |> DeptEmployee() |> EmpName()
     #-> Unit -> String*
 
     display(execute(q))
@@ -143,7 +140,7 @@ Extracting data
 
 *Show the name of each employee.*
 
-    q = Employee() |> EmpName()
+    q = Start() |> Employee() |> EmpName()
     #-> Unit -> String*
 
     display(execute(q))
@@ -159,7 +156,7 @@ Extracting data
 
 *For each employee, show the name of their department.*
 
-    q = Employee() |> EmpDepartment() |> DeptName()
+    q = Start() |> Employee() |> EmpDepartment() |> DeptName()
     #-> Unit -> String*
 
     display(execute(q))
@@ -175,7 +172,7 @@ Extracting data
 
 *Show the position of each employee.*
 
-    q = Employee() |> EmpPosition()
+    q = Start() |> Employee() |> EmpPosition()
     #-> Unit -> String*
 
     display(execute(q))
@@ -191,7 +188,7 @@ Extracting data
 
 *Show all employees.*
 
-    q = Employee()
+    q = Start() |> Employee()
     #-> Unit -> Emp*
 
     display(execute(q))
@@ -210,13 +207,39 @@ Summarizing data
 ----------------
 
     using RBT:
-        Count
+        Count,
+        MaxOf,
+        ThenMax
 
 *Show the number of departments.*
 
-    q = Start() |> Count(UnitDepartment())
+    q = Start() |> Count(Department())
     #-> Unit -> Int64
 
     execute(q)
     #-> 35
+
+*What is the highest employee salary?*
+
+    q = Start() |> MaxOf(Employee() |> EmpSalary())
+    #-> Unit -> Int64?
+
+    execute(q)
+    #-> Nullable{Int64}(260004)
+
+*For each department, show the number of employees.*
+
+    q = Start() |> Department() |> Count(DeptEmployee())
+    #-> Unit -> Int64*
+
+    execute(q)
+    #-> [1848,13570,924  …  39,1]
+
+*How many employees are in the largest department?*
+
+    q = q |> ThenMax()
+    #-> Unit -> Int64?
+
+    execute(q)
+    #-> Nullable{Int64}(13570)
 

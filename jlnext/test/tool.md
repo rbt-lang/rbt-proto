@@ -253,3 +253,37 @@ It can also be applied to optional or plural queries.
      String["EZ6","EZ7","EZ8","EZ9"]
     =#
 
+
+Aggregate functions
+-------------------
+
+Aggregate combinators transform plural queries to singular queries.
+
+    using RBT:
+        AggregateTool,
+        MappingTool,
+        Output,
+        run
+
+    t0 = MappingTool(
+        Int,
+        Output(Int, optional=true, plural=true),
+        [1,1,2,4,7,11],
+        1:10)
+    #-> Int64 -> Int64*
+
+    run(t0, 1:5)
+    #-> [Int64[],[1],[2,3],[4,5,6],[7,8,9,10]]
+
+    t = AggregateTool(minimum, false, t0)
+    #-> Int64 -> Int64?
+
+    run(t, 1:5)
+    #-> [#NULL,1,2,4,7]
+
+    t = AggregateTool(sum, true, t0)
+    #-> Int64 -> Int64
+
+    run(t, 1:5)
+    #-> [0,1,5,15,34]
+

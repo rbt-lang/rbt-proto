@@ -13,7 +13,7 @@ run(tool::CountTool, iflow::InputFlow) =
     run(prim(tool), iflow)
 
 prim(tool::CountTool) =
-    RecordTool(tool.F) >> CountPrimTool()
+    RecordTool(prim(tool.F)) >> CountPrimTool()
 
 Count(F) =
     Combinator(
