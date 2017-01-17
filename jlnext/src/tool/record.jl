@@ -27,7 +27,7 @@ run(tool::RecordTool, iflow::InputFlow) =
 Record(Fs...) =
     Combinator(
         P ->
-            let Q = HereTool(domain(output(P)))
+            let Q = Start(P)
                 P >> RecordTool((F(Q) for F in Fs)...)
             end)
 

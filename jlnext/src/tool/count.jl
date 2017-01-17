@@ -18,7 +18,7 @@ prim(tool::CountTool) =
 Count(F) =
     Combinator(
         P ->
-            let Q = HereTool(domain(output(P)))
+            let Q = Start(P)
                 P >> CountTool(F(Q))
             end)
 

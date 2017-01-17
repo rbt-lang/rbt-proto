@@ -207,3 +207,49 @@ The count aggregate counts the number of values in a sequence.
     run(t, 1:5)
     #-> [0,1,2,3,4]
 
+
+Scalar functions and operators
+------------------------------
+
+Any regular function or operator could be lifted to a query combinator.
+
+    using RBT:
+        MappingTool,
+        OpTool,
+        Output,
+        run
+
+    t0 = MappingTool(Int, String, 1:6, ["A","B","C","D","E"])
+    #-> Int64 -> String
+
+    t = OpTool(*, String, t0, t0, t0)
+    #-> Int64 -> String
+
+    run(t, 1:5)
+    #-> ["AAA","BBB","CCC","DDD","EEE"]
+
+It can also be applied to optional or plural queries.
+
+    t1 = MappingTool(Int, Output(String, optional=true), [1,2,2,3,3,4], ["X","Y","Z"])
+    #-> Int64 -> String?
+
+    t2 = MappingTool(
+        Int,
+        Output(String, optional=true, plural=true),
+        [1,1,2,4,7,11],
+        ["0","1","2","3","4","5","6","7","8","9"])
+    #-> Int64 -> String*
+
+    t = OpTool(*, String, t0, t1, t2)
+    #-> Int64 -> String*
+
+    display(run(t, 1:5))
+    #=>
+    OutputFlow[5 × String*]:
+     String[]
+     String[]
+     String["CY1","CY2"]
+     String[]
+     String["EZ6","EZ7","EZ8","EZ9"]
+    =#
+

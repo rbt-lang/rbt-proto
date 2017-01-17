@@ -19,4 +19,6 @@ run(tool::HereTool, iflow::InputFlow) =
 Here() = Combinator(P -> P)
 
 Start() = HereTool(Unit)
+Start(dom) = HereTool(dom)
+Start(tool::AbstractTool) = Start(domain(output(tool)))
 

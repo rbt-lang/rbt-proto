@@ -62,6 +62,9 @@ Combinator(tool::AbstractTool) =
 (c::Combinator)(tool::AbstractTool)::AbstractTool =
     c.combinator(tool)
 
+(c::Combinator)(d::Combinator)::Combinator =
+    Combinator(P -> c(d(P)))
+
 include("tool/here.jl")
 include("tool/const.jl")
 include("tool/nullconst.jl")
@@ -71,4 +74,5 @@ include("tool/compose.jl")
 include("tool/record.jl")
 include("tool/field.jl")
 include("tool/count.jl")
+include("tool/op.jl")
 
