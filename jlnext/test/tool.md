@@ -287,3 +287,28 @@ Aggregate combinators transform plural queries to singular queries.
     run(t, 1:5)
     #-> [0,1,5,15,34]
 
+
+Filtering
+---------
+
+The sieve combinator passes data the satisfies a certain condition.
+
+    using RBT:
+        CollectionTool,
+        HereTool,
+        OpTool,
+        SieveTool,
+        run
+
+    t0 = CollectionTool(1:10)
+    #-> Any -> Int64*
+
+    t1 = OpTool(isodd, (Int,), Bool, HereTool(Int))
+    #-> Int64 -> Bool
+
+    t = t0 >> SieveTool(t1)
+    #-> Any -> Int64*
+
+    run(t, [nothing])
+    #-> [[1,3,5,7,9]]
+

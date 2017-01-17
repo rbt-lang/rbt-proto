@@ -243,3 +243,43 @@ Summarizing data
     execute(q)
     #-> Nullable{Int64}(13570)
 
+
+Filtering data
+--------------
+
+    using RBT:
+        Const,
+        Record,
+        ThenCount,
+        ThenFilter
+
+*Which employees have a salary higher than $150k?*
+
+    q = Start() |>
+        Employee() |>
+        ThenFilter(EmpSalary() .> Const(150000)) |>
+        Record(EmpName(), EmpDepartment() |> DeptName(), EmpPosition(), EmpSalary())
+    #-> Unit -> {String, String, String, Int64}*
+
+    display(execute(q))
+    #=>
+    DataSet[151 × {String, String, String, Int64}]:
+     ("DANA A","POLICE","DEPUTY CHIEF",170112)
+     ("VERDIE A","FIRE","ASST DEPUTY CHIEF PARAMEDIC",156360)
+     ("SCOTT A","IPRA","CHIEF ADMINISTRATOR",161856)
+     ⋮
+     ("ALFONZA W","POLICE","FIRST DEPUTY SUPERINTENDENT",197736)
+     ("GARY Y","POLICE","COMMANDER",162684)
+    =#
+
+*How many departments have more than 1000 employees?*
+
+    q = Start() |>
+        Department() |>
+        ThenFilter(Count(DeptEmployee()) .> Const(1000)) |>
+        ThenCount()
+    #-> Unit -> Int64
+
+    execute(q)
+    #-> 7
+

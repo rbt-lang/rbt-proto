@@ -21,6 +21,9 @@ end
 OpTool(op::Function, itypes, otype::Type, Fs) =
     OpTool(op, convert(Tuple{Vararg{Type}}, itypes), otype, convert(Vector{Tool}, Fs))
 
+OpTool(op::Function, itypes, otype::Type, Fs::AbstractTool...) =
+    OpTool(op, itypes, otype, collect(Tool, Fs))
+
 OpTool(op::Function, otype, Fs::AbstractTool...) =
     let Fs = collect(Tool, Fs)
         OpTool(op, ((datatype(domain(output(F))) for F in Fs)...), otype, Fs)
