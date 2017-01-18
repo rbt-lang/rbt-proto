@@ -33,6 +33,33 @@ getindex(ds::DataSet, idxs::AbstractVector{Int}) =
 
 Base.linearindexing(::Type{DataSet}) = Base.LinearFast()
 
+function vcat(ds1::DataSet, ds2::DataSet)
+    flows = OutputFlow[]
+    w1 = length(ds1.flows)
+    w2 = length(ds2.flows)
+    for k = 1:min(w1, w2)
+        push!(flows, vcat(ds1.flows[k], ds2.flows[k]))
+    end
+    if w1 < w2
+        dummy1 =
+            OutputFlow(
+                Output(Zero, optional=true),
+                Column(fill(1, ds1.len+1), Zero[]))
+        for k = w1+1:w2
+            push!(flows, vcat(dummy1, ds2.flows[k]))
+        end
+    elseif w1 > w2
+        dummy2 =
+            OutputFlow(
+                Output(Zero, optional=true),
+                Column(fill(1, ds2.len+1), Zero[]))
+        for k = w2+1:w1
+            push!(flows, vcat(ds1.flows[k], dummy2))
+        end
+    end
+    return DataSet(ds1.len+ds2.len, flows)
+end
+
 Base.array_eltype_show_how(::DataSet) = (true, "")
 
 Base.array_eltype_show_how{T,N,P<:DataSet,I,L}(::SubArray{T,N,P,I,L}) = (true, "")

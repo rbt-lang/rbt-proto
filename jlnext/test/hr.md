@@ -500,3 +500,45 @@ Query aliases
      (Dept(5),"STREETS & SAN",2090)
     =#
 
+
+Hierarchical relationships
+--------------------------
+
+    using RBT:
+        AnyOf,
+        Connect
+
+*Find all employees whose salary is higher than the salary of their manager.*
+
+    q = (Start()
+        |> Employee()
+        |> ThenFilter(EmpSalary() .> (EmpManager() |> EmpSalary()))
+        |> EmpRecord())
+    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+
+    display(execute(q))
+    #=>
+    DataSet[1 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+     ("BRIAN L","TREASURER","AUDITOR IV",114492)
+    =#
+
+*Find all direct and indirect subordinates of the City Treasurer.*
+
+    q = (Start()
+        |> Employee()
+        |> ThenFilter(
+                AnyOf((Connect(EmpManager()) |> EmpPosition()) .== Const("CITY TREASURER")))
+        |> EmpRecord())
+    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+
+    display(execute(q))
+    #=>
+    DataSet[23 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+     ("SAEED A","TREASURER","ASST CITY TREASURER",85020)
+     ("ELIZABETH A","TREASURER","ACCOUNTANT I",72840)
+     ("KONSTANTINES A","TREASURER","ASSISTANT DIRECTOR OF FINANCE",73080)
+     ⋮
+     ("KENNETH S","TREASURER","ASST CITY TREASURER",75000)
+     ("ALEXANDRA S","TREASURER","DEPUTY CITY TREASURER",90000)
+    =#
+

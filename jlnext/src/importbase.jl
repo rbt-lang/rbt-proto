@@ -8,6 +8,7 @@ import Base:
     show,
     summary,
     values,
+    vcat,
     >>,
     .==,
     .!=,

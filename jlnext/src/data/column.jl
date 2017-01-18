@@ -139,6 +139,24 @@ function getindex{T,O<:OneTo,V}(col::Column{T,O,V}, idxs::OneTo)
     end
 end
 
+function vcat(col1::Column, col2::Column)
+    offs = Vector{Int}(col1.len+col2.len+1)
+    for k = 1:col1.len
+        offs[k] = col1.offs[k]
+    end
+    L = col1.offs[col1.len+1]
+    for k = 1:col2.len+1
+        offs[col1.len+k] = col2.offs[k] + L
+    end
+    vals = vcat(col1.vals, col2.vals)
+    return Column(offs, vals)
+end
+
+vcat{T1,V1,T2,V2}(col1::Column{T1,OneTo{Int},V1}, col2::Column{T2,OneTo{Int},V2}) =
+    Column(
+        OneTo(col1.len+col2.len+1),
+        vcat(col1.vals, col2.vals))
+
 Base.linearindexing{T,O,V}(::Type{Column{T,O,V}}) = Base.LinearFast()
 
 Base.array_eltype_show_how(::Column) = (true, "")

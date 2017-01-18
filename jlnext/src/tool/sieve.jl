@@ -92,7 +92,7 @@ function run_sieve(vals::AbstractVector, predoffs::AbstractVector{Int}, predvals
     offs[1] = 1
     idxs = Vector{Int}(size)
     n = 1
-    for k in eachindex(predoffs)
+    for k in 1:len
         l = predoffs[k]
         r = predoffs[k+1]
         if l < r && predvals[l]

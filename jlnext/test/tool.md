@@ -431,3 +431,58 @@ The take and skip combinators can be used to paginate the output.
     run(t, 1:5)
     #-> [Int64[],[1],[2,3],[4,5,6],[7,8,9,10]]
 
+
+Hierarchical closure
+--------------------
+
+The connect combinator calculates a closure of a self-referential query.
+
+    using RBT:
+        ConnectTool
+
+    t0 = MappingTool(
+        Int,
+        Output(Int, optional=true),
+        [1,2,3,4,5,5],
+        2:5)
+    #-> Int64 -> Int64?
+
+    run(t0, 1:5)
+    #-> [2,3,4,5,#NULL]
+
+    t = ConnectTool(t0, true)
+    #-> Int64 -> Int64+
+
+    run(t, 1:5)
+    #-> [[1,2,3,4,5],[2,3,4,5],[3,4,5],[4,5],[5]]
+
+    t = ConnectTool(t0, false)
+    #-> Int64 -> Int64*
+
+    run(t, 1:5)
+    #-> [[2,3,4,5],[3,4,5],[4,5],[5],Int64[]]
+
+The connect combinator also works with plural relationships.
+
+    t0 = MappingTool(
+        Int,
+        Output(Int, optional=true, plural=true),
+        [1,1,1,1,2,2,4,4,6,7,9,9,12],
+        [2,3,2,4,2,3,5,2,6,3,2])
+    #-> Int64 -> Int64*
+
+    run(t0, 1:12)
+    #-> [Int64[],Int64[],Int64[],[2],Int64[],[3,2],Int64[],[4,2],[3],[5,2],Int64[],[6,3,2]]
+
+    t = ConnectTool(t0, true)
+    #-> Int64 -> Int64+
+
+    run(t, 1:12)
+    #-> [[1],[2],[3],[4,2],[5],[6,3,2],[7],[8,4,2,2],[9,3],[10,5,2],[11],[12,6,3,2,3,2]]
+
+    t = ConnectTool(t0, false)
+    #-> Int64 -> Int64*
+
+    run(t, 1:12)
+    #-> [Int64[],Int64[],Int64[],[2],Int64[],[3,2],Int64[],[4,2,2],[3],[5,2],Int64[],[6,3,2,3,2]]
+

@@ -48,6 +48,9 @@ getindex(flow::OutputFlow, idxs::AbstractVector{Int}) =
 
 Base.linearindexing(flow::OutputFlow) = Base.LinearFast()
 
+vcat(flow1::OutputFlow, flow2::OutputFlow) =
+    OutputFlow(obound(flow1.sig, flow2.sig), vcat(flow1.col, flow2.col))
+
 Base.array_eltype_show_how(::OutputFlow) = (true, "")
 
 summary(flow::OutputFlow) = "OutputFlow[$(length(flow.col)) \ud7 $(flow.sig)]"
