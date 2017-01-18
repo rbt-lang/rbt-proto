@@ -24,6 +24,8 @@ prim(tool::DecorateTool) =
 ThenDecorate(; decorations...) =
     Combinator(P -> DecorateTool(P; decorations...))
 
+ThenTag(tag::Symbol) = ThenDecorate(tag=tag)
+
 # Primitive decorator.
 
 immutable DecoratePrimTool <: AbstractTool

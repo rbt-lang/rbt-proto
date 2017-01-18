@@ -32,7 +32,7 @@ ThenFilter(F::Combinator) =
     Combinator(
         P ->
             let Q = Start(P)
-                P >> SieveTool(F(Q))
+                P >> SieveTool(F(Q)) >> HereTool(domain(output(Q)), decorations(output(Q)))
             end)
 
 # The sieve primitive.

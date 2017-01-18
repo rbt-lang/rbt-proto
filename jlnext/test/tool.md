@@ -180,13 +180,14 @@ Individual fields could be extracted.
     #-> [[10,20],[50,60],[90,100]]
 
 
-The count aggregate
--------------------
+The count and exists aggregates
+-------------------------------
 
 The count aggregate counts the number of values in a sequence.
 
     using RBT:
-        CountTool
+        CountTool,
+        ExistsTool,
         MappingTool,
         Output,
         run
@@ -206,6 +207,12 @@ The count aggregate counts the number of values in a sequence.
 
     run(t, 1:5)
     #-> [0,1,2,3,4]
+
+    t = ExistsTool(t0)
+    #-> Int64 -> Bool
+
+    run(t, 1:5)
+    #-> [false,true,true,true,true]
 
 
 Scalar functions and operators
