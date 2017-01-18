@@ -321,17 +321,20 @@ The sort combinator sorts the query output.
     using RBT:
         CollectionTool,
         DecorateTool,
+        MappingTool,
+        Output,
+        SortByTool,
         SortTool,
         run
 
-    t0 = CollectionTool([0,1,9,2,8,3,7,4,6,5])
+    t0 = CollectionTool([10,1,9,2,8,3,7,4,6,5])
     #-> Any -> Int64*
 
     t = SortTool(t0)
     #-> Any -> Int64*
 
     run(t, [nothing])
-    #-> [[0,1,2,3,4,5,6,7,8,9]]
+    #-> [[1,2,3,4,5,6,7,8,9,10]]
 
     t1 = DecorateTool(t0, rev=true)
     #-> Any -> Int64* [rev=true]
@@ -340,5 +343,33 @@ The sort combinator sorts the query output.
     #-> Any -> Int64* [rev=true]
 
     run(t, [nothing])
-    #-> [[9,8,7,6,5,4,3,2,1,0]]
+    #-> [[10,9,8,7,6,5,4,3,2,1]]
+
+It is also possible to sort by a key.
+
+    tkey = MappingTool(Int, Int, [k % 7 for k = 10:10:100])
+    #-> Int64 -> Int64
+
+    run(tkey, 1:10)
+    #-> [3,6,2,5,1,4,0,3,6,2]
+
+    t = SortByTool(t0, tkey)
+    #-> Any -> Int64*
+
+    run(t, [nothing])
+    #-> [[7,5,10,3,1,8,6,4,9,2]]
+
+The sorting key could be nullable.
+
+    tkey = MappingTool(Int, Output(Int, optional=true), [1,1,2,2,3,3,4,4,5,5,6], [1,2,3,4,5])
+    #-> Int64 -> Int64?
+
+    run(tkey, 1:10)
+    #-> [#NULL,1,#NULL,2,#NULL,3,#NULL,4,#NULL,5]
+
+    t = SortByTool(t0, DecorateTool(tkey, rev=true, nullrev=true))
+    #-> Any -> Int64*
+
+    run(t, [nothing])
+    #-> [[10,8,6,4,2,1,9,3,7,5]]
 

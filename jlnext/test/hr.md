@@ -98,6 +98,16 @@ Finally, we will convert the queries to combinators.
     EmpManager() = Combinator(emp_manager_query)
     EmpSubordinate() = Combinator(emp_subordinate_query)
 
+We also prepare the standard selectors for both entities.
+
+    using RBT:
+        Record
+
+    DeptRecord() = Record(DeptName())
+
+    EmpRecord() =
+        Record(EmpName(), EmpDepartment() |> DeptName(), EmpPosition(), EmpSalary())
+
 
 Extracting data
 ---------------
@@ -258,7 +268,7 @@ Filtering data
     q = Start() |>
         Employee() |>
         ThenFilter(EmpSalary() .> Const(150000)) |>
-        Record(EmpName(), EmpDepartment() |> DeptName(), EmpPosition(), EmpSalary())
+        EmpRecord()
     #-> Unit -> {String, String, String, Int64}*
 
     display(execute(q))
@@ -284,10 +294,11 @@ Filtering data
     #-> 7
 
 
-Sorting data
-------------
+Sorting and paginating data
+---------------------------
 
     using RBT:
+        ThenDesc,
         ThenSort
 
 *Show the names of all departments in alphabetical order.*
@@ -307,5 +318,43 @@ Sorting data
      ⋮
      "TREASURER"
      "WATER MGMNT"
+    =#
+
+*Show all employees ordered by salary.*
+
+    q = Start() |>
+        Employee() |>
+        ThenSort(EmpSalary()) |>
+        EmpRecord()
+    #-> Unit -> {String, String, String, Int64}*
+
+    display(execute(q))
+    #=>
+    DataSet[32181 × {String, String, String, Int64}]:
+     ("STEVEN K","MAYOR'S OFFICE","ADMINISTRATIVE SECRETARY",1)
+     ("BETTY A","FAMILY & SUPPORT","FOSTER GRANDPARENT",2756)
+     ("VICTOR A","FAMILY & SUPPORT","SENIOR COMPANION",2756)
+     ⋮
+     ("RAHM E","MAYOR'S OFFICE","MAYOR",216210)
+     ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
+    =#
+
+*Show all employees ordered by salary, highest paid first.*
+
+    q = Start() |>
+        Employee() |>
+        ThenSort(EmpSalary() |> ThenDesc()) |>
+        EmpRecord()
+    #-> Unit -> {String, String, String, Int64}*
+
+    display(execute(q))
+    #=>
+    DataSet[32181 × {String, String, String, Int64}]:
+     ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
+     ("RAHM E","MAYOR'S OFFICE","MAYOR",216210)
+     ("JOSE S","FIRE","FIRE COMMISSIONER",202728)
+     ⋮
+     ("BETTY A","FAMILY & SUPPORT","FOSTER GRANDPARENT",2756)
+     ("STEVEN K","MAYOR'S OFFICE","ADMINISTRATIVE SECRETARY",1)
     =#
 
