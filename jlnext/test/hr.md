@@ -283,3 +283,29 @@ Filtering data
     execute(q)
     #-> 7
 
+
+Sorting data
+------------
+
+    using RBT:
+        ThenSort
+
+*Show the names of all departments in alphabetical order.*
+
+    q = Start() |>
+        Department() |>
+        DeptName() |>
+        ThenSort()
+    #-> Unit -> String*
+
+    display(execute(q))
+    #=>
+    35-element Array{String,1}:
+     "ADMIN HEARNG"
+     "ANIMAL CONTRL"
+     "AVIATION"
+     ⋮
+     "TREASURER"
+     "WATER MGMNT"
+    =#
+

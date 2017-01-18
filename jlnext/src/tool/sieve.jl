@@ -47,14 +47,10 @@ input(tool::SievePrimTool) =
 output(tool::SievePrimTool) =
     Output(tool.dom, optional=true)
 
-run(tool::SievePrimTool, iflow::InputFlow) =
-    let ds = values(iflow)::DataSet
-        OutputFlow(
-            output(tool),
-            isplain(output(flow(ds, 2))) ?
-                run_plain_sieve(values(ds, 1), values(ds, 2)) :
-                run_sieve(values(ds, 1), offsets(ds, 2), values(ds, 2)))
-    end
+run_prim(tool::SievePrimTool, ds::DataSet) =
+    isplain(output(flow(ds, 2))) ?
+        run_plain_sieve(values(ds, 1), values(ds, 2)) :
+        run_sieve(values(ds, 1), offsets(ds, 2), values(ds, 2))
 
 function run_plain_sieve(vals::AbstractVector, predvals::AbstractVector{Bool})
     len = length(vals)

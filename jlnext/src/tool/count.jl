@@ -34,12 +34,8 @@ input(::CountPrimTool) = Input((Output(Any, optional=true, plural=true),))
 
 output(::CountPrimTool) = Output(Int)
 
-run(tool::CountPrimTool, iflow::InputFlow) =
-    let ds = values(iflow)::DataSet
-        OutputFlow(
-            output(tool),
-            run_count(length(ds), offsets(ds, 1)))
-    end
+run_prim(tool::CountPrimTool, ds::DataSet) =
+    run_count(length(ds), offsets(ds, 1))
 
 function run_count(len::Int, ioffs::AbstractVector{Int})
     vals = Vector{Int}(len)

@@ -104,14 +104,10 @@ input(tool::AggregatePrimTool) =
 output(tool::AggregatePrimTool) =
     Output(tool.otype, optional=(!tool.haszero && tool.optional))
 
-run(tool::AggregatePrimTool, iflow::InputFlow) =
-    let ds = values(iflow)::DataSet
-        OutputFlow(
-            output(tool),
-            tool.haszero || !tool.optional ?
-                run_plain_aggregate(tool.op, tool.otype, length(ds), column(ds, 1)) :
-                run_aggregate(tool.op, tool.otype, length(ds), column(ds, 1)))
-    end
+run_prim(tool::AggregatePrimTool, ds::DataSet) =
+    tool.haszero || !tool.optional ?
+        run_plain_aggregate(tool.op, tool.otype, length(ds), column(ds, 1)) :
+        run_aggregate(tool.op, tool.otype, length(ds), column(ds, 1))
 
 function run_plain_aggregate{T}(op::Function, otype::Type{T}, len::Int, arg::Column)
     argoffs = offsets(arg)

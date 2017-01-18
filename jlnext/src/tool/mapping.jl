@@ -14,13 +14,10 @@ input(tool::MappingTool) = Input(tool.dom)
 
 output(tool::MappingTool) = output(tool.flow)
 
-run(tool::MappingTool, iflow::InputFlow) =
-    OutputFlow(
-        output(tool),
-        run_mapping(values(iflow), column(tool.flow)))
-
-run_mapping(ivals::AbstractVector{Int}, col::Column) =
-    col[ivals]
+run_prim(tool::MappingTool, ivals::AbstractVector{Int}) =
+    let col = column(tool.flow)
+        col[ivals]
+    end
 
 Mapping(flow) = Combinator(MappingTool(flow))
 

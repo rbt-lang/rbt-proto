@@ -93,14 +93,10 @@ input(tool::OpPrimTool) =
 output(tool::OpPrimTool) =
     Output(tool.otype, tool.mode)
 
-run(tool::OpPrimTool, iflow::InputFlow) =
-    let ds = values(iflow)::DataSet
-        OutputFlow(
-            output(tool),
-            isplain(tool.mode) ?
-                run_plain_op(tool.op, tool.otype, length(ds), (values(flow) for flow in flows(ds))...) :
-                run_op(tool.op, tool.otype, length(ds), (column(flow) for flow in flows(ds))...))
-    end
+run_prim(tool::OpPrimTool, ds::DataSet) =
+    isplain(tool.mode) ?
+        run_plain_op(tool.op, tool.otype, length(ds), (values(flow) for flow in flows(ds))...) :
+        run_op(tool.op, tool.otype, length(ds), (column(flow) for flow in flows(ds))...)
 
 @generated function run_plain_op{T}(
         op::Function,

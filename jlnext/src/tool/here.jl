@@ -9,12 +9,8 @@ end
 input(tool::HereTool) = Input(tool.dom)
 output(tool::HereTool) = Output(tool.dom)
 
-run(tool::HereTool, iflow::InputFlow) =
-    OutputFlow(
-        output(tool),
-        Column(
-            OneTo(length(iflow)+1),
-            values(iflow)))
+run_prim(tool::HereTool, vals::AbstractVector) =
+    Column(OneTo(length(vals)+1), vals)
 
 Here() = Combinator(P -> P)
 

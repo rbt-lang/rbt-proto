@@ -13,7 +13,10 @@ input(tool::AbstractTool) = error("not implemented")
 
 output(tool::AbstractTool) = error("not implemented")
 
-run(tool::AbstractTool, iflow::InputFlow) = error("not implemented")
+run(tool::AbstractTool, iflow::InputFlow) =
+    OutputFlow(output(tool), run_prim(tool, values(iflow)))
+
+run_prim(tool::AbstractTool, ivals::AbstractVector) = error("not implemented")
 
 run(tool::AbstractTool, ctx::InputContext=InputContext(), dom=Domain(Unit), vals::AbstractVector=[nothing]) =
     run(tool, InputFlow(ctx, dom, vals))
@@ -70,6 +73,7 @@ Combinator(tool::AbstractTool) =
     Combinator(P -> c(d(P)))
 
 include("tool/here.jl")
+include("tool/decorate.jl")
 include("tool/const.jl")
 include("tool/nullconst.jl")
 include("tool/collection.jl")
@@ -81,4 +85,5 @@ include("tool/count.jl")
 include("tool/op.jl")
 include("tool/aggregate.jl")
 include("tool/sieve.jl")
+include("tool/sort.jl")
 

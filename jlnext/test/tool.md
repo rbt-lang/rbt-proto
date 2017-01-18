@@ -312,3 +312,33 @@ The sieve combinator passes data the satisfies a certain condition.
     run(t, [nothing])
     #-> [[1,3,5,7,9]]
 
+
+Sorting
+-------
+
+The sort combinator sorts the query output.
+
+    using RBT:
+        CollectionTool,
+        DecorateTool,
+        SortTool,
+        run
+
+    t0 = CollectionTool([0,1,9,2,8,3,7,4,6,5])
+    #-> Any -> Int64*
+
+    t = SortTool(t0)
+    #-> Any -> Int64*
+
+    run(t, [nothing])
+    #-> [[0,1,2,3,4,5,6,7,8,9]]
+
+    t1 = DecorateTool(t0, rev=true)
+    #-> Any -> Int64* [rev=true]
+
+    t = SortTool(t1)
+    #-> Any -> Int64* [rev=true]
+
+    run(t, [nothing])
+    #-> [[9,8,7,6,5,4,3,2,1,0]]
+
