@@ -86,4 +86,5 @@ include("tool/op.jl")
 include("tool/aggregate.jl")
 include("tool/sieve.jl")
 include("tool/sort.jl")
+include("tool/take.jl")
 

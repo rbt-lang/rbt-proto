@@ -254,14 +254,50 @@ Summarizing data
     #-> Nullable{Int64}(13570)
 
 
+Pipeline notation
+-----------------
+
+    using RBT:
+        Const,
+        ThenDesc,
+        ThenFilter,
+        ThenSort,
+        ThenSelect,
+        ThenTake
+
+*Show the top 10 highest paid employees in the Police department.*
+
+    q = Start() |>
+        Employee() |>
+        ThenFilter(EmpDepartment() |> DeptName() .== Const("POLICE")) |>
+        ThenSort(EmpSalary() |> ThenDesc()) |>
+        ThenSelect(EmpName(), EmpPosition(), EmpSalary()) |>
+        ThenTake(Const(10))
+    #-> Unit -> {Emp, String, String, Int64}*
+
+    display(execute(q))
+    #=>
+    DataSet[10 × {Emp, String, String, Int64}]:
+     (Emp(18040),"GARRY M","SUPERINTENDENT OF POLICE",260004)
+     (Emp(31712),"ALFONZA W","FIRST DEPUTY SUPERINTENDENT",197736)
+     (Emp(29026),"ROBERT T","CHIEF",194256)
+     (Emp(31020),"EUGENE W","CHIEF",185364)
+     (Emp(24184),"JUAN R","CHIEF",185364)
+     (Emp(23936),"ANTHONY R","CHIEF",185364)
+     (Emp(11020),"WAYNE G","CHIEF",185364)
+     (Emp(8066),"JOHN E","CHIEF",185364)
+     (Emp(30573),"EDDIE W","DEPUTY CHIEF",170112)
+     (Emp(30355),"ERIC W","DEPUTY CHIEF",170112)
+    =#
+
+
 Filtering data
 --------------
 
     using RBT:
         Const,
         Record,
-        ThenCount,
-        ThenFilter
+        ThenCount
 
 *Which employees have a salary higher than $150k?*
 
@@ -298,8 +334,7 @@ Sorting and paginating data
 ---------------------------
 
     using RBT:
-        ThenDesc,
-        ThenSort
+        Op
 
 *Show the names of all departments in alphabetical order.*
 
@@ -356,5 +391,28 @@ Sorting and paginating data
      ⋮
      ("BETTY A","FAMILY & SUPPORT","FOSTER GRANDPARENT",2756)
      ("STEVEN K","MAYOR'S OFFICE","ADMINISTRATIVE SECRETARY",1)
+    =#
+
+*Who are the top 1% of the highest paid employees?*
+
+    Base.div(F::Combinator, G::Combinator) =
+        Op(div, (Int, Int), Int, F, G)
+
+    q = Start() |>
+        Employee() |>
+        ThenSort(EmpSalary() |> ThenDesc()) |>
+        ThenTake(Count(Employee()) ÷ Const(100)) |>
+        EmpRecord()
+    #-> Unit -> {String, String, String, Int64}*
+
+    display(execute(q))
+    #=>
+    DataSet[321 × {String, String, String, Int64}]:
+     ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
+     ("RAHM E","MAYOR'S OFFICE","MAYOR",216210)
+     ("JOSE S","FIRE","FIRE COMMISSIONER",202728)
+     ⋮
+     ("JERRY W","FIRE","PARAMEDIC FIELD CHIEF",135480)
+     ("ROBERT T","FIRE","BATTALION CHIEF",135480)
     =#
 

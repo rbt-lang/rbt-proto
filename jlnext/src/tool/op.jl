@@ -54,7 +54,7 @@ prim(tool::OpTool) =
         RecordTool(map(prim, tool.Fs)) >> OpPrimTool(tool.op, tool.itypes, tool.otype, omode)
     end
 
-Op(op::Function, itypes::Tuple{Type}, otype::Type, Fs::Combinator...) =
+Op(op::Function, itypes::Tuple{Vararg{Type}}, otype::Type, Fs::Combinator...) =
     Combinator(
         P ->
             let Q = Start(P)

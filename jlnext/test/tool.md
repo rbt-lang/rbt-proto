@@ -373,3 +373,54 @@ The sorting key could be nullable.
     run(t, [nothing])
     #-> [[10,8,6,4,2,1,9,3,7,5]]
 
+
+Paginating
+----------
+
+The take and skip combinators can be used to paginate the output.
+
+    using RBT:
+        ConstTool,
+        MappingTool,
+        NullConstTool,
+        Output,
+        SkipTool,
+        TakeTool,
+        run
+
+    t0 = MappingTool(
+        Int,
+        Output(Int, optional=true, plural=true),
+        [1,1,2,4,7,11],
+        1:10)
+    #-> Int64 -> Int64*
+
+    run(t0, 1:5)
+    #-> [Int64[],[1],[2,3],[4,5,6],[7,8,9,10]]
+
+    t = TakeTool(t0, ConstTool(2))
+    #-> Int64 -> Int64*
+
+    run(t, 1:5)
+    #-> [Int64[],[1],[2,3],[4,5],[7,8]]
+
+    t = SkipTool(t0, ConstTool(2))
+
+    run(t, 1:5)
+    #-> [Int64[],Int64[],Int64[],[6],[9,10]]
+
+    t = TakeTool(t0, ConstTool(-2))
+
+    run(t, 1:5)
+    #-> [Int64[],Int64[],Int64[],[4],[7,8]]
+
+    t = SkipTool(t0, ConstTool(-2))
+
+    run(t, 1:5)
+    #-> [Int64[],[1],[2,3],[5,6],[9,10]]
+
+    t = TakeTool(t0, NullConstTool())
+
+    run(t, 1:5)
+    #-> [Int64[],[1],[2,3],[4,5,6],[7,8,9,10]]
+
