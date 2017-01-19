@@ -499,6 +499,7 @@ The group combinator partitions a sequence into groups.
         HereTool,
         MappingTool,
         RecordTool,
+        UniqueTool,
         Output,
         run
 
@@ -561,4 +562,22 @@ The key could be nullable.
 
     run(t, [nothing])
     #-> [[([1,9,3,7,5],#NULL),([2],1),([4],2),([6],3),([8],4),([10],5)]]
+
+The unique combinator filters out duplicate values.
+
+    t0 = MappingTool(
+        Int,
+        Output(Int, optional=true, plural=true),
+        [1,1,2,4,7,11],
+        [1,2,1,2,1,2,1,2,1,2])
+    #-> Int64 -> Int64*
+
+    run(t0, 1:5)
+    #-> [Int64[],[1],[2,1],[2,1,2],[1,2,1,2]]
+
+    t = UniqueTool(t0)
+    #-> Int64 -> Int64*
+
+    run(t, 1:5)
+    #-> [Int64[],[1],[2,1],[2,1],[1,2]]
 

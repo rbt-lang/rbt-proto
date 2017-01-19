@@ -548,7 +548,9 @@ Quotient classes
 
     using RBT:
         Field,
-        ThenGroup
+        ThenConnect,
+        ThenGroup,
+        ThenUnique
 
 *Show all departments, and, for each department, list the associated
 employees.*
@@ -563,12 +565,12 @@ employees.*
     display(execute(q))
     #=>
     DataSet[35 × {Dept [tag=:department], String [tag=:name], Emp* [tag=:employee]}]:
-     (Dept(1),"WATER MGMNT",RBT.Entity{:Emp}[Emp(1)  …  Emp(32171)])
-     (Dept(2),"POLICE",RBT.Entity{:Emp}[Emp(2)  …  Emp(32180)])
-     (Dept(3),"GENERAL SERVICES",RBT.Entity{:Emp}[Emp(4)  …  Emp(32177)])
+     (Dept(1),"WATER MGMNT",Emp[Emp(1)  …  Emp(32171)])
+     (Dept(2),"POLICE",Emp[Emp(2)  …  Emp(32180)])
+     (Dept(3),"GENERAL SERVICES",Emp[Emp(4)  …  Emp(32177)])
      ⋮
-     (Dept(34),"ADMIN HEARNG",RBT.Entity{:Emp}[Emp(2813)  …  Emp(31533)])
-     (Dept(35),"LICENSE APPL COMM",RBT.Entity{:Emp}[Emp(11126)])
+     (Dept(34),"ADMIN HEARNG",Emp[Emp(2813)  …  Emp(31533)])
+     (Dept(35),"LICENSE APPL COMM",Emp[Emp(11126)])
     =#
 
 *Show all positions, and, for each position, list the associated employees.*
@@ -587,12 +589,12 @@ employees.*
     display(execute(q))
     #=>
     DataSet[1094 × {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Emp+ [tag=:employee]}]:
-     ((RBT.Entity{:Emp}[Emp(8293)],"1ST DEPUTY INSPECTOR GENERAL"),"1ST DEPUTY INSPECTOR GENERAL",RBT.Entity{:Emp}[Emp(8293)])
-     ((RBT.Entity{:Emp}[Emp(10877)],"A/MGR COM SVC-ELECTIONS"),"A/MGR COM SVC-ELECTIONS",RBT.Entity{:Emp}[Emp(10877)])
-     ((RBT.Entity{:Emp}[Emp(29045)],"A/MGR OF MIS-ELECTIONS"),"A/MGR OF MIS-ELECTIONS",RBT.Entity{:Emp}[Emp(29045)])
+     ((Emp[Emp(8293)],"1ST DEPUTY INSPECTOR GENERAL"),"1ST DEPUTY INSPECTOR GENERAL",Emp[Emp(8293)])
+     ((Emp[Emp(10877)],"A/MGR COM SVC-ELECTIONS"),"A/MGR COM SVC-ELECTIONS",Emp[Emp(10877)])
+     ((Emp[Emp(29045)],"A/MGR OF MIS-ELECTIONS"),"A/MGR OF MIS-ELECTIONS",Emp[Emp(29045)])
      ⋮
-     ((RBT.Entity{:Emp}[Emp(23375)],"ZONING INVESTIGATOR"),"ZONING INVESTIGATOR",RBT.Entity{:Emp}[Emp(23375)])
-     ((RBT.Entity{:Emp}[Emp(1594)  …  Emp(12339)],"ZONING PLAN EXAMINER"),"ZONING PLAN EXAMINER",RBT.Entity{:Emp}[Emp(1594)  …  Emp(12339)])
+     ((Emp[Emp(23375)],"ZONING INVESTIGATOR"),"ZONING INVESTIGATOR",Emp[Emp(23375)])
+     ((Emp[Emp(1594)  …  Emp(12339)],"ZONING PLAN EXAMINER"),"ZONING PLAN EXAMINER",Emp[Emp(1594)  …  Emp(12339)])
     =#
 
 *In the Police department, show all positions with the number of employees and
@@ -611,12 +613,12 @@ the top salary.*
     display(execute(q))
     #=>
     DataSet[129 × {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Int64, Int64}]:
-     ((RBT.Entity{:Emp}[Emp(26755)],"ACCOUNTANT I"),"ACCOUNTANT I",1,72840)
-     ((RBT.Entity{:Emp}[Emp(7319),Emp(28313)],"ACCOUNTANT II"),"ACCOUNTANT II",2,80424)
-     ((RBT.Entity{:Emp}[Emp(6681)],"ACCOUNTANT III"),"ACCOUNTANT III",1,65460)
+     ((Emp[Emp(26755)],"ACCOUNTANT I"),"ACCOUNTANT I",1,72840)
+     ((Emp[Emp(7319),Emp(28313)],"ACCOUNTANT II"),"ACCOUNTANT II",2,80424)
+     ((Emp[Emp(6681)],"ACCOUNTANT III"),"ACCOUNTANT III",1,65460)
      ⋮
-     ((RBT.Entity{:Emp}[Emp(13404)  …  Emp(30503)],"WARRANT AND EXTRADITION AIDE"),"WARRANT AND EXTRADITION AIDE",5,80328)
-     ((RBT.Entity{:Emp}[Emp(28702),Emp(30615)],"YOUTH SERVICES COORD"),"YOUTH SERVICES COORD",2,80916)
+     ((Emp[Emp(13404)  …  Emp(30503)],"WARRANT AND EXTRADITION AIDE"),"WARRANT AND EXTRADITION AIDE",5,80328)
+     ((Emp[Emp(28702),Emp(30615)],"YOUTH SERVICES COORD"),"YOUTH SERVICES COORD",2,80916)
     =#
 
 *Arrange employees into a hierarchy: first by position, then by department.*
@@ -636,11 +638,57 @@ the top salary.*
     display(execute(q))
     #=>
     DataSet[1094 × {{  …  }, String [tag=:position], {{  …  }, String [tag=:name], Emp+ [tag=:employee]}+}]:
-     ((  …  ),"1ST DEPUTY INSPECTOR GENERAL",[((  …  ),"INSPECTOR GEN",RBT.Entity{:Emp}[Emp(8293)])])
-     ((  …  ),"A/MGR COM SVC-ELECTIONS",[((  …  ),"BOARD OF ELECTION",RBT.Entity{:Emp}[Emp(10877)])])
-     ((  …  ),"A/MGR OF MIS-ELECTIONS",[((  …  ),"BOARD OF ELECTION",RBT.Entity{:Emp}[Emp(29045)])])
+     ((  …  ),"1ST DEPUTY INSPECTOR GENERAL",[((  …  ),"INSPECTOR GEN",Emp[Emp(8293)])])
+     ((  …  ),"A/MGR COM SVC-ELECTIONS",[((  …  ),"BOARD OF ELECTION",Emp[Emp(10877)])])
+     ((  …  ),"A/MGR OF MIS-ELECTIONS",[((  …  ),"BOARD OF ELECTION",Emp[Emp(29045)])])
      ⋮
-     ((  …  ),"ZONING INVESTIGATOR",[((  …  ),"COMMUNITY DEVELOPMENT",RBT.Entity{:Emp}[Emp(23375)])])
-     ((  …  ),"ZONING PLAN EXAMINER",[((  …  ),"COMMUNITY DEVELOPMENT",RBT.Entity{:Emp}[Emp(1594)  …  Emp(12339)])])
+     ((  …  ),"ZONING INVESTIGATOR",[((  …  ),"COMMUNITY DEVELOPMENT",Emp[Emp(23375)])])
+     ((  …  ),"ZONING PLAN EXAMINER",[((  …  ),"COMMUNITY DEVELOPMENT",Emp[Emp(1594)  …  Emp(12339)])])
+    =#
+
+*Show all positions available in more than one department, and, for each
+position, list the respective departments.*
+
+    PosDepartment() =
+        PosEmployee() |> EmpDepartment() |> ThenUnique()
+
+    q = (Start()
+        |> Employee()
+        |> ThenGroup(EmpPosition())
+        |> ThenFilter(Count(PosDepartment()) .> Const(1))
+        |> ThenSelect(
+                PosPosition(),
+                PosDepartment() |> DeptName()))
+    #-> Unit -> {{  …  }, String [tag=:position], String+ [tag=:name]}*
+
+    display(execute(q))
+    #=>
+    DataSet[261 × {{  …  }, String [tag=:position], String+ [tag=:name]}]:
+     ((  …  ),"ACCOUNTANT I",String["TREASURER","FINANCE","PUBLIC LIBRARY","POLICE"])
+     ((  …  ),"ACCOUNTANT II",String["FINANCE","FAMILY & SUPPORT"  …  "PUBLIC LIBRARY"])
+     ((  …  ),"ACCOUNTANT III",String["FAMILY & SUPPORT","PUBLIC LIBRARY"  …  "BUSINESS AFFAIRS"])
+     ⋮
+     ((  …  ),"WATCHMAN",String["GENERAL SERVICES","WATER MGMNT"])
+     ((  …  ),"YOUTH SERVICES COORD",String["FAMILY & SUPPORT","POLICE"])
+    =#
+
+*How many employees at each level of the organization chart?*
+
+    EmpLevel() = EmpManager() |> ThenConnect() |> ThenCount() |> ThenTag(:level)
+
+    q = (Start()
+        |> Employee()
+        |> ThenGroup(EmpLevel())
+        |> ThenSelect(
+                Field(:level),
+                Count(Field(:employee))))
+    #-> Unit -> {{  …  }, Int64 [tag=:level], Int64}*
+
+    display(execute(q))
+    #=>
+    DataSet[3 × {{  …  }, Int64 [tag=:level], Int64}]:
+     ((  …  ),0,32158)
+     ((  …  ),1,17)
+     ((  …  ),2,6)
     =#
 

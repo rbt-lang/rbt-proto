@@ -8,6 +8,8 @@ end
 
 show{C}(io::IO, ::Type{Entity{C}}) =
     print(io, C)
+Base.print{C}(io::IO, ::Type{Entity{C}}) =
+    print(io, C)
 
 show{C}(io::IO, e::Entity{C}) =
     print(io, "$(string(C))($(e.val))")

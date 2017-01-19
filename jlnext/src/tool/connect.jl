@@ -82,10 +82,16 @@ Connect(F::Combinator) =
                 P >> ConnectTool(F(Q), false)
             end)
 
+ThenConnect() =
+    Combinator(P -> ConnectTool(P, false))
+
 HereAndConnect(F::Combinator) =
     Combinator(
         P ->
             let Q = Start(P)
                 P >> ConnectTool(F(Q), true)
             end)
+
+ThenHereAndConnect() =
+    Combinator(P -> ConnectTool(P, true))
 
