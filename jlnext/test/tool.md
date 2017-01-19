@@ -486,3 +486,79 @@ The connect combinator also works with plural relationships.
     run(t, 1:12)
     #-> [Int64[],Int64[],Int64[],[2],Int64[],[3,2],Int64[],[4,2,2],[3],[5,2],Int64[],[6,3,2,3,2]]
 
+
+Grouping
+--------
+
+The group combinator partitions a sequence into groups.
+
+    using RBT:
+        CollectionTool,
+        DecorateTool,
+        GroupByTool,
+        HereTool,
+        MappingTool,
+        RecordTool,
+        Output,
+        run
+
+    t0 = CollectionTool([10,1,9,2,8,3,7,4,6,5])
+    #-> Any -> Int64*
+
+    run(t0, [nothing])
+    #-> [[10,1,9,2,8,3,7,4,6,5]]
+
+    t1 = MappingTool(Int, Int, [k % 3 for k = 1:10])
+    #-> Int64 -> Int64
+
+    run(t0 >> RecordTool(HereTool(Int), t1), [nothing])
+    #-> [[(10,1),(1,1),(9,0),(2,2),(8,2),(3,0),(7,1),(4,1),(6,0),(5,2)]]
+
+    t = GroupByTool(t0, t1)
+    #-> Any -> {Int64+, Int64}*
+
+    run(t, [nothing])
+    #-> [[([9,3,6],0),([10,1,7,4],1),([2,8,5],2)]]
+
+    t2 = DecorateTool(
+        MappingTool(
+            Int,
+            Int,
+            [k % 2 for k = 1:10]),
+        rev=true)
+    #-> Int64 -> Int64 [rev=true]
+
+    run(t0 >> RecordTool(HereTool(Int), t2), [nothing])
+    #-> [[(10,0),(1,1),(9,1),(2,0),(8,0),(3,1),(7,1),(4,0),(6,0),(5,1)]]
+
+    t = GroupByTool(t0, t1, t2)
+    #-> Any -> {Int64+, Int64, Int64 [rev=true]}*
+
+    run(t, [nothing])
+    #-> [[([9,3],0,1),([6],0,0),([1,7],1,1),([10,4],1,0),([5],2,1),([2,8],2,0)]]
+
+It is possible to run the group combinator without any keys.
+
+    t = GroupByTool(t0)
+    #-> Any -> {Int64+}?
+
+    run(t, [nothing])
+    #-> [([10,1,9,2,8,3,7,4,6,5],)]
+
+The key could be nullable.
+
+    t3 = MappingTool(
+        Int,
+        Output(Int, optional=true),
+        [1,1,2,2,3,3,4,4,5,5,6],
+        1:5)
+
+    run(t0 >> RecordTool(HereTool(Int), t3), [nothing])
+    #-> [[(10,5),(1,#NULL),(9,#NULL),(2,1),(8,4),(3,#NULL),(7,#NULL),(4,2),(6,3),(5,#NULL)]]
+
+    t = GroupByTool(t0, t3)
+    #-> Any -> {Int64+, Int64?}*
+
+    run(t, [nothing])
+    #-> [[([1,9,3,7,5],#NULL),([2],1),([4],2),([6],3),([8],4),([10],5)]]
+

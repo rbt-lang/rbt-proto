@@ -66,6 +66,47 @@ ThenDesc() = ThenDecorate(rev=true)
 ThenNullFirst() = ThenDecorate(nullrev=false)
 ThenNullLast() = ThenDecorate(nullrev=true)
 
+# Custom ordering.
+
+immutable SortByOrdering{O<:AbstractVector{Int}, V<:AbstractVector} <: Base.Ordering
+    offs::O
+    vals::V
+    rev::Bool
+    nullrev::Bool
+end
+
+function SortByOrdering(flow::OutputFlow)
+    @assert !isplural(output(flow))
+    offs = offsets(flow)
+    vals = values(flow)
+    rev = decoration(output(flow), :rev, false)
+    nullrev = decoration(output(flow), :nullrev, false)
+    return SortByOrdering(offs, vals, rev, nullrev)
+end
+
+function Base.lt{O,V}(o::SortByOrdering{O,V}, a::Int, b::Int)
+    la = o.offs[a]
+    ra = o.offs[a+1]
+    lb = o.offs[b]
+    rb = o.offs[b+1]
+    if la < ra && lb < rb
+        return !o.rev ?
+                isless(o.vals[la], o.vals[lb]) :
+                isless(o.vals[lb], o.vals[la])
+    elseif la < ra
+        return o.nullrev
+    elseif lb < rb
+        return !o.nullrev
+    else
+        return false
+    end
+end
+
+Base.lt{V}(o::SortByOrdering{OneTo{Int},V}, a::Int, b::Int) =
+    !o.rev ?
+        isless(o.vals[a], o.vals[b]) :
+        isless(o.vals[b], o.vals[a])
+
 # The sorting primitive.
 
 immutable SortPrimTool <: AbstractTool
@@ -99,10 +140,8 @@ function run_prim(tool::SortByPrimTool, ds::DataSet)
     vals = values(ds′, 1)
     perm = collect(1:length(vals))
     for k = endof(tool.keysigs):-1:1
-        keyflow = flow(ds′, k+1)
-        rev = decoration(output(keyflow), :rev, false)
-        nullrev = decoration(output(keyflow), :nullrev, false)
-        run_sort_by!(offs, perm, column(keyflow), rev, nullrev)
+        order = SortByOrdering(flow(ds′, k+1))
+        run_sort_by!(offs, perm, order)
     end
     return Column(offs, vals[perm])
 end
@@ -119,46 +158,12 @@ function run_sort(col::Column, rev::Bool)
     return Column(offs, vals)
 end
 
-function run_sort_by!(
-        offs::AbstractVector{Int},
-        perm::Vector{Int},
-        keycol::Column,
-        rev::Bool,
-        nullrev::Bool)
+function run_sort_by!(offs::AbstractVector{Int}, perm::Vector{Int}, order::SortByOrdering)
     len = length(offs) - 1
-    order = SortByOrdering(offsets(keycol), values(keycol), rev, nullrev)
     for k = 1:len
         l = offs[k]
         r = offs[k+1]
         sort!(view(perm, l:r-1), alg=MergeSort, order=order)
     end
 end
-
-# Custom ordering.
-
-immutable SortByOrdering{O<:AbstractVector{Int}, V<:AbstractVector} <: Base.Ordering
-    offs::O
-    vals::V
-    rev::Bool
-    nullrev::Bool
-end
-
-function Base.lt{O,V}(o::SortByOrdering{O,V}, a::Int, b::Int)
-    la = o.offs[a]
-    ra = o.offs[a+1]
-    lb = o.offs[b]
-    rb = o.offs[b+1]
-    if la < ra && lb < rb
-        return isless(o.vals[la], o.vals[lb]) ? !o.rev : o.rev
-    elseif la < ra
-        return o.nullrev
-    elseif lb < rb
-        return !o.nullrev
-    else
-        return false
-    end
-end
-
-Base.lt{V}(o::SortByOrdering{OneTo{Int},V}, a::Int, b::Int) =
-    isless(o.vals[a], o.vals[b]) ? !o.rev : o.rev
 

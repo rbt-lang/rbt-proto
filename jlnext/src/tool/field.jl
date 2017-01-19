@@ -27,3 +27,17 @@ run(tool::FieldTool, iflow::InputFlow) =
 Field(pos::Int) =
     Combinator(P -> P >> FieldTool(domain(output(P)), pos))
 
+Field(tag::Symbol) =
+    Combinator(
+        P ->
+            let dom = domain(output(P)), pos = 0
+                for (k, sig) in enumerate(fields(dom))
+                    if decoration(sig, :tag, Symbol("")) == tag
+                        pos = k
+                        break
+                    end
+                end
+                @assert pos > 0
+                P >> FieldTool(dom, pos)
+            end)
+

@@ -287,13 +287,13 @@ Pipeline notation
      (Emp(18040),"GARRY M","SUPERINTENDENT OF POLICE",260004)
      (Emp(31712),"ALFONZA W","FIRST DEPUTY SUPERINTENDENT",197736)
      (Emp(29026),"ROBERT T","CHIEF",194256)
-     (Emp(31020),"EUGENE W","CHIEF",185364)
-     (Emp(24184),"JUAN R","CHIEF",185364)
-     (Emp(23936),"ANTHONY R","CHIEF",185364)
-     (Emp(11020),"WAYNE G","CHIEF",185364)
      (Emp(8066),"JOHN E","CHIEF",185364)
-     (Emp(30573),"EDDIE W","DEPUTY CHIEF",170112)
-     (Emp(30355),"ERIC W","DEPUTY CHIEF",170112)
+     (Emp(11020),"WAYNE G","CHIEF",185364)
+     (Emp(23936),"ANTHONY R","CHIEF",185364)
+     (Emp(24184),"JUAN R","CHIEF",185364)
+     (Emp(31020),"EUGENE W","CHIEF",185364)
+     (Emp(370),"DANA A","DEPUTY CHIEF",170112)
+     (Emp(780),"CONSTANTINE A","DEPUTY CHIEF",170112)
     =#
 
 
@@ -395,7 +395,7 @@ Sorting and paginating data
      ("RAHM E","MAYOR'S OFFICE","MAYOR",216210)
      ("JOSE S","FIRE","FIRE COMMISSIONER",202728)
      ⋮
-     ("BETTY A","FAMILY & SUPPORT","FOSTER GRANDPARENT",2756)
+     ("MING Y","FAMILY & SUPPORT","SENIOR COMPANION",2756)
      ("STEVEN K","MAYOR'S OFFICE","ADMINISTRATIVE SECRETARY",1)
     =#
 
@@ -418,8 +418,8 @@ Sorting and paginating data
      ("RAHM E","MAYOR'S OFFICE","MAYOR",216210)
      ("JOSE S","FIRE","FIRE COMMISSIONER",202728)
      ⋮
-     ("JERRY W","FIRE","PARAMEDIC FIELD CHIEF",135480)
-     ("ROBERT T","FIRE","BATTALION CHIEF",135480)
+     ("KEVIN B","FIRE","BATTALION CHIEF",135480)
+     ("MARJORIE B","FIRE","PARAMEDIC FIELD CHIEF",135480)
     =#
 
 
@@ -540,5 +540,107 @@ Hierarchical relationships
      ⋮
      ("KENNETH S","TREASURER","ASST CITY TREASURER",75000)
      ("ALEXANDRA S","TREASURER","DEPUTY CITY TREASURER",90000)
+    =#
+
+
+Quotient classes
+----------------
+
+    using RBT:
+        Field,
+        ThenGroup
+
+*Show all departments, and, for each department, list the associated
+employees.*
+
+    q = (Start()
+        |> Department()
+        |> ThenSelect(
+                DeptName(),
+                DeptEmployee()))
+    #-> Unit -> {Dept [tag=:department], String [tag=:name], Emp* [tag=:employee]}*
+
+    display(execute(q))
+    #=>
+    DataSet[35 × {Dept [tag=:department], String [tag=:name], Emp* [tag=:employee]}]:
+     (Dept(1),"WATER MGMNT",RBT.Entity{:Emp}[Emp(1)  …  Emp(32171)])
+     (Dept(2),"POLICE",RBT.Entity{:Emp}[Emp(2)  …  Emp(32180)])
+     (Dept(3),"GENERAL SERVICES",RBT.Entity{:Emp}[Emp(4)  …  Emp(32177)])
+     ⋮
+     (Dept(34),"ADMIN HEARNG",RBT.Entity{:Emp}[Emp(2813)  …  Emp(31533)])
+     (Dept(35),"LICENSE APPL COMM",RBT.Entity{:Emp}[Emp(11126)])
+    =#
+
+*Show all positions, and, for each position, list the associated employees.*
+
+    PosPosition() = Field(:position)
+    PosEmployee() = Field(:employee)
+
+    q = (Start()
+        |> Employee()
+        |> ThenGroup(EmpPosition())
+        |> ThenSelect(
+                PosPosition(),
+                PosEmployee()))
+    #-> Unit -> {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Emp+ [tag=:employee]}*
+
+    display(execute(q))
+    #=>
+    DataSet[1094 × {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Emp+ [tag=:employee]}]:
+     ((RBT.Entity{:Emp}[Emp(8293)],"1ST DEPUTY INSPECTOR GENERAL"),"1ST DEPUTY INSPECTOR GENERAL",RBT.Entity{:Emp}[Emp(8293)])
+     ((RBT.Entity{:Emp}[Emp(10877)],"A/MGR COM SVC-ELECTIONS"),"A/MGR COM SVC-ELECTIONS",RBT.Entity{:Emp}[Emp(10877)])
+     ((RBT.Entity{:Emp}[Emp(29045)],"A/MGR OF MIS-ELECTIONS"),"A/MGR OF MIS-ELECTIONS",RBT.Entity{:Emp}[Emp(29045)])
+     ⋮
+     ((RBT.Entity{:Emp}[Emp(23375)],"ZONING INVESTIGATOR"),"ZONING INVESTIGATOR",RBT.Entity{:Emp}[Emp(23375)])
+     ((RBT.Entity{:Emp}[Emp(1594)  …  Emp(12339)],"ZONING PLAN EXAMINER"),"ZONING PLAN EXAMINER",RBT.Entity{:Emp}[Emp(1594)  …  Emp(12339)])
+    =#
+
+*In the Police department, show all positions with the number of employees and
+the top salary.*
+
+    q = (Start()
+        |> Employee()
+        |> ThenFilter(EmpDepartment() |> DeptName() .== Const("POLICE"))
+        |> ThenGroup(EmpPosition())
+        |> ThenSelect(
+                PosPosition(),
+                Count(PosEmployee()),
+                MaxOf(PosEmployee() |> EmpSalary())))
+    #-> Unit -> {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Int64, Int64}*
+
+    display(execute(q))
+    #=>
+    DataSet[129 × {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Int64, Int64}]:
+     ((RBT.Entity{:Emp}[Emp(26755)],"ACCOUNTANT I"),"ACCOUNTANT I",1,72840)
+     ((RBT.Entity{:Emp}[Emp(7319),Emp(28313)],"ACCOUNTANT II"),"ACCOUNTANT II",2,80424)
+     ((RBT.Entity{:Emp}[Emp(6681)],"ACCOUNTANT III"),"ACCOUNTANT III",1,65460)
+     ⋮
+     ((RBT.Entity{:Emp}[Emp(13404)  …  Emp(30503)],"WARRANT AND EXTRADITION AIDE"),"WARRANT AND EXTRADITION AIDE",5,80328)
+     ((RBT.Entity{:Emp}[Emp(28702),Emp(30615)],"YOUTH SERVICES COORD"),"YOUTH SERVICES COORD",2,80916)
+    =#
+
+*Arrange employees into a hierarchy: first by position, then by department.*
+
+    q = (Start()
+        |> Employee()
+        |> ThenGroup(EmpPosition())
+        |> ThenSelect(
+                Field(:position),
+                Field(:employee)
+                |> ThenGroup(EmpDepartment())
+                |> ThenSelect(
+                        Field(:department) |> DeptName(),
+                        Field(:employee))))
+    #-> Unit -> {{  …  }, String [tag=:position], {{  …  }, String [tag=:name], Emp+ [tag=:employee]}+}*
+
+    display(execute(q))
+    #=>
+    DataSet[1094 × {{  …  }, String [tag=:position], {{  …  }, String [tag=:name], Emp+ [tag=:employee]}+}]:
+     ((  …  ),"1ST DEPUTY INSPECTOR GENERAL",[((  …  ),"INSPECTOR GEN",RBT.Entity{:Emp}[Emp(8293)])])
+     ((  …  ),"A/MGR COM SVC-ELECTIONS",[((  …  ),"BOARD OF ELECTION",RBT.Entity{:Emp}[Emp(10877)])])
+     ((  …  ),"A/MGR OF MIS-ELECTIONS",[((  …  ),"BOARD OF ELECTION",RBT.Entity{:Emp}[Emp(29045)])])
+     ⋮
+     ((  …  ),"ZONING INVESTIGATOR",[((  …  ),"COMMUNITY DEVELOPMENT",RBT.Entity{:Emp}[Emp(23375)])])
+     ((  …  ),"ZONING PLAN EXAMINER",[((  …  ),"COMMUNITY DEVELOPMENT",RBT.Entity{:Emp}[Emp(1594)  …  Emp(12339)])])
     =#
 

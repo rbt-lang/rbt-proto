@@ -34,7 +34,7 @@ function run(tool::ConnectTool, iflow::InputFlow)
         oflow = run(tool.F, iflow)
     end
     if isempty(cols)
-        pile = Column(fill(1, length(iflow)+1), values(iflow)[Int[]])
+        pile = column(oflow)
     else
         pile = cols[end]
         for k = endof(cols)-1:-1:1
