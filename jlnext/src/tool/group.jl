@@ -76,44 +76,73 @@ output(tool::GroupByPrimTool) =
         plural=(isplural(tool.sig) && !isempty(tool.keysigs)))
 
 function run_prim(tool::GroupByPrimTool, ds::DataSet)
-    width = length(tool.keysigs)
-    len = length(ds)
-    offs = offsets(ds, 1)
     ds′ = values(ds, 1)::DataSet
-    vals = values(ds′, 1)
-    perm = collect(1:length(vals))
-    for k = 1:width
-        order = SortByOrdering(flow(ds′, k+1))
-        offs = run_group_by!(offs, perm, order)
-    end
-    groupoffs = run_group_offs(offsets(ds, 1), offs)
-    flows = Vector{OutputFlow}(width+1)
-    flows[1] =
+    perm, offs = run_group_by_keys(run_group_skip(offsets(ds, 1)), ds′)
+    groupoffs = run_group_match(offsets(ds, 1), offs)
+    keyperm = perm[view(offs, 1:endof(offs)-1)]
+    width = length(flows(ds′)) - 1
+    fs = Vector{OutputFlow}(width+1)
+    fs[1] =
         OutputFlow(
             Output(tool.sig, optional=false),
-            Column(offs, vals[perm]))
-    keyslice = perm[view(offs, 1:endof(offs)-1)]
+            Column(offs, values(ds′, 1)[perm]))
     for k = 1:width
-        keycol = column(ds′, k+1)
-        flows[k+1] =
+        fs[k+1] =
             OutputFlow(
                 tool.keysigs[k],
-                keycol[keyslice])
+                column(ds′, k+1)[keyperm])
     end
-    return Column(groupoffs, DataSet(length(offs)-1, flows))
+    return Column(groupoffs, DataSet(length(offs)-1, fs))
 end
 
-function run_group_by!(offs::AbstractVector{Int}, perm::Vector{Int}, order::SortByOrdering)
+function run_group_skip(offs::AbstractVector{Int})
+    empty = 0
+    for k = 1:length(offs)-1
+        if offs[k] == offs[k+1]
+            empty += 1
+        end
+    end
+    if empty == 0
+        return offs
+    end
+    offs′ = Vector{Int}(length(offs)-empty)
+    offs′[1] = 1
+    n = 1
+    for k = 1:length(offs)-1
+        if offs[k] < offs[k+1]
+            n += 1
+            offs′[n] = offs[k+1]
+        end
+    end
+    return offs′
+end
+
+function run_group_by_keys(offs::AbstractVector{Int}, ds::DataSet)
+    len = length(offs) - 1
+    width = length(ds.flows) - 1
+    vals = values(ds, 1)
+    perm = collect(1:length(vals))
+    for k = 1:width
+        order = SortByOrdering(flow(ds, k+1))
+        offs = run_group_by_key!(offs, perm, order)
+    end
+    return perm, offs
+end
+
+function run_group_by_key!(
+        offs::AbstractVector{Int},
+        perm::Vector{Int},
+        order::SortByOrdering)
     len = length(offs)-1
     len′ = 0
     for k = 1:len
         l = offs[k]
         r = offs[k+1]
         sort!(view(perm, l:r-1), alg=MergeSort, order=order)
-        len′ += r - l
+        len′ += 1
         for j = l+1:r-1
-            if !Base.lt(order, perm[j-1], perm[j])
-                len′ -= 1
+            if Base.lt(order, perm[j-1], perm[j])
+                len′ += 1
             end
         end
     end
@@ -135,18 +164,16 @@ function run_group_by!(offs::AbstractVector{Int}, perm::Vector{Int}, order::Sort
     return offs′
 end
 
-function run_group_offs(offs::AbstractVector{Int}, offs′::AbstractVector{Int})
+function run_group_match(offs::AbstractVector{Int}, offs′::AbstractVector{Int})
     groupoffs = Vector{Int}(length(offs))
     n = 1
-    b = offs[1]
-    for k = 1:endof(offs′)-1
-        if offs′[k] == b
-            groupoffs[n] = k
+    for k = 1:length(offs)
+        b = offs[k]
+        while offs′[n] < b
             n += 1
-            b = offs[n]
         end
+        groupoffs[k] = n
     end
-    groupoffs[n] = length(offs′)
     return groupoffs
 end
 

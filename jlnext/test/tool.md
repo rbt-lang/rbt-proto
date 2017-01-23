@@ -563,6 +563,24 @@ The key could be nullable.
     run(t, [nothing])
     #-> [[([1,9,3,7,5],#NULL),([2],1),([4],2),([6],3),([8],4),([10],5)]]
 
+The group combinator can also handle empty sequences.
+
+    t0 = MappingTool(
+        Int,
+        Output(Int, optional=true, plural=true),
+        [1,11,16,16],
+        [1,2,3,4,5,6,7,8,9,10,5,4,3,2,1])
+    #-> Int64 -> Int64*
+
+    run(t0, 1:3)
+    #-> [[1,2,3,4,5,6,7,8,9,10],[5,4,3,2,1],Int64[]]
+
+    t = GroupByTool(t0, t1, t2)
+    #-> Int64 -> {Int64+, Int64, Int64 [rev=true]}*
+
+    run(t, 1:3)
+    #-> [[([3,9],0,1),([6],0,0),([1,7],1,1),([4,10],1,0),([5],2,1),([2,8],2,0)],[([3],0,1),([1],1,1),([4],1,0),([5],2,1),([2],2,0)],[]]
+
 The unique combinator filters out duplicate values.
 
     t0 = MappingTool(
