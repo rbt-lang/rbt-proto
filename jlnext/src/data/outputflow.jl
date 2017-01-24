@@ -21,24 +21,23 @@ function getindex(flow::OutputFlow, i::Int)
     l = offs[i]
     r = offs[i+1]
     T = eltype(vals)
-    item =
-        isplural(flow.sig) && length(flow) == 1 ?
-            vals :
-        isplural(flow.sig) ?
-            view(vals, l:r-1) :
-        isoptional(flow.sig) ?
-            (l < r ? Nullable{T}(vals[l]) : Nullable{T}()) :
-            vals[l]
     if isentity(flow.sig)
         E = Entity{classname(domain(flow.sig))}
         item =
             isplural(flow.sig) ?
-                E[E(i) for i in item] :
-            isoptional(flow.sig) && isnull(item) ?
-                Nullable{E}() :
+                E[E(i) for i in view(vals, l:r-1)] :
             isoptional(flow.sig) ?
-                Nullable{E}(get(item)) :
-            E(item)
+                (l < r ? Nullable{E}(E(vals[l])) : Nullable{E}()) :
+                E(vals[l])
+    else
+        item =
+            isplural(flow.sig) && length(flow) == 1 ?
+                vals :
+            isplural(flow.sig) ?
+                view(vals, l:r-1) :
+            isoptional(flow.sig) ?
+                (l < r ? Nullable{T}(vals[l]) : Nullable{T}()) :
+                vals[l]
     end
     return item
 end

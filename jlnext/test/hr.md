@@ -548,8 +548,10 @@ Quotient classes
 
     using RBT:
         Field,
+        MeanOf,
         ThenConnect,
         ThenGroup,
+        ThenRollUp,
         ThenUnique
 
 *Show all departments, and, for each department, list the associated
@@ -690,5 +692,28 @@ position, list the respective departments.*
      ((  …  ),0,32158)
      ((  …  ),1,17)
      ((  …  ),2,6)
+    =#
+
+*Show the average salary by department and position, with subtotals for each
+department and the grand total.*
+
+    q = (Start()
+        |> Employee()
+        |> ThenRollUp(EmpDepartment(), EmpPosition())
+        |> ThenSelect(
+                Field(:department) |> DeptRecord(),
+                Field(:position),
+                MeanOf(Field(:employee) |> EmpSalary())))
+    #-> Unit -> {{  …  }, {String [tag=:name]}? [tag=:department], String? [tag=:position], Float64}*
+
+    display(execute(q))
+    #=>
+    DataSet[2001 × {{  …  }, {String [tag=:name]}? [tag=:department], String? [tag=:position], Float64}]:
+     ((  …  ),("WATER MGMNT",),"ACCOUNTANT IV",95880.0)
+     ((  …  ),("WATER MGMNT",),"ACCOUNTING TECHNICIAN I",63708.0)
+     ((  …  ),("WATER MGMNT",),"ACCOUNTING TECHNICIAN III",66684.0)
+     ⋮
+     ((  …  ),("LICENSE APPL COMM",),#NULL,69888.0)
+     ((  …  ),#NULL,#NULL,79167.5)
     =#
 

@@ -91,4 +91,5 @@ include("tool/take.jl")
 include("tool/connect.jl")
 include("tool/unique.jl")
 include("tool/group.jl")
+include("tool/rollup.jl")
 
