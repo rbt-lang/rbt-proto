@@ -618,3 +618,45 @@ The unique combinator filters out duplicate values.
     run(t, 1:5)
     #-> [Int64[],[1],[2,1],[2,1],[1,2]]
 
+
+Parameters
+----------
+
+The parameter primitive extracts a parameter value from the input flow.
+
+    using RBT:
+        CollectionTool,
+        InputContext,
+        InputFlow,
+        InputFrame,
+        InputParameterFlow,
+        MappingTool,
+        Output,
+        OutputFlow,
+        ParameterTool,
+        SieveTool,
+        run
+
+    t0 = CollectionTool(1:10)
+    #-> Any -> Int64*
+
+    t1 = MappingTool(Int, Int, [k % 3 for k = 1:10])
+    #-> Int64 -> Int64
+
+    t2 = ParameterTool(:D, Output(Int))
+    #-> {Any, D => Int64} -> Int64
+
+    t = t0 >> SieveTool(t1 .== t2)
+    #-> {Any, D => Int64} -> Int64*
+
+    iflow = InputFlow(
+        InputContext(),
+        Void,
+        [nothing],
+        InputFrame(),
+        InputParameterFlow[:D => OutputFlow(Int, [1, 2], [1])])
+    #-> [(nothing,:D=>1)]
+
+    run(t, iflow)
+    #-> [[1,4,7,10]]
+

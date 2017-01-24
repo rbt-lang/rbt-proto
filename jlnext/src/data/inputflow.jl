@@ -97,7 +97,7 @@ function narrow(flow::InputFlow, sig::Input)
         if length(flow.paramflows) == length(parameters(sig))
             flow.paramflows
         elseif length(parameters(sig)) == 0
-            ()
+            InputParameterFlow[]
         else
             keep = Set(n for (n, param) in parameters(sig))
             filter(p -> p.first in keep, flow.paramflows)

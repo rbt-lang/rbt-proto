@@ -717,3 +717,33 @@ department and the grand total.*
      ((  …  ),#NULL,#NULL,79167.5)
     =#
 
+
+Query context
+-------------
+
+    using RBT:
+        Parameter
+
+*Show all employees in the given department D with the salary higher than S,
+where D = "POLICE", S = 150000.*
+
+    D() = Parameter(:D, String)
+    S() = Parameter(:S, Int)
+
+    q = (Start()
+        |> Employee()
+        |> ThenFilter((EmpDepartment() |> DeptName() .== D()) & (EmpSalary() .> S()))
+        |> EmpRecord())
+    #-> {Unit, D => String, S => Int64} -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+
+    display(execute(q, D="POLICE", S=150000))
+    #=>
+    DataSet[62 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+     ("DANA A","POLICE","DEPUTY CHIEF",170112)
+     ("CONSTANTINE A","POLICE","DEPUTY CHIEF",170112)
+     ("KENNETH A","POLICE","COMMANDER",162684)
+     ⋮
+     ("ALFONZA W","POLICE","FIRST DEPUTY SUPERINTENDENT",197736)
+     ("GARY Y","POLICE","COMMANDER",162684)
+    =#
+

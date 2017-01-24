@@ -27,9 +27,23 @@ run(tool::AbstractTool, dom, vals::AbstractVector) =
 run{T}(tool::AbstractTool, vals::AbstractVector{T}) =
     run(tool, InputFlow(InputContext(), T, vals))
 
-function execute{T}(tool::AbstractTool, val::T=nothing)
+function execute{T}(tool::AbstractTool, val::T=nothing; paramvals...)
+    isig = input(tool)
     osig = output(tool)
-    iflow = InputFlow(InputContext(), T, T[val])
+    if isrelative(isig)
+        frameoffs = InputFrame(OneTo(2))
+    else
+        frameoffs = InputFrame()
+    end
+    pflows = InputParameterFlow[]
+    parammap = Dict{Symbol,Any}(paramvals)
+    for (pname, psig) in parameters(isig)
+        paramval = get(parammap, pname, nothing)
+        paramcol = Column(OneTo(2), [paramval])
+        paramflow = InputParameterFlow(pname, OutputFlow(psig, paramcol))
+        push!(pflows, paramflow)
+    end
+    iflow = InputFlow(InputContext(), T, T[val], pflows)
     oflow = run(tool, iflow)
     return oflow[1]
 end
@@ -92,4 +106,5 @@ include("tool/connect.jl")
 include("tool/unique.jl")
 include("tool/group.jl")
 include("tool/rollup.jl")
+include("tool/parameter.jl")
 
