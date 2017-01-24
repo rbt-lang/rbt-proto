@@ -722,6 +722,7 @@ Query context
 -------------
 
     using RBT:
+        Given,
         Parameter
 
 *Show all employees in the given department D with the salary higher than S,
@@ -745,5 +746,27 @@ where D = "POLICE", S = 150000.*
      ⋮
      ("ALFONZA W","POLICE","FIRST DEPUTY SUPERINTENDENT",197736)
      ("GARY Y","POLICE","COMMANDER",162684)
+    =#
+
+*Which employees have higher than average salary?*
+
+    MS() = Parameter(:MS, Output(Float64, optional=true))
+
+    q = (Start()
+        |> Employee()
+        |> ThenFilter(EmpSalary() .> MS())
+        |> EmpRecord()
+        |> Given(MeanOf(Employee() |> EmpSalary()) |> ThenTag(:MS)))
+    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+
+    display(execute(q))
+    #=>
+    DataSet[19796 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+     ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
+     ("JEFFERY A","POLICE","POLICE OFFICER",80778)
+     ("KARINA A","POLICE","POLICE OFFICER",80778)
+     ⋮
+     ("CARLO Z","POLICE","POLICE OFFICER",86520)
+     ("DARIUSZ Z","DoIT","CHIEF DATA BASE ANALYST",110352)
     =#
 

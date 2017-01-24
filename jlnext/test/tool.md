@@ -626,6 +626,9 @@ The parameter primitive extracts a parameter value from the input flow.
 
     using RBT:
         CollectionTool,
+        ConstTool,
+        DecorateTool,
+        GivenTool,
         InputContext,
         InputFlow,
         InputFrame,
@@ -658,5 +661,16 @@ The parameter primitive extracts a parameter value from the input flow.
     #-> [(nothing,:D=>1)]
 
     run(t, iflow)
+    #-> [[1,4,7,10]]
+
+The parameter could be specified with the given combinator.
+
+    t3 = DecorateTool(ConstTool(1), tag=:D)
+    #-> Any -> Int64 [tag=:D]
+
+    t = GivenTool(t, t3)
+    #-> Any -> Int64*
+
+    run(t, [nothing])
     #-> [[1,4,7,10]]
 
