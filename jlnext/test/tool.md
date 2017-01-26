@@ -663,7 +663,7 @@ The parameter primitive extracts a parameter value from the input flow.
     run(t, iflow)
     #-> [[1,4,7,10]]
 
-The parameter could be specified with the given combinator.
+The value of the parameter could be specified with the given combinator.
 
     t3 = DecorateTool(ConstTool(1), tag=:D)
     #-> Any -> Int64 [tag=:D]
@@ -673,4 +673,153 @@ The parameter could be specified with the given combinator.
 
     run(t, [nothing])
     #-> [[1,4,7,10]]
+
+
+Input context
+-------------
+
+The combinator around relates each value to its neighbors.
+
+    using RBT:
+        AroundTool,
+        AroundByTool,
+        CollectionTool,
+        HereTool,
+        MappingTool,
+        RecordTool,
+        FrameTool,
+        run
+
+    iflow = InputFlow(
+        InputContext(),
+        Int,
+        1:10,
+        InputFrame([1,2,4,7,11]))
+
+    display(iflow)
+    #=>
+    InputFlow[10 × (Int64...)]:
+     (1,[1])
+     (1,[2,3])
+     (2,[2,3])
+     (1,[4,5,6])
+     (2,[4,5,6])
+     (3,[4,5,6])
+     (1,[7,8,9,10])
+     (2,[7,8,9,10])
+     (3,[7,8,9,10])
+     (4,[7,8,9,10])
+    =#
+
+    t0 = AroundTool(Int, false, true, false)
+    #-> (Int64...) -> Int64*
+
+    t = RecordTool(HereTool(Int), t0)
+    #-> (Int64...) -> {Int64, Int64*}
+
+    display(run(t, iflow))
+    #=>
+    OutputFlow[10 × {Int64, Int64*}]:
+     (1,Int64[])
+     (2,Int64[])
+     (3,[2])
+     (4,Int64[])
+     (5,[4])
+     (6,[4,5])
+     (7,Int64[])
+     (8,[7])
+     (9,[7,8])
+     (10,[7,8,9])
+    =#
+
+    t0 = AroundTool(Int, true, true, false)
+    #-> (Int64...) -> Int64+
+
+    t = RecordTool(HereTool(Int), t0)
+    #-> (Int64...) -> {Int64, Int64+}
+
+    display(run(t, iflow))
+    #=>
+    OutputFlow[10 × {Int64, Int64+}]:
+     (1,[1])
+     (2,[2])
+     (3,[2,3])
+     (4,[4])
+     (5,[4,5])
+     (6,[4,5,6])
+     (7,[7])
+     (8,[7,8])
+     (9,[7,8,9])
+     (10,[7,8,9,10])
+    =#
+
+    t0 = AroundTool(Int, true, true, true)
+    #-> (Int64...) -> Int64+
+
+    t = RecordTool(HereTool(Int), t0)
+    #-> (Int64...) -> {Int64, Int64+}
+
+    display(run(t, iflow))
+    #=>
+    OutputFlow[10 × {Int64, Int64+}]:
+     (1,[1])
+     (2,[2,3])
+     (3,[2,3])
+     (4,[4,5,6])
+     (5,[4,5,6])
+     (6,[4,5,6])
+     (7,[7,8,9,10])
+     (8,[7,8,9,10])
+     (9,[7,8,9,10])
+     (10,[7,8,9,10])
+    =#
+
+The set of neighbors could be restricted by the value of a key.
+
+    tkey = MappingTool(Int, Int, [k % 2 for k = 1:10])
+    #-> Int64 -> Int64
+
+    run(tkey, 1:10)
+    #-> [1,0,1,0,1,0,1,0,1,0]
+
+    t0 = AroundByTool(Int, true, true, true, tkey)
+    #-> (Int64...) -> Int64+
+
+    t = RecordTool(HereTool(Int), t0)
+    #-> (Int64...) -> {Int64, Int64+}
+
+    display(run(t, iflow))
+    #=>
+    OutputFlow[10 × {Int64, Int64+}]:
+     (1,[1])
+     (2,[2])
+     (3,[3])
+     (4,[4,6])
+     (5,[5])
+     (6,[4,6])
+     (7,[7,9])
+     (8,[8,10])
+     (9,[7,9])
+     (10,[8,10])
+    =#
+
+It is possible to frame the input context.
+
+    t = FrameTool(t)
+    #-> Int64 -> {Int64, Int64+}
+
+    display(run(t, 1:10))
+    #=>
+    OutputFlow[10 × {Int64, Int64+}]:
+     (1,[1])
+     (2,[2])
+     (3,[3])
+     (4,[4])
+     (5,[5])
+     (6,[6])
+     (7,[7])
+     (8,[8])
+     (9,[9])
+     (10,[10])
+    =#
 

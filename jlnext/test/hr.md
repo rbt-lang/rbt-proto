@@ -723,7 +723,11 @@ Query context
 
     using RBT:
         Given,
-        Parameter
+        HereAndAround,
+        HereAndBefore,
+        Parameter,
+        SumOf,
+        ThenFrame
 
 *Show all employees in the given department D with the salary higher than S,
 where D = "POLICE", S = 150000.*
@@ -768,5 +772,91 @@ where D = "POLICE", S = 150000.*
      ⋮
      ("CARLO Z","POLICE","POLICE OFFICER",86520)
      ("DARIUSZ Z","DoIT","CHIEF DATA BASE ANALYST",110352)
+    =#
+
+*Which employees have higher than average salary?*
+
+    q = (Start()
+        |> Employee()
+        |> ThenTake(Const(100))     # FIXME
+        |> ThenFilter(EmpSalary() .> MeanOf(HereAndAround() |> EmpSalary()))
+        |> EmpRecord())
+    #-> (Unit...) -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+
+    display(execute(q))
+    #=>
+    DataSet[65 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+     ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
+     ("JEFFERY A","POLICE","POLICE OFFICER",80778)
+     ("KARINA A","POLICE","POLICE OFFICER",80778)
+     ⋮
+    =#
+
+*In the Police department, show employees whose salary is higher than the
+average for their position.*
+
+    q = (Start()
+        |> Employee()
+        |> ThenTake(Const(100))     # FIXME
+        |> ThenFilter(EmpDepartment() |> DeptName() .== Const("POLICE"))
+        |> ThenFilter(EmpSalary() .> MeanOf(HereAndAround(EmpPosition()) |> EmpSalary()))
+        |> EmpRecord())
+    #-> (Unit...) -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+
+    display(execute(q))
+    #=>
+    DataSet[29 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+     ("JEFFERY A","POLICE","POLICE OFFICER",80778)
+     ("KARINA A","POLICE","POLICE OFFICER",80778)
+     ("TERRY A","POLICE","POLICE OFFICER",86520)
+     ⋮
+    =#
+
+*Show a numbered list of employees and their salaries along with the running total.*
+
+    q = (Start()
+        |> Employee()
+        |> ThenTake(Const(100))     # FIXME
+        |> ThenSelect(
+                Count(HereAndBefore()) |> ThenTag(:no),
+                EmpName(),
+                EmpSalary(),
+                SumOf(HereAndBefore() |> EmpSalary()) |> ThenTag(:total)))
+    #-> (Unit...) -> {Emp [tag=:employee], Int64 [tag=:no], String [tag=:name], Int64 [tag=:salary], Int64 [tag=:total]}*
+
+    display(execute(q))
+    #=>
+    DataSet[100 × {Emp [tag=:employee], Int64 [tag=:no], String [tag=:name], Int64 [tag=:salary], Int64 [tag=:total]}]:
+     (Emp(1),1,"ELVIA A",88968,88968)
+     (Emp(2),2,"JEFFERY A",80778,169746)
+     (Emp(3),3,"KARINA A",80778,250524)
+     ⋮
+    =#
+
+*For each department, show employee salaries along with the running total; the
+total should be reset at the department boundary.*
+
+    q = (Start()
+        |> Department()
+        |> ThenSelect(
+                DeptName(),
+                DeptEmployee()
+                |> ThenTake(Const(100))     # FIXME
+                |> ThenSelect(
+                        EmpName(),
+                        EmpSalary(),
+                        SumOf(HereAndBefore() |> EmpSalary()))
+                |> ThenFrame()))
+    #-> Unit -> {Dept [tag=:department], String [tag=:name], {Emp [tag=:employee], String [tag=:name], Int64 [tag=:salary], Int64}*}*
+
+    display(execute(q))
+    #=>
+    DataSet[35 × {Dept [tag=:department], String [tag=:name], {Emp [tag=:employee], String [tag=:name], Int64 [tag=:salary], Int64}*}]:
+     (Dept(1),"WATER MGMNT",[(Emp(1),"ELVIA A",88968,88968),(Emp(5),"VICENTE A",104736,193704)  …  ])
+     (Dept(2),"POLICE",[(Emp(2),"JEFFERY A",80778,80778),(Emp(3),"KARINA A",80778,161556)  …  ])
+     (Dept(3),"GENERAL SERVICES",[(Emp(4),"KIMBERLEI A",84780,84780),(Emp(23),"RASHAD A",91520,176300)  …  ])
+     ⋮
+     (Dept(34),"ADMIN HEARNG",[(Emp(2813),"JAMIE B",63708,63708),(Emp(3020),"ELOUISE B",66684,130392)  …  ])
+     (Dept(35),"LICENSE APPL COMM",[(Emp(11126),"MICHELLE G",69888,69888)])
     =#
 

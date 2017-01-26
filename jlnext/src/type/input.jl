@@ -42,10 +42,10 @@ Input(dom; relative::Bool=false, parameters::InputParameters=()) =
 
 Input(isig::Input; domain=nothing, relative=nothing, parameters=nothing) =
     Input(
-        domain !== nothing ? convert(Domain, domain) : isig.domain,
+        domain !== nothing ? convert(Domain, domain) : isig.dom,
         InputMode(
-            relative !== nothing ? relative::Bool : isig.relative,
-            parameters !== nothing ? parameters::InputParameters : isig.params))
+            relative !== nothing ? relative::Bool : isig.mode.relative,
+            parameters !== nothing ? parameters::InputParameters : isig.mode.params))
 
 convert(::Type{Input}, dom::Union{Type, Symbol, Tuple, Domain}) =
     Input(convert(Domain, dom))

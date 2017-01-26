@@ -43,7 +43,7 @@ function execute{T}(tool::AbstractTool, val::T=nothing; paramvals...)
         paramflow = InputParameterFlow(pname, OutputFlow(psig, paramcol))
         push!(pflows, paramflow)
     end
-    iflow = InputFlow(InputContext(), T, T[val], pflows)
+    iflow = InputFlow(InputContext(), T, T[val], frameoffs, pflows)
     oflow = run(tool, iflow)
     return oflow[1]
 end
@@ -108,4 +108,6 @@ include("tool/group.jl")
 include("tool/rollup.jl")
 include("tool/parameter.jl")
 include("tool/given.jl")
+include("tool/around.jl")
+include("tool/frame.jl")
 
