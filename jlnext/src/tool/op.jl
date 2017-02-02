@@ -77,7 +77,7 @@ Op(op::Function, otype::Type, Fs::Combinator...) =
 
 (~)(F::Combinator) = Op(!, (Bool,), Bool, F)
 (&)(F::Combinator, G::Combinator) = Op(&, (Bool, Bool), Bool, F, G)
-(|)(F::Combinator, G::Combinator) = OpTool(|, (Bool, Bool), Bool, F, G)
+(|)(F::Combinator, G::Combinator) = Op(|, (Bool, Bool), Bool, F, G)
 
 # Function primitive.
 
