@@ -24,7 +24,7 @@ function run_collection(len::Int, set::AbstractVector)
         return Column(Int[1, card+1], set)
     end
     offs = Int[1 + i*card for i = 0:len]
-    idxs = Int[j for i = 1:len for j = 1:card]
+    idxs = len > 0 ? Int[j for i = 1:len for j = 1:card] : Int[]
     vals = set[idxs]
     return Column(offs, vals)
 end
