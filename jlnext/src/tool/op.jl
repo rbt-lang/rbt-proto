@@ -18,6 +18,22 @@ immutable OpTool <: AbstractTool
     end
 end
 
+immutable NullableOpTool <: AbstractTool
+    op::Function
+    itypes::Tuple{Vararg{Type}}
+    otype::Type
+    Fs::Vector{Tool}
+
+    function NullableOpTool(op::Function, itypes::Tuple{Vararg{Type}}, otype::Type, Fs::Vector{Tool})
+        @assert method_exists(op, itypes)
+        @assert length(itypes) == length(Fs)
+        for (itype, F) in zip(itypes, Fs)
+            @assert fits(domain(output(F)), Domain(itype))
+        end
+        return new(op, itypes, otype, Fs)
+    end
+end
+
 OpTool(op::Function, itypes, otype::Type, Fs) =
     OpTool(op, convert(Tuple{Vararg{Type}}, itypes), otype, convert(Vector{Tool}, Fs))
 
@@ -27,6 +43,17 @@ OpTool(op::Function, itypes, otype::Type, Fs::AbstractTool...) =
 OpTool(op::Function, otype, Fs::AbstractTool...) =
     let Fs = collect(Tool, Fs)
         OpTool(op, ((datatype(domain(output(F))) for F in Fs)...), otype, Fs)
+    end
+
+NullableOpTool(op::Function, itypes, otype::Type, Fs) =
+    NullableOpTool(op, convert(Tuple{Vararg{Type}}, itypes), otype, convert(Vector{Tool}, Fs))
+
+NullableOpTool(op::Function, itypes, otype::Type, Fs::AbstractTool...) =
+    NullableOpTool(op, itypes, otype, collect(Tool, Fs))
+
+NullableOpTool(op::Function, otype, Fs::AbstractTool...) =
+    let Fs = collect(Tool, Fs)
+        NullableOpTool(op, ((datatype(domain(output(F))) for F in Fs)...), otype, Fs)
     end
 
 .==(F::AbstractTool, G::AbstractTool) = OpTool(==, Bool, F, G)
@@ -46,12 +73,27 @@ output(tool::OpTool) =
         tool.otype,
         obound(OutputMode, (mode(output(F)) for F in tool.Fs)...))
 
+input(tool::NullableOpTool) = ibound(Input, (input(F) for F in tool.Fs)...)
+output(tool::NullableOpTool) =
+    Output(
+        tool.otype,
+        OutputMode(obound(OutputMode, (mode(output(F)) for F in tool.Fs)...), optional=true))
+
 run(tool::OpTool, iflow::InputFlow) =
+    run(prim(tool), iflow)
+
+run(tool::NullableOpTool, iflow::InputFlow) =
     run(prim(tool), iflow)
 
 prim(tool::OpTool) =
     let omode = obound(OutputMode, (mode(output(F)) for F in tool.Fs)...)
         RecordTool(map(prim, tool.Fs)) >> OpPrimTool(tool.op, tool.itypes, tool.otype, omode)
+    end
+
+prim(tool::NullableOpTool) =
+    let omode = obound(OutputMode, (mode(output(F)) for F in tool.Fs)...)
+        RecordTool(map(prim, tool.Fs)) >>
+        OpPrimTool(tool.op, tool.itypes, Nullable{tool.otype}, omode) >> NullablePrimTool(tool.otype)
     end
 
 Op(op::Function, itypes::Tuple{Vararg{Type}}, otype::Type, Fs::Combinator...) =
@@ -66,6 +108,20 @@ Op(op::Function, otype::Type, Fs::Combinator...) =
         P ->
             let Q = Start(P)
                 P >> OpTool(op, otype, (F(Q) for F in Fs)...)
+            end)
+
+NullableOp(op::Function, itypes::Tuple{Vararg{Type}}, otype::Type, Fs::Combinator...) =
+    Combinator(
+        P ->
+            let Q = Start(P)
+                P >> NullableOpTool(op, itypes, otype, (F(Q) for F in Fs)...)
+            end)
+
+NullableOp(op::Function, otype::Type, Fs::Combinator...) =
+    Combinator(
+        P ->
+            let Q = Start(P)
+                P >> NullableOpTool(op, otype, (F(Q) for F in Fs)...)
             end)
 
 .==(F::Combinator, G::Combinator) = Op(==, Bool, F, G)
@@ -176,5 +232,37 @@ end
         end
         return Column(offs, vals)
     end
+end
+
+# Nullable to optional converter.
+
+immutable NullablePrimTool <: AbstractTool
+    otype::Type
+end
+
+input(tool::NullablePrimTool) = Input(Nullable{tool.otype})
+output(tool::NullablePrimTool) = Output(tool.otype, optional=true)
+
+function run_prim{T}(tool::NullablePrimTool, ivals::AbstractVector{Nullable{T}})
+    len = length(ivals)
+    sz = 0
+    for val in ivals
+        if !isnull(val)
+            sz += 1
+        end
+    end
+    offs = Vector{Int}(len+1)
+    vals = Vector{T}(sz)
+    offs[1] = 1
+    n = 1
+    for k = 1:len
+        val = ivals[k]
+        if !isnull(val)
+            vals[n] = get(val)
+            n += 1
+        end
+        offs[k+1] = n
+    end
+    return Column(offs, vals)
 end
 

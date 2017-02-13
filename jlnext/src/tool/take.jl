@@ -51,7 +51,7 @@ ThenTake(N::Combinator) =
                 TakeTool(P, N(Q))
             end)
 
-SkipTake(N::Combinator) =
+ThenSkip(N::Combinator) =
     Combinator(
         P ->
             let Q = HereTool(domain(input(P)))
