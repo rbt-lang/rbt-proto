@@ -1,12 +1,17 @@
 
 import Base:
     convert,
+    done,
+    find,
     get,
     getindex,
+    isempty,
     keys,
     length,
-    size,
+    next,
     show,
+    size,
+    start,
     summary,
     values,
     vcat,
