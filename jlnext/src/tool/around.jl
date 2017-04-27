@@ -28,18 +28,17 @@ end
 AroundByTool(dom, here, before, after, Ks::AbstractTool...) =
     AroundByTool(convert(Domain, dom), here, before, after, collect(Tool, Ks))
 
-input(tool::AroundTool) = Input(tool.dom, relative=true)
+input(tool::AroundTool) = Input(tool.dom) |> setrelative()
 output(tool::AroundTool) =
-    Output(tool.dom, optional=!tool.here, plural=(tool.before || tool.after))
+    Output(tool.dom) |> setoptional(!tool.here) |> setplural(tool.before || tool.after)
 
-input(tool::AroundByTool) =
+input(tool::AroundByTool) = (
     Input(
-        Input(
-            tool.dom,
-            ibound(InputMode, (mode(input(K)) for K in tool.Ks)...)),
-        relative=true)
+        tool.dom,
+        ibound(InputMode[mode(input(K)) for K in tool.Ks]))
+    |> setrelative())
 output(tool::AroundByTool) =
-    Output(tool.dom, optional=!tool.here, plural=(tool.before || tool.after))
+    Output(tool.dom) |> setoptional(!tool.here) |> setplural(tool.before || tool.after)
 
 run(tool::AroundTool, iflow::InputFlow) =
     OutputFlow(
@@ -137,11 +136,10 @@ input(tool::AroundByPrimTool) =
     Input(
         Domain((
             tool.dom,
-            tool.keydoms...)),
-        relative=true)
+            tool.keydoms...))) |> setrelative()
 
 output(tool::AroundByPrimTool) =
-    Output(tool.dom, optional=!tool.here, plural=(tool.before || tool.after))
+    Output(tool.dom) |> setoptional(!tool.here) |> setplural(tool.before || tool.after)
 
 run(tool::AroundByPrimTool, iflow::InputFlow) =
     OutputFlow(

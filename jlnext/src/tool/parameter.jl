@@ -8,7 +8,7 @@ immutable ParameterTool <: AbstractTool
 end
 
 input(tool::ParameterTool) =
-    Input(Any, parameters=(InputParameter(tool.name, tool.sig),))
+    Input(Any) |> setparameters([InputParameter(tool.name, tool.sig)])
 
 output(tool::ParameterTool) = tool.sig
 

@@ -23,13 +23,13 @@ input(tool::RollUpTool) =
         domain(input(tool.F)),
         ibound(mode(input(tool.F)), (mode(input(K)) for K in tool.Ks)...))
 
-output(tool::RollUpTool) =
+output(tool::RollUpTool) = (
     Output(
         Domain((
-            Output(output(tool.F), optional=false),
-            (Output(output(K), optional=true) for K in tool.Ks)...)),
-        optional=isoptional(output(tool.F)),
-        plural=(isplural(output(tool.F)) && !isempty(tool.Ks)))
+            output(tool.F) |> setoptional(false),
+            (output(K) |> setoptional(true) for K in tool.Ks)...)))
+    |> setoptional(isoptional(output(tool.F)))
+    |> setplural(isplural(output(tool.F)) && !isempty(tool.Ks)))
 
 run(tool::RollUpTool, iflow::InputFlow) =
     run(prim(tool), iflow)
@@ -46,7 +46,7 @@ prim(tool::RollUpTool) =
             Output[output(K) for K in tool.Ks]) >>
         GroupByPrimTool(
             output(tool.F),
-            Output[Output(output(K), optional=true) for K in tool.Ks])
+            Output[output(K) |> setoptional() for K in tool.Ks])
     end
 
 ThenRollUp(Ks::Combinator...) =
@@ -67,17 +67,18 @@ input(tool::RollUpPrimTool) =
     Input(
         Domain((
             Output(
-                (domain(tool.sig), tool.keysigs...),
-                optional=true, plural=true),)))
+                (domain(tool.sig), tool.keysigs...))
+            |> setoptional()
+            |> setplural(),)))
 
 output(tool::RollUpPrimTool) =
     Output((
         Output(
             Domain((
                 domain(tool.sig),
-                (Output(keysig, optional=true) for keysig in tool.keysigs)...)),
-            optional=isoptional(tool.sig),
-            plural=true),))
+                (keysig |> setoptional() for keysig in tool.keysigs)...)))
+        |> setoptional(isoptional(tool.sig))
+        |> setplural(),))
 
 function run_prim(tool::RollUpPrimTool, ds::DataSet)
     ds′ = values(ds, 1)::DataSet
@@ -92,7 +93,7 @@ function run_prim(tool::RollUpPrimTool, ds::DataSet)
     for k = 2:width
         fs[k] =
             OutputFlow(
-                Output(output(flow(ds′, k)), optional=true, nullrev=true),
+                output(flow(ds′, k)) |> setoptional() |> decorate(:nullrev => true),
                 run_rollup_values(k, width, offs, values(ds′, k)))
     end
     return Column(
@@ -103,9 +104,9 @@ function run_prim(tool::RollUpPrimTool, ds::DataSet)
                 Output(
                     Domain((
                         domain(tool.sig),
-                        (Output(keysig, optional=true) for keysig in tool.keysigs)...)),
-                    optional=isoptional(tool.sig),
-                    plural=true),
+                        (keysig |> setoptional() for keysig in tool.keysigs)...)))
+                |> setoptional(isoptional(tool.sig))
+                |> setplural(),
                 Column(groupoffs, DataSet(width*length(ds′), fs)))))
 end
 

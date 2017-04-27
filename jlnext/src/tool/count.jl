@@ -30,7 +30,7 @@ ThenCount() =
 immutable CountPrimTool <: AbstractTool
 end
 
-input(::CountPrimTool) = Input((Output(Any, optional=true, plural=true),))
+input(::CountPrimTool) = Input((Output(Any) |> setoptional() |> setplural(),))
 
 output(::CountPrimTool) = Output(Int)
 

@@ -23,13 +23,13 @@ input(tool::GroupByTool) =
         domain(input(tool.F)),
         ibound(mode(input(tool.F)), (mode(input(K)) for K in tool.Ks)...))
 
-output(tool::GroupByTool) =
+output(tool::GroupByTool) = (
     Output(
         Domain((
-            Output(output(tool.F), optional=false),
-            (output(K) for K in tool.Ks)...)),
-        optional=isoptional(output(tool.F)),
-        plural=(isplural(output(tool.F)) && !isempty(tool.Ks)))
+            output(tool.F) |> setoptional(false),
+            (output(K) for K in tool.Ks)...)))
+    |> setoptional(isoptional(output(tool.F)))
+    |> setplural(isplural(output(tool.F)) && !isempty(tool.Ks)))
 
 run(tool::GroupByTool, iflow::InputFlow) =
     run(prim(tool), iflow)
@@ -64,16 +64,17 @@ input(tool::GroupByPrimTool) =
     Input(
         Domain((
             Output(
-                (domain(tool.sig), tool.keysigs...),
-                optional=true, plural=true),)))
+                (domain(tool.sig), tool.keysigs...))
+            |> setoptional()
+            |> setplural(),)))
 
-output(tool::GroupByPrimTool) =
+output(tool::GroupByPrimTool) = (
     Output(
         Domain((
-            Output(tool.sig, optional=false),
-            tool.keysigs...)),
-        optional=isoptional(tool.sig),
-        plural=(isplural(tool.sig) && !isempty(tool.keysigs)))
+            tool.sig |> setoptional(false),
+            tool.keysigs...)))
+    |> setoptional(isoptional(tool.sig))
+    |> setplural(isplural(tool.sig) && !isempty(tool.keysigs)))
 
 function run_prim(tool::GroupByPrimTool, ds::DataSet)
     ds′ = values(ds, 1)::DataSet
@@ -84,7 +85,7 @@ function run_prim(tool::GroupByPrimTool, ds::DataSet)
     fs = Vector{OutputFlow}(width+1)
     fs[1] =
         OutputFlow(
-            Output(tool.sig, optional=false),
+            tool.sig |> setoptional(false),
             Column(offs, values(ds′, 1)[perm]))
     for k = 1:width
         fs[k+1] =

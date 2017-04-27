@@ -13,13 +13,13 @@ GivenTool(F::AbstractTool, Gs::AbstractTool...) =
 function input(tool::GivenTool)
     pset = Set{Symbol}()
     for G in tool.Gs
-        tag = decoration(output(G), :tag, Symbol(""))
+        tag = decoration(output(G), :tag, Symbol, Symbol(""))
         if tag != Symbol("")
             push!(pset, tag)
         end
     end
     params = filter(p -> !(p.first in pset), parameters(input(tool.F)))
-    imode = InputMode(isrelative(input(tool.F)), (params...))
+    imode = mode(input(tool.F)) |> setparameters(params)
     return Input(
         domain(input(tool.F)),
         ibound(imode, (mode(input(G)) for G in tool.Gs)...))
@@ -55,13 +55,13 @@ end
 function input(tool::GivenPrimTool)
     pset = Set{Symbol}()
     for psig in tool.psigs
-        tag = decoration(psig, :tag, Symbol(""))
+        tag = decoration(psig, :tag, Symbol, Symbol(""))
         if tag != Symbol("")
             push!(pset, tag)
         end
     end
     params = filter(p -> !(p.first in pset), parameters(input(tool.F)))
-    imode = InputMode(isrelative(input(tool.F)), (params...))
+    imode = mode(input(tool.F)) |> setparameters(params)
     return Input(
         Domain((
             domain(input(tool.F)),
@@ -77,7 +77,7 @@ run(tool::GivenPrimTool, iflow::InputFlow) =
 function run_given(tool::GivenPrimTool, iflow::InputFlow, ds::DataSet)
     pmap = Dict{Symbol,OutputFlow}(iflow.paramflows)
     for (k, psig) in enumerate(tool.psigs)
-        tag = decoration(psig, :tag, Symbol(""))
+        tag = decoration(psig, :tag, Symbol, Symbol(""))
         if tag != Symbol("")
             pmap[tag] = flow(ds, k+1)
         end

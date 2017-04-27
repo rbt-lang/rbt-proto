@@ -77,7 +77,7 @@ input(tool::NullableOpTool) = ibound(Input, (input(F) for F in tool.Fs)...)
 output(tool::NullableOpTool) =
     Output(
         tool.otype,
-        OutputMode(obound(OutputMode, (mode(output(F)) for F in tool.Fs)...), optional=true))
+        obound(OutputMode, (mode(output(F)) for F in tool.Fs)...) |> setoptional())
 
 run(tool::OpTool, iflow::InputFlow) =
     run(prim(tool), iflow)
@@ -241,7 +241,7 @@ immutable NullablePrimTool <: AbstractTool
 end
 
 input(tool::NullablePrimTool) = Input(Nullable{tool.otype})
-output(tool::NullablePrimTool) = Output(tool.otype, optional=true)
+output(tool::NullablePrimTool) = Output(tool.otype) |> setoptional()
 
 function run_prim{T}(tool::NullablePrimTool, ivals::AbstractVector{Nullable{T}})
     len = length(ivals)

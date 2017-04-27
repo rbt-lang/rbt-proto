@@ -31,7 +31,7 @@ input(tool::Union{TakeTool, SkipTool}) =
     ibound(input(tool.F), input(tool.N))
 
 output(tool::Union{TakeTool, SkipTool}) =
-    Output(output(tool.F), optional=true)
+    output(tool.F) |> setoptional()
 
 run(tool::Union{TakeTool, SkipTool}, iflow::InputFlow) =
     run(prim(tool), iflow)
@@ -69,7 +69,7 @@ immutable TakeSkipPrimTool <: AbstractTool
 end
 
 input(tool::TakeSkipPrimTool) =
-    Input((tool.sig, Output(Int, optional=true)))
+    Input((tool.sig, Output(Int) |> setoptional()))
 
 output(tool::TakeSkipPrimTool) = tool.sig
 

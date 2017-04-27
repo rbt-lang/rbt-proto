@@ -11,7 +11,7 @@ CollectionTool(set::AbstractVector) = CollectionTool(eltype(set), set)
 
 input(tool::CollectionTool) = Input(Any)
 
-output(tool::CollectionTool) = Output(tool.dom, optional=true, plural=true)
+output(tool::CollectionTool) = Output(tool.dom) |> setoptional() |> setplural()
 
 run(tool::CollectionTool, iflow::InputFlow) =
     OutputFlow(

@@ -1,5 +1,5 @@
 #
-# The output signature.
+# The type of the query output.
 #
 
 # Output cardinality.
@@ -9,133 +9,109 @@ immutable OutputMode
     plural::Bool
 end
 
-OutputMode(; optional::Bool=false, plural::Bool=false) =
-    OutputMode(optional, plural)
+OutputMode() = OutputMode(false, false)
 
-OutputMode(omode::OutputMode; optional=nothing, plural=nothing) =
-    OutputMode(
-        optional !== nothing ? optional::Bool : omode.optional,
-        plural !== nothing ? plural::Bool : omode.plural)
+setoptional(omode::OutputMode, optional::Bool=true) =
+    OutputMode(optional, omode.plural)
+setplural(omode::OutputMode, plural::Bool=true) =
+    OutputMode(omode.optional, plural)
+
+setoptional(optional::Bool=true) =
+    omode -> setoptional(omode, optional)
+
+setplural(plural::Bool=true) =
+    omode -> setplural(omode, plural)
 
 isplain(omode::OutputMode) = !omode.optional && !omode.plural
 isoptional(omode::OutputMode) = omode.optional
 isplural(omode::OutputMode) = omode.plural
 
-# The domain, cardinality and decorations of the output.
-
-typealias OutputDecoration Pair{Symbol,Any}
-typealias OutputDecorations Tuple{Vararg{OutputDecoration}}
+# The output type.
 
 immutable Output
     dom::Domain
     mode::OutputMode
-    decors::OutputDecorations
 end
 
-Output(dom, mode) = Output(dom, mode, ())
+Output(dom) = Output(convert(Domain, dom), OutputMode())
 
-Output(dom; optional::Bool=false, plural::Bool=false, decorations...) =
-    Output(
-        convert(Domain, dom),
-        OutputMode(optional, plural),
-        ((OutputDecoration(n, v) for (n, v) in sort(decorations))...))
+decorate(otype::Output, d::Decoration) =
+    Output(decorate(otype.dom, d), otype.mode)
 
-function Output(osig::Output; domain=nothing, optional=nothing, plural=nothing, decorations...)
-    dom = domain !== nothing ? convert(Domain, domain) : osig.dom
-    mode = OutputMode(
-        optional !== nothing ? optional::Bool : osig.mode.optional,
-        plural !== nothing ? plural::Bool : osig.mode.plural)
-    decors =
-        if isempty(decorations)
-            osig.decors
-        elseif isempty(osig.decors)
-            ((OutputDecoration(n, v) for (n, v) in sort(decorations))...)
-        else
-            dmap = Dict{Symbol,OutputDecoration}()
-            for d in osig.decors
-                dmap[d.first] = d
-            end
-            for (n, v) in decorations
-                dmap[n] = OutputDecoration(n, v)
-            end
-            ((dmap[n] for n in sort(collect(keys(dmap))))...)
-        end
-    return Output(dom, mode, decors)
-end
+setoptional(otype::Output, optional::Bool=true) =
+    Output(otype.dom, setoptional(otype.mode, optional))
 
-convert(::Type{Output}, dom::Union{Type, Symbol, Tuple, Domain}) =
+setplural(otype::Output, plural::Bool=true) =
+    Output(otype.dom, setplural(otype.mode, plural))
+
+convert(::Type{Output}, dom::Union{Type, Symbol, Tuple, Vector, Domain}) =
     Output(convert(Domain, dom))
 
-function show(io::IO, osig::Output)
-    print(io, osig.dom)
-    if isplural(osig) && isoptional(osig)
+function show(io::IO, otype::Output)
+    print(io, otype.dom)
+    if isplural(otype) && isoptional(otype)
         print(io, "*")
-    elseif isplural(osig)
+    elseif isplural(otype)
         print(io, "+")
-    elseif isoptional(osig)
+    elseif isoptional(otype)
         print(io, "?")
-    end
-    if !isempty(osig.decors)
-        print(io, " [")
-        comma = false
-        for (n, v) in osig.decors
-            if comma
-                print(io, ", ")
-            end
-            comma = true
-            print(io, n)
-            print(io, "=")
-            if v !== nothing
-                show(io, v)
-            else
-                print(io, "?")
-            end
-        end
-        print(io, "]")
     end
 end
 
 # Predicates and properties.
 
-domain(osig::Output) = osig.dom
-mode(osig::Output) = osig.mode
-decorations(osig::Output) = osig.decors
+domain(otype::Output) = otype.dom
+mode(otype::Output) = otype.mode
 
-isdata(osig::Output) = isdata(osig.dom)
-isany(osig::Output) = isany(osig.dom)
-isunit(osig::Output) = isunit(osig.dom)
-iszero(osig::Output) = iszero(osig.dom)
-isentity(osig::Output) = isentity(osig.dom)
-isrecord(osig::Output) = isrecord(osig.dom)
+isdata(otype::Output) = isdata(otype.dom)
+isany(otype::Output) = isany(otype.dom)
+isunit(otype::Output) = isunit(otype.dom)
+iszero(otype::Output) = iszero(otype.dom)
+isentity(otype::Output) = isentity(otype.dom)
+isrecord(otype::Output) = isrecord(otype.dom)
 
-isplain(osig::Output) = isplain(osig.mode)
-isoptional(osig::Output) = isoptional(osig.mode)
-isplural(osig::Output) = isplural(osig.mode)
+isplain(otype::Output) = isplain(otype.mode)
+isoptional(otype::Output) = isoptional(otype.mode)
+isplural(otype::Output) = isplural(otype.mode)
 
-function decoration{T}(osig::Output, name::Symbol, default::T)
-    for (n, v) in osig.decors
-        if n == name && isa(v, T)
-            return v::T
-        end
-    end
-    return default
-end
+decorations(otype::Output) = decorations(otype.dom)
+decoration(otype::Output, name, T, default) =
+    decoration(otype.dom, name, T, default)
+
+classname(otype::Output) = classname(otype.dom)
+fields(otype::Output) = fields(otype.dom)
 
 # The native Julia type that can represent the output.
 
-datatype(osig::Output) =
-    let T = datatype(osig.dom)
-        isplural(osig) ?
+datatype(otype::Output) =
+    let T = datatype(otype.dom)
+        isplural(otype) ?
             Vector{T} :
-        isoptional(osig) ?
+        isoptional(otype) ?
             Nullable{T} :
             T
     end
 
 # Domain definitions that depend on Output.
 
-convert(::Type{Domain}, desc::Type) = Domain(desc)
-convert(::Type{Domain}, desc::Symbol) = Domain(desc)
-convert(::Type{Domain}, desc::Tuple{Vararg{Union{Type, Symbol, Domain, Output}}}) =
-    Domain(((convert(Output, osig) for osig in desc)...))
+convert(::Type{Domain}, desc::Union{Tuple, Vector}) =
+    Domain(Output[convert(Output, otype) for otype in desc])
+
+isdata(::Vector{Output}) = false
+isany(::Vector{Output}) = false
+isunit(::Vector{Output}) = false
+iszero(::Vector{Output}) = false
+isentity(::Vector{Output}) = false
+isrecord(::Vector{Output}) = true
+
+datatype(desc::Vector{Output}) =
+    Tuple{(datatype(otype) for otype in desc)...}
+
+classname(::Vector{Output}) = NO_CLASSNAME
+
+const NO_FIELDS = Output[]
+
+fields(desc::Type) = NO_FIELDS
+fields(desc::Symbol) = NO_FIELDS
+fields(desc::Vector{Output}) = desc
 

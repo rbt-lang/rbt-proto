@@ -17,7 +17,7 @@ ConnectTool(F::AbstractTool, here::Bool=false) =
     ConnectTool(convert(Tool, F), here)
 
 input(tool::ConnectTool) = input(tool.F)
-output(tool::ConnectTool) = Output(output(tool.F), plural=true, optional=!tool.here)
+output(tool::ConnectTool) = output(tool.F) |> setoptional(!tool.here) |> setplural()
 
 prim(tool::ConnectTool) =
     ConnectTool(prim(tool.F), tool.here)

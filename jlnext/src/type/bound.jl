@@ -1,5 +1,5 @@
 #
-# Partial order on domains and signatures.
+# Partial order on domains and input/output types.
 #
 
 # Is the given type compatible with the expected type?
@@ -9,13 +9,13 @@ function fits(act::Domain, exp::Domain)
         return true
     end
     if isdata(exp)
-        return isdata(act) && act.desc::Type <: exp.desc::Type
+        return isdata(act) && datatype(act) <: datatype(exp)
     elseif isentity(exp)
-        return isentity(act) && act.desc::Symbol == exp.desc::Symbol
+        return isentity(act) && classname(act) == classname(exp)
     else
         return (
             isrecord(act) &&
-            let actfs = act.desc::Tuple{Vararg{Output}}, expfs = exp.desc::Tuple{Vararg{Output}}
+            let actfs = fields(act), expfs = fields(exp)
                 length(actfs) == length(expfs) &&
                 all(fits(actf, expf) for (actf, expf) in zip(actfs, expfs))
             end)
@@ -59,55 +59,29 @@ fits(act::Output, exp::Type) = fits(act.dom, convert(Domain, exp))
 
 ibound{T}(t1::T, ts::T...) = ibound(T, t1, ts...)
 ibound{T}(::Type{T}, ts::T...) = foldl(ibound, ibound(T), ts)
+ibound{T}(ts::Vector{T}) = foldl(ibound, ibound(T), ts)
 
 ibound(::Type{Domain}) = Domain(Any)
 
 function ibound(dom1::Domain, dom2::Domain)
-    if isany(dom1) || iszero(dom2)
-        return dom2
-    elseif dom1 == dom2 || iszero(dom1) || isany(dom2)
+    if dom1 == dom2
         return dom1
-    elseif isdata(dom1) && isdata(dom2)
-        return Domain(typeintersect(dom1.desc::Type, dom2.desc::Type))
-    elseif isrecord(dom1) && isrecord(dom2)
-        osigs1 = dom1.desc::Tuple{Vararg{Output}}
-        osigs2 = dom2.desc::Tuple{Vararg{Output}}
-        if length(osigs1) == length(osigs2)
-            return Domain(((ibound(osig1, osig2) for (osig1, osig2) in zip(osigs1, osigs2))...))
-        end
     end
-    return Domain(Zero)
-end
-
-ibound(::Type{OutputMode}) = OutputMode(true, true)
-
-ibound(omode1::OutputMode, omode2::OutputMode) =
-    OutputMode(omode1.optional && omode2.optional, omode1.plural && omode2.plural)
-
-ibound(::Type{Output}) =
-    Output(ibound(Domain), ibound(OutputMode), (OutputDecoration(:*, nothing),))
-
-function ibound(osig1::Output, osig2::Output)
-    if osig1 == osig2
-        return osig1
-    end
-    dom = ibound(osig1.dom, osig2.dom)
-    mode = ibound(osig1.mode, osig2.mode)
     decors =
-        if isempty(osig1.decors) || osig1.decors == osig2.decors
-            osig1.decors
-        elseif isempty(osig2.decors)
-            osig2.decors
+        if isempty(dom1.decors) || dom1.decors == dom2.decors
+            dom1.decors
+        elseif isempty(dom2.decors)
+            dom2.decors
         else
-            dset1 = Set{Symbol}(d.first for d in osig1.decors)
-            dset2 = Set{Symbol}(d.first for d in osig2.decors)
-            dmap = Dict{Symbol,OutputDecoration}()
-            for d in osig1.decors
+            dset1 = Set{Symbol}(d.first for d in dom1.decors)
+            dset2 = Set{Symbol}(d.first for d in dom2.decors)
+            dmap = Dict{Symbol,Decoration}()
+            for d in dom1.decors
                 if d.first in dset2 || :* in dset2
                     dmap[d.first] = d
                 end
             end
-            for d in osig2.decors
+            for d in dom2.decors
                 (n, v) = d
                 if n in dset1
                     if dmap[n].second === nothing
@@ -119,9 +93,43 @@ function ibound(osig1::Output, osig2::Output)
                     dmap[n] = d
                 end
             end
-            ((dmap[n] for n in sort(collect(keys(dmap))))...)
+            Decoration[dmap[n] for n in sort(collect(keys(dmap)))]
         end
-    return Output(dom, mode, decors)
+    if isany(dom1) || iszero(dom2)
+        return Domain(dom2.desc, decors)
+    elseif iszero(dom1) || isany(dom2)
+        return Domain(dom1.desc, decors)
+    elseif isdata(dom1) && isdata(dom2)
+        return Domain(typeintersect(dom1.desc::Type, dom2.desc::Type), decors)
+    elseif isentity(dom1) && isentity(dom2) && dom1.desc::Symbol == dom2.desc::Symbol
+        return Domain(dom1.desc, decors)
+    elseif isrecord(dom1) && isrecord(dom2)
+        otypes1 = dom1.desc::Vector{Output}
+        otypes2 = dom2.desc::Vector{Output}
+        if length(otypes1) == length(otypes2)
+            return Domain(
+                    Output[ibound(otype1, otype2) for (otype1, otype2) in zip(otypes1, otypes2)],
+                    decors)
+        end
+    end
+    return Domain(Zero, decors)
+end
+
+ibound(::Type{OutputMode}) = OutputMode(true, true)
+
+ibound(omode1::OutputMode, omode2::OutputMode) =
+    OutputMode(omode1.optional && omode2.optional, omode1.plural && omode2.plural)
+
+ibound(::Type{Output}) =
+    Output(ibound(Domain), ibound(OutputMode), Decoration[Decoration(:*, nothing)])
+
+function ibound(otype1::Output, otype2::Output)
+    if otype1 == otype2
+        return otype1
+    end
+    dom = ibound(otype1.dom, otype2.dom)
+    mode = ibound(otype1.mode, otype2.mode)
+    return Output(dom, mode)
 end
 
 ibound(::Type{InputMode}) = InputMode()
@@ -147,48 +155,87 @@ function ibound(imode1::InputMode, imode2::InputMode)
             end
             ps = InputParameter[]
             for n in sort(unique([collect(keys(pmap1)); collect(keys(pmap2))]))
-                osig =
+                otype =
                     !haskey(pmap1, n) ?
                         pmap2[n].second :
                     !haskey(pmap2, n) ?
                         pmap1[n].second :
                         Output(pmap1[n].second, pmap2[n].second)
-                push!(ps, n => osig)
+                push!(ps, n => otype)
             end
-            (ps...)
+            ps
         end
     return InputMode(relative, params)
 end
 
 ibound(::Type{Input}) = Input(ibound(Domain), ibound(InputMode))
 
-ibound(isig1::Input, isig2::Input) =
-    isig1 == isig2 ?
-        isig1 :
-        Input(ibound(isig1.dom, isig2.dom), ibound(isig1.mode, isig2.mode))
+ibound(itype1::Input, itype2::Input) =
+    itype1 == itype2 ?
+        itype1 :
+        Input(ibound(itype1.dom, itype2.dom), ibound(itype1.mode, itype2.mode))
 
 # The least upper bound.
 
 obound{T}(t1::T, ts::T...) = obound(T, t1, ts...)
 obound{T}(::Type{T}, ts::T...) = foldl(obound, obound(T), ts)
+obound{T}(ts::Vector{T}) = foldl(obound, obound(T), ts)
 
 obound(::Type{Domain}) = Domain(Zero)
 
 function obound(dom1::Domain, dom2::Domain)
-    if iszero(dom1) || isany(dom2)
-        return dom2
-    elseif dom1 == dom2 || isany(dom1) || iszero(dom2)
+    if dom1 == dom2
         return dom1
+    end
+    decors =
+        if isempty(dom2.decors) || dom1.decors == dom2.decors
+            dom1.decors
+        elseif isempty(dom1.decors)
+            dom2.decors
+        else
+            dset1 = Set{Symbol}(d.first for d in dom1.decors)
+            dset2 = Set{Symbol}(d.first for d in dom2.decors)
+            dmap = Dict{Symbol,Decoration}()
+            for d in dom1.decors
+                n = d.first
+                if !(n in dset2) && :* in dset2
+                    dmap[n] = Decoration(n, nothing)
+                else
+                    dmap[n] = d
+                end
+            end
+            for d in dom2.decors
+                n = d.first
+                if n in dset1
+                    if !(n in dset1)
+                        if :* in dset1
+                            dmap[n] = Decoration(n, nothing)
+                        else
+                            dmap[n] = d
+                        end
+                    elseif d != dmap[n]
+                        dmap[n] = Decoration(n, nothing)
+                    end
+                end
+            end
+            Decoration[dmap[n] for n in sort(collect(keys(dmap)))]
+        end
+    if iszero(dom1) || isany(dom2)
+        return Domain(dom2.desc, decors)
+    elseif isany(dom1) || iszero(dom2)
+        return Domain(dom1.desc, decors)
     elseif isdata(dom1) && isdata(dom2)
-        return Domain(typejoin(dom1.desc::Type, dom2.desc::Type))
+        return Domain(typejoin(dom1.desc::Type, dom2.desc::Type), decors)
     elseif isrecord(dom1) && isrecord(dom2)
-        osigs1 = dom1.desc::Tuple{Vararg{Output}}
-        osigs2 = dom2.desc::Tuple{Vararg{Output}}
-        if length(osigs1) == length(osigs2)
-            return Domain(((obound(osig1, osig2) for (osig1, osig2) in zip(osigs1, osigs2))...))
+        otypes1 = dom1.desc::Vector{Output}
+        otypes2 = dom2.desc::Vector{Output}
+        if length(otypes1) == length(otypes2)
+            return Domain(
+                    Output[obound(otype1, otype2) for (otype1, otype2) in zip(otypes1, otypes2)],
+                    decors)
         end
     end
-    return Domain(Any)
+    return Domain(Any, decors)
 end
 
 obound(::Type{OutputMode}) = OutputMode(false, false)
@@ -199,46 +246,13 @@ obound(omode1::OutputMode, omode2::OutputMode) =
 obound(::Type{Output}) =
     Output(obound(Domain), ibound(OutputMode), ())
 
-function obound(osig1::Output, osig2::Output)
-    if osig1 == osig2
-        return osig1
+function obound(otype1::Output, otype2::Output)
+    if otype1 == otype2
+        return otype1
     end
-    dom = obound(osig1.dom, osig2.dom)
-    mode = obound(osig1.mode, osig2.mode)
-    decors =
-        if isempty(osig2.decors) || osig1.decors == osig2.decors
-            osig1.decors
-        elseif isempty(osig1.decors)
-            osig2.decors
-        else
-            dset1 = Set{Symbol}(d.first for d in osig1.decors)
-            dset2 = Set{Symbol}(d.first for d in osig2.decors)
-            dmap = Dict{Symbol,OutputDecoration}()
-            for d in osig1.decors
-                n = d.first
-                if !(n in dset2) && :* in dset2
-                    dmap[n] = OutputDecoration(n, nothing)
-                else
-                    dmap[n] = d
-                end
-            end
-            for d in osig2.decors
-                n = d.first
-                if n in dset1
-                    if !(n in dset1)
-                        if :* in dset1
-                            dmap[n] = OutputDecoration(n, nothing)
-                        else
-                            dmap[n] = d
-                        end
-                    elseif d != dmap[n]
-                        dmap[n] = OutputDecoration(n, nothing)
-                    end
-                end
-            end
-            ((dmap[n] for n in sort(collect(keys(dmap))))...)
-        end
-    return Output(dom, mode, decors)
+    dom = obound(otype1.dom, otype2.dom)
+    mode = obound(otype1.mode, otype2.mode)
+    return Output(dom, mode)
 end
 
 

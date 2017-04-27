@@ -31,9 +31,7 @@ AggregateTool(op::Function, haszero::Bool, F::AbstractTool) =
 input(tool::AggregateTool) = input(tool.F)
 
 output(tool::AggregateTool) =
-    Output(
-        tool.otype,
-        optional=(!tool.haszero && isoptional(output((tool.F)))))
+    Output(tool.otype) |> setoptional((!tool.haszero && isoptional(output((tool.F)))))
 
 run(tool::AggregateTool, iflow::InputFlow) =
     run(prim(tool), iflow)
@@ -99,10 +97,10 @@ immutable AggregatePrimTool <: AbstractTool
 end
 
 input(tool::AggregatePrimTool) =
-    Input((Output(tool.itype, optional=tool.optional, plural=true),))
+    Input((Output(tool.itype) |> setoptional(tool.optional) |> setplural(),))
 
 output(tool::AggregatePrimTool) =
-    Output(tool.otype, optional=(!tool.haszero && tool.optional))
+    Output(tool.otype) |> setoptional(!tool.haszero && tool.optional)
 
 run_prim(tool::AggregatePrimTool, ds::DataSet) =
     tool.haszero || !tool.optional ?

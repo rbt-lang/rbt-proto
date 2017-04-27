@@ -79,8 +79,8 @@ function SortByOrdering(flow::OutputFlow)
     @assert !isplural(output(flow))
     offs = offsets(flow)
     vals = values(flow)
-    rev = decoration(output(flow), :rev, false)
-    nullrev = decoration(output(flow), :nullrev, false)
+    rev = decoration(output(flow), :rev, Bool, false)
+    nullrev = decoration(output(flow), :nullrev, Bool, false)
     return SortByOrdering(offs, vals, rev, nullrev)
 end
 
@@ -125,12 +125,13 @@ input(tool::SortByPrimTool) =
     Input(
         Domain((
             Output(
-                (domain(tool.sig), tool.keysigs...),
-                optional=true, plural=true),)))
+                (domain(tool.sig), tool.keysigs...))
+            |> setoptional()
+            |> setplural(),)))
 output(tool::SortByPrimTool) = tool.sig
 
 run_prim(tool::SortPrimTool, ds::DataSet) =
-    let rev = decoration(tool.sig, :rev, false)
+    let rev = decoration(tool.sig, :rev, Bool, false)
         run_sort(column(ds, 1), rev)
     end
 

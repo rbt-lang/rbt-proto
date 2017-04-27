@@ -6,7 +6,7 @@ immutable FrameTool <: AbstractTool
     F::Tool
 end
 
-input(tool::FrameTool) = Input(input(tool.F), relative=false)
+input(tool::FrameTool) = input(tool.F) |> setrelative(false)
 output(tool::FrameTool) = output(tool.F)
 
 prim(tool::FrameTool) =

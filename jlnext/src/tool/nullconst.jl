@@ -6,7 +6,7 @@ immutable NullConstTool <: AbstractTool
 end
 
 input(::NullConstTool) = Input(Any)
-output(::NullConstTool) = Output(Zero, optional=true)
+output(::NullConstTool) = Output(Zero) |> setoptional()
 
 run(tool::NullConstTool, iflow::InputFlow) =
     OutputFlow(

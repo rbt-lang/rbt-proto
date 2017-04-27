@@ -17,7 +17,7 @@ SieveTool(F) = SieveTool(convert(Tool, F))
 input(tool::SieveTool) = input(tool.F)
 output(tool::SieveTool) =
     let dom = domain(input(tool.F))
-        Output(dom, optional=true)
+        Output(dom) |> setoptional()
     end
 
 run(tool::SieveTool, iflow::InputFlow) =
@@ -32,7 +32,7 @@ ThenFilter(F::Combinator) =
     Combinator(
         P ->
             let Q = Start(P)
-                P >> SieveTool(F(Q)) >> HereTool(domain(output(Q)), decorations(output(Q)))
+                P >> SieveTool(F(Q)) >> HereTool(domain(output(Q)))
             end)
 
 # The sieve primitive.
@@ -42,10 +42,10 @@ immutable SievePrimTool <: AbstractTool
 end
 
 input(tool::SievePrimTool) =
-    Input((Output(tool.dom), Output(Bool, optional=true)))
+    Input((Output(tool.dom), Output(Bool) |> setoptional()))
 
 output(tool::SievePrimTool) =
-    Output(tool.dom, optional=true)
+    Output(tool.dom) |> setoptional()
 
 run_prim(tool::SievePrimTool, ds::DataSet) =
     isplain(output(flow(ds, 2))) ?

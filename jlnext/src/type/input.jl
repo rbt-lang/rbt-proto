@@ -1,11 +1,13 @@
 #
-# The input signature.
+# The type of the query input.
 #
 
-# Parameters with their types.
+# InputParameters with their types.
 
 typealias InputParameter Pair{Symbol, Output}
-typealias InputParameters Tuple{Vararg{InputParameter}}
+typealias InputParameters Vector{InputParameter}
+
+const NO_PARAMETERS = InputParameter[]
 
 # Input context.
 
@@ -13,16 +15,22 @@ immutable InputMode
     # Depends on the preceeding and subsequent input values.
     relative::Bool
     # List of query parameters.
-    params::InputParameters
+    params::Vector{InputParameter}
 end
 
-InputMode(;relative::Bool=false, parameters::InputParameters=()) =
-    InputMode(relative, parameters)
+InputMode() = InputMode(false, NO_PARAMETERS)
 
-InputMode(imode::InputMode; relative=nothing, parameters=nothing) =
-    InputMode(
-        relative !== nothing ? relative::Bool : imode.relative,
-        parameters !== nothing ? parameters::InputParameters : imode.params)
+setrelative(imode::InputMode, relative::Bool=true) =
+    InputMode(relative, imode.params)
+
+setparameters(imode::InputMode, params::InputParameters=NO_PARAMETERS) =
+    InputMode(imode.relative, params)
+
+setrelative(relative::Bool=true) =
+    imode -> setrelative(imode, relative)
+
+setparameters(params::InputParameters=NO_PARAMETERS) =
+    imode -> setparameters(imode, params)
 
 # Predicates and properties.
 
@@ -37,28 +45,29 @@ immutable Input
     mode::InputMode
 end
 
-Input(dom; relative::Bool=false, parameters::InputParameters=()) =
-    Input(convert(Domain, dom), InputMode(relative, parameters))
+Input(dom) = Input(convert(Domain, dom), InputMode())
 
-Input(isig::Input; domain=nothing, relative=nothing, parameters=nothing) =
-    Input(
-        domain !== nothing ? convert(Domain, domain) : isig.dom,
-        InputMode(
-            relative !== nothing ? relative::Bool : isig.mode.relative,
-            parameters !== nothing ? parameters::InputParameters : isig.mode.params))
+decorate(itype::Input, d::Decoration) =
+    Input(decorate(itype.dom, d), itype.mode)
 
-convert(::Type{Input}, dom::Union{Type, Symbol, Tuple, Domain}) =
+setrelative(itype::Input, relative::Bool=true) =
+    Input(itype.dom, setrelative(itype.mode, relative))
+
+setparameters(itype::Input, params::InputParameters=NO_PARAMETERS) =
+    Input(itype.dom, setparameters(itype.mode, params))
+
+convert(::Type{Input}, dom::Union{Type, Symbol, Tuple, Vector, Domain}) =
     Input(convert(Domain, dom))
 
-function show(io::IO, isig::Input)
-    mode = isig.mode
+function show(io::IO, itype::Input)
+    mode = itype.mode
     if !isempty(mode.params)
         print(io, "{")
     end
     if mode.relative
         print(io, "(")
     end
-    print(io, isig.dom)
+    print(io, itype.dom)
     if mode.relative
         print(io, "...)")
     end
@@ -72,17 +81,17 @@ end
 
 # Predicates and properties.
 
-domain(isig::Input) = isig.dom
-mode(isig::Input) = isig.mode
+domain(itype::Input) = itype.dom
+mode(itype::Input) = itype.mode
 
-isdata(isig::Input) = isdata(isig.dom)
-isany(isig::Input) = isany(isig.dom)
-isunit(isig::Input) = isunit(isig.dom)
-iszero(isig::Input) = iszero(isig.dom)
-isentity(isig::Input) = isentity(isig.dom)
-isrecord(isig::Input) = isentity(isig.dom)
+isdata(itype::Input) = isdata(itype.dom)
+isany(itype::Input) = isany(itype.dom)
+isunit(itype::Input) = isunit(itype.dom)
+iszero(itype::Input) = iszero(itype.dom)
+isentity(itype::Input) = isentity(itype.dom)
+isrecord(itype::Input) = isentity(itype.dom)
 
-isfree(isig::Input) = isfree(isig.mode)
-isrelative(isig::Input) = isrelative(isig.mode)
-parameters(isig::Input) = parameters(isig.mode)
+isfree(itype::Input) = isfree(itype.mode)
+isrelative(itype::Input) = isrelative(itype.mode)
+parameters(itype::Input) = parameters(itype.mode)
 

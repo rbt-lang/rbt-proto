@@ -43,13 +43,17 @@ belong to one of three categories: value types, entity classes, and records.
         Zero,
         classname,
         datatype,
+        decorate,
+        decoration,
+        decorations,
         fields,
         isany,
         isdata,
         isentity,
         isrecord,
         isunit,
-        iszero
+        iszero,
+        setplural
 
 Value types, such as `Bool`, `Int` or `String`, are represented by native Julia
 types.
@@ -71,7 +75,7 @@ In general, a record field may be of an entity or a record type and may have
 non-trivial cardinality.  Such fields could be specified as `Domain` or
 `Output` instances.
 
-    name_and_salary_seq_t = Output(name_and_salary_t, plural=true)
+    name_and_salary_seq_t = Output(name_and_salary_t) |> setplural(true)
 
     dept_with_name_and_salary_seq_t = Domain((dept_t, name_and_salary_seq_t))
     #-> {Dept, {String, Int64}+}
@@ -154,22 +158,41 @@ Function `classname()` returns the name of an entity class.
 Function `fields()` returns a tuple with record fields.
 
     fields(name_and_salary_t)
-    #-> (String,Int64)
+    #-> RBT.Output[String,Int64]
 
     fields(text_t)
-    #-> (String,)
+    #-> RBT.Output[]
+
+The domain could be annotated with arbitrary values, which are called
+*decorations*.
+
+    name_t = text_t |> decorate(:tag => :name)
+    #-> String[tag=:name]
+
+Function `decoration()` returns the value for a specific decoration.
+
+    decoration(name_t, :tag, Symbol, Symbol(""))
+    #-> :name
+
+    decoration(text_t, :tag, Symbol, Symbol(""))
+    #-> Symbol("")
+
+Function `decorations()` returns a list of all decorations.
+
+    decorations(name_t)
+    #-> Pair{Symbol,Any}[Pair{Symbol,Any}(:tag,:name)]
 
 
-Output signature
-----------------
+Output type
+-----------
 
-The *output signature* describes the form of the query output.  It includes the
-output domain, the output cardinality, and the output decorations.
+The *output type* describes the structure of the query output.  It includes the
+output domain and the output cardinality.
 
     using RBT:
+        Decoration,
         Domain,
         Output,
-        OutputDecoration,
         OutputMode,
         Unit,
         decoration,
@@ -182,7 +205,9 @@ output domain, the output cardinality, and the output decorations.
         isplural,
         isrecord,
         isunit,
-        mode
+        mode,
+        setoptional,
+        setplural
 
 The output *cardinality* specifies whether the output is *optional* (may have
 no value), *plural* (may have more than one value) or both.  Cardinalities are
@@ -191,10 +216,10 @@ represented by `OutputMode` objects.
     iso_mode = OutputMode()
     #-> RBT.OutputMode(false,false)
 
-    opt_mode = OutputMode(optional=true)
+    opt_mode = iso_mode |> setoptional(true)
     #-> RBT.OutputMode(true,false)
 
-    seq_mode = OutputMode(opt_mode, plural=true)
+    seq_mode = opt_mode |> setplural(true)
     #-> RBT.OutputMode(true,true)
 
     isplain(iso_mode)
@@ -215,97 +240,93 @@ represented by `OutputMode` objects.
     isoptional(iso_mode)
     #-> false
 
-The output signature consists of the output domain, the output cardinality and
-a sequence of *decorations*.  The signature is created with the `Output`
-constructor.
+The output type consists of the output domain and the output cardinality.  The
+output type is created with the `Output` constructor.
 
-    text_osig = Output(String)
+    text_ot = Output(String)
     #-> String
 
-    unit_osig = Output(Domain(Unit))
+    unit_ot = Output(Domain(Unit))
     #-> Unit
 
-    name_osig = Output(text_osig, tag=:name)
-    #-> String [tag=:name]
+    name_ot = text_ot |> decorate(:tag => :name)
+    #-> String[tag=:name]
 
-    department_osig = Output(:Dept, optional=true, plural=true, tag=:department)
-    #-> Dept* [tag=:department]
+    department_ot = Output(:Dept) |> setoptional() |> setplural() |> decorate(:tag => :department)
+    #-> Dept[tag=:department]*
 
-    manager_osig =
+    manager_ot =
         Output(
-            Domain(:Emp),
-            OutputMode(optional=true),
-            (OutputDecoration(:tag,:manager),))
-    #-> Emp? [tag=:manager]
+            Domain(:Emp, [Decoration(:tag, :manager)]),
+            OutputMode(true, false))
+    #-> Emp[tag=:manager]?
 
-    subordinate_osig = Output(manager_osig, plural=true, tag=:subordinate)
-    #-> Emp* [tag=:subordinate]
+    subordinate_ot = manager_ot |> setplural() |> decorate(:tag => :subordinate)
+    #-> Emp[tag=:subordinate]*
 
-    record_osig =
-        Output(
-            (Output(String, tag=:name), Output(Int64, tag=:salary)),
-            plural=true,
-            tag=:employee)
-    #-> {String [tag=:name], Int64 [tag=:salary]}+ [tag=:employee]
+    record_ot = (
+        Output([
+            Output(String) |> decorate(:tag => :name),
+            Output(Int64) |> decorate(:tag => :salary)])
+        |> setplural()
+        |> decorate(:tag => :employee))
+    #-> {String[tag=:name], Int64[tag=:salary]}[tag=:employee]+
 
-Components of the signature could be extracted using functions `domain()`,
-`mode()` and `decorations()`.
+Components of the output type could be extracted using functions `domain()` and
+`mode()`.
 
-    domain(department_osig)
-    #-> Dept
+    domain(department_ot)
+    #-> Dept[tag=:department]
 
-    mode(department_osig)
+    mode(department_ot)
     #-> RBT.OutputMode(true,true)
 
-    decorations(department_osig)
-    #-> (Pair{Symbol,Any}(:tag,:department),)
+Various predicates and accessors can be used to inspect output types.
 
-Various predicates and accessors can be used to inspect output signatures.
-
-    isdata(text_osig)
+    isdata(text_ot)
     #-> true
 
-    isentity(manager_osig)
+    isentity(manager_ot)
     #-> true
 
-    isrecord(record_osig)
+    isrecord(record_ot)
     #-> true
 
-    isunit(unit_osig)
+    isunit(unit_ot)
     #-> true
 
-    isplain(name_osig)
+    isplain(name_ot)
     #-> true
 
-    isoptional(manager_osig)
+    isoptional(manager_ot)
     #-> true
 
-    isplural(subordinate_osig)
+    isplural(subordinate_ot)
     #-> true
 
-    decoration(department_osig, :tag, Symbol(""))
+    decoration(department_ot, :tag, Symbol, Symbol(""))
     #-> :department
 
-    decoration(text_osig, :tag, Symbol(""))
+    decoration(text_ot, :tag, Symbol, Symbol(""))
     #-> Symbol("")
 
 Function `datatype()` returns a Julia type that can represent the output values
-with the given signature.
+with the given output type.
 
-    datatype(text_osig)
+    datatype(text_ot)
     #-> String
 
-    datatype(manager_osig)
+    datatype(manager_ot)
     #-> Nullable{Emp}
 
-    datatype(record_osig)
+    datatype(record_ot)
     #-> Array{Tuple{String,Int64},1}
 
 
-Input signature
----------------
+Input type
+----------
 
-The *input signature* describes the form of the query input.  It includes the
+The *input type* describes the form of the query input.  It includes the
 input domain, the input *parameters*, and the *flow dependency* indicator.
 
     using RBT:
@@ -320,22 +341,22 @@ input domain, the input *parameters*, and the *flow dependency* indicator.
         isfree,
         isrelative,
         mode,
-        parameters
+        parameters,
+        setparameters,
+        setrelative
 
 The input context includes the input parameters and flow dependency indicator.
 It is represented by `InputMode` object.
 
     free_mode = InputMode()
-    #-> RBT.InputMode(false,())
+    #-> RBT.InputMode(false,Pair{Symbol,RBT.Output}[])
 
-    rel_mode = InputMode(relative=true)
-    #-> RBT.InputMode(true,())
+    rel_mode = free_mode |> setrelative()
+    #-> RBT.InputMode(true,Pair{Symbol,RBT.Output}[])
 
-    param_mode = InputMode(
-        rel_mode,
-        relative=false,
-        parameters=(InputParameter(:D,:Dept), InputParameter(:S,Int64)))
-    #-> RBT.InputMode(false,(:D=>Dept,:S=>Int64))
+    param_mode =
+        rel_mode |> setrelative(false) |> setparameters([InputParameter(:D,:Dept), InputParameter(:S,Int64)])
+    #-> RBT.InputMode(false,Pair{Symbol,RBT.Output}[:D=>Dept,:S=>Int64])
 
     isfree(free_mode)
     #-> true
@@ -350,51 +371,48 @@ It is represented by `InputMode` object.
     #-> false
 
     parameters(param_mode)
-    #-> (:D=>Dept,:S=>Int64)
+    #-> Pair{Symbol,RBT.Output}[:D=>Dept,:S=>Int64]
 
     parameters(free_mode)
-    #-> ()
+    #-> Pair{Symbol,RBT.Output}[]
 
-The input signature is created using the `Input` constructor.
+The input type is created using the `Input` constructor.
 
-    unit_isig = Input(Unit)
+    unit_it = Input(Unit)
     #-> Unit
 
-    dept_rel_isig = Input(:Dept, relative=true)
+    dept_rel_it = Input(:Dept) |> setrelative()
     #-> (Dept...)
 
-    emp_param_isig = Input(
-        dept_rel_isig,
-        domain=:Emp,
-        relative=false,
-        parameters=(InputParameter(:S, Output(Int64, optional=true)),))
+    emp_param_it =
+        Input(:Emp, InputMode(false, [InputParameter(:S, Output(Int64) |> setoptional())]))
     #-> {Emp, S => Int64?}
 
-Components of the input signature could be extracted using functions `domain()`
-and `mode()`.
+Components of the input type could be extracted using functions `domain()` and
+`mode()`.
 
-    domain(dept_rel_isig)
+    domain(dept_rel_it)
     #-> Dept
 
-    mode(dept_rel_isig)
-    #-> RBT.InputMode(true,())
+    mode(dept_rel_it)
+    #-> RBT.InputMode(true,Pair{Symbol,RBT.Output}[])
 
-Various predicates and accessors can be used to inspect the input signature.
+Various predicates and accessors can be used to inspect the input type.
 
-    isdata(unit_isig)
+    isdata(unit_it)
     #-> true
 
-    isentity(dept_rel_isig)
+    isentity(dept_rel_it)
     #-> true
 
-    isfree(unit_isig)
+    isfree(unit_it)
     #-> true
 
-    isrelative(dept_rel_isig)
+    isrelative(dept_rel_it)
     #-> true
 
-    parameters(emp_param_isig)
-    #-> (:S=>Int64?,)
+    parameters(emp_param_it)
+    #-> Pair{Symbol,RBT.Output}[:S=>Int64?]
 
 
 Domain lattice
@@ -403,12 +421,12 @@ Domain lattice
 Domains are partially ordered with respect to inclusion.
 
     using RBT:
+        Decoration,
         Domain,
         Input,
         InputMode,
         InputParameter,
         Output,
-        OutputDecoration,
         OutputMode,
         fits,
         ibound,
@@ -437,38 +455,37 @@ values of *B*.  Function `fits()` verifies this property.
 
     fits(
         Domain((Output(:Dept), Output(Int64))),
-        Domain((Output(:Dept, plural=true), Output(Real))))
+        Domain((Output(:Dept) |> setplural(), Output(Real))))
     #-> true
 
     fits(
-        Domain((Output(:Dept, optional=true),)),
+        Domain((Output(:Dept) |> setoptional(),)),
         Domain((Output(:Dept),)))
     #-> false
 
 We can also use `fits()` to verify that the output of one query fits the input
 of another query.
 
-    fits(Output(:Dept, plural=true), Input(:Dept, relative=true))
+    fits(Output(:Dept) |> setplural(), Input(:Dept) |> setrelative())
     #-> true
 
     fits(Output(:Dept), Input(:Emp))
     #-> false
 
-Finally, we can check if the given input signature fits the expected input
-signature.
+Finally, we can check if the given input type fits the expected input type.
 
-    fits(Input(String, relative=true), Input(String))
+    fits(Input(String) |> setrelative(), Input(String))
     #-> true
 
-    fits(Input(String), Input(String, relative=true))
+    fits(Input(String), Input(String) |> setrelative())
     #-> false
 
     fits(
-        Input(:Dept, parameters=(InputParameter(:S, Int64),)),
-        Input(:Dept, parameters=(InputParameter(:S, Output(Int64, optional=true)),)))
+        Input(:Dept) |> setparameters([InputParameter(:S, Int64)]),
+        Input(:Dept) |> setparameters([InputParameter(:S, Output(Int64) |> setoptional())]))
     #-> true
 
-    fits(Input(:Dept), Input(:Dept, parameters=(InputParameter(:S, Int64),)))
+    fits(Input(:Dept), Input(:Dept) |> setparameters([InputParameter(:S, Int64)]))
     #-> false
 
 For any two domains, the smallest domain that encapsulates both of them is
@@ -490,8 +507,8 @@ called their *output bound*.
     #-> Any
 
     obound(
-        Domain((:Dept, String, Output(Int64, optional=true))),
-        Domain((:Emp, String, Output(Float64, plural=true))))
+        Domain((:Dept, String, Output(Int64) |> setoptional())),
+        Domain((:Emp, String, Output(Float64) |> setplural())))
     #-> {Any, String, Real*}
 
     obound(
@@ -499,20 +516,32 @@ called their *output bound*.
         Domain((:Dept, String)))
     #-> Any
 
-We could also find the output bound of two output signatures.
-
-    obound(Output(String, tag=:name), Output(String, tag=:name))
-    #-> String [tag=:name]
+The output bound is also calculated for domain decorations.
 
     obound(
-        Output(Int64, optional=true, tag=:salary),
-        Output(Float64, plural=true))
-    #-> Real* [tag=:salary]
+        Domain(String) |> decorate(:tag => :name),
+        Domain(String) |> decorate(:tag => :name))
+    #-> String[tag=:name]
 
     obound(
-        Output(:Emp, tag=:employee),
-        Output(String, tag=:name))
-    #-> Any [tag=?]
+        Domain(Int64) |> decorate(:tag => :salary),
+        Domain(Float64) |> decorate(:precision => 2))
+    #-> Real[tag=:salary]
+
+    obound(
+        Domain(:Emp) |> decorate(:tag => :employee),
+        Domain(:String) |> decorate(:tag => :name))
+    #-> Any[tag=?]
+
+Similarly, we can find the output bound of two output types.
+
+    obound(Output(String), Output(String))
+    #-> String
+
+    obound(
+        Output(Int64) |> setoptional(),
+        Output(Float64) |> setplural())
+    #-> Real*
 
 Similarly, for any two domains, the largest domain that fits both of them is
 called their *input bound*.
@@ -536,9 +565,13 @@ called their *input bound*.
     #-> Zero
 
     ibound(
-        Domain((Output(String, optional=true, tag=:name), Output(String, optional=true, tag=:position))),
-        Domain((Output(String, plural=true, tag=:name), Output(:Dept, optional=true, tag=:department))))
-    #-> {String [tag=:name], Zero?}
+        Domain((
+            Output(String) |> setoptional() |> decorate(:tag => :name),
+            Output(String) |> setoptional() |> decorate(:tag => :position))),
+        Domain((
+            Output(String) |> setplural() |> decorate(:tag => :name),
+            Output(:Dept) |> setoptional() |> decorate(:tag => :department))))
+    #-> {String[tag=:name], Zero?}
 
 Functions `ibound()` and `obound()` could also be applied to the input contexts
 and output cardinalities.
@@ -546,19 +579,19 @@ and output cardinalities.
     obound(OutputMode)
     #-> RBT.OutputMode(false,false)
 
-    obound(OutputMode(optional=true))
+    obound(OutputMode() |> setoptional())
     #-> RBT.OutputMode(true,false)
 
-    obound(OutputMode(optional=true), OutputMode(optional=true, plural=true))
+    obound(OutputMode() |> setoptional(), OutputMode() |> setoptional() |> setplural())
     #-> RBT.OutputMode(true,true)
 
     ibound(OutputMode)
     #-> RBT.OutputMode(true,true)
 
-    ibound(OutputMode(optional=true))
+    ibound(OutputMode() |> setoptional())
     #-> RBT.OutputMode(true,false)
 
-    ibound(OutputMode(optional=true), OutputMode(optional=true, plural=true))
+    ibound(OutputMode() |> setoptional(), OutputMode() |> setoptional() |> setplural())
     #-> RBT.OutputMode(true,false)
 
 Both `ibound()` and `obound()` could be applied to an arbitrary number of

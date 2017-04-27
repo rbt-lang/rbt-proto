@@ -22,8 +22,8 @@ immutable InputFlow <: AbstractVector{Any}
             frameoffs::InputFrame=InputFrame(),
             paramflows::InputParameterFlows=InputParameterFlow[])
         relative = !isnull(frameoffs)
-        parameters = ((n => output(pflow) for (n, pflow) in paramflows)...)
-        sig = Input(dom, relative=relative, parameters=parameters)
+        parameters = InputParameter[n => output(pflow) for (n, pflow) in paramflows]
+        sig = Input(dom) |> setrelative(relative) |> setparameters(parameters)
         len = length(vals)
         if !isnull(frameoffs)
             @assert length(get(frameoffs)) >= 1

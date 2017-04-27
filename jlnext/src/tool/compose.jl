@@ -29,8 +29,7 @@ output(tool::ComposeTool) =
     let Fsig = output(tool.F), Gsig = output(tool.G)
         Output(
             domain(Gsig),
-            obound(mode(Fsig), mode(Gsig)),
-            decorations(Gsig))
+            obound(mode(Fsig), mode(Gsig)))
     end
 
 function run(tool::ComposeTool, iflow::InputFlow)

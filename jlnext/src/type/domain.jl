@@ -1,80 +1,159 @@
 #
-# The bare type of a database object or a value.
+# The bare type of a value or an object in the database.
 #
 
-# Aliases and checks for the top, singleton and empty types.
+# Aliases for special data types.
 
 typealias Unit Void
 typealias Zero Union{}
 
-isany(T::Type) = T == Any
-isunit(T::Type) = T == Unit
-iszero(T::Type) = T == Zero
+# Domain decorations.
+
+typealias Decoration Pair{Symbol,Any}
+typealias Decorations Vector{Decoration}
+
+const NO_DECORATIONS = Decoration[]
+
+function decoration{T}(decors::Decorations, name::Symbol, ::Type{T}, default::T)
+    for (n, v) in decors
+        if n == name && isa(v, T)
+            return v::T
+        end
+    end
+    return default
+end
+
+function decorate(decors::Decorations, d::Decoration)
+    decors = copy(decors)
+    for k in eachindex(decors)
+        n = decors[k].first
+        if n >= d.first
+            if n == d.first
+                decors[k] = d
+            else
+                insert!(decors, k, d)
+            end
+            return decors
+        end
+    end
+    push!(decors, d)
+    return decors
+end
+
+decorate(d::Decoration) =
+    decors -> decorate(decors, d)
+
+decorate(d::Pair{Symbol}) =
+    decorate(Decoration(d.first, d.second))
 
 # A domain is a value type, a nominal entity class, or a record.
 
 immutable Domain
-    desc    # ::Union{Type, Symbol, Tuple{Vararg{Output}}}
+    desc    # ::Union{Type, Symbol, Vector{Output}}
+    decors::Decorations
 
-    function Domain(desc)
-        if isa(desc, Tuple)
-            desc = ((convert(Output, osig) for osig in desc)...)
-        end
-        new(desc::Union{Type, Symbol, Tuple{Vararg{Output}}})
-    end
+    Domain(desc::Union{Type, Symbol}, decors::Decorations=NO_DECORATIONS) =
+        new(desc, decors)
+
+    Domain(desc::Vector, decors::Decorations=NO_DECORATIONS) =
+        new(convert(Vector{Output}, desc), decors)
 end
+
+convert(::Type{Domain}, desc::Union{Type, Symbol}) =
+    Domain(desc)
 
 function show(io::IO, dom::Domain)
-    if isentity(dom)
-        print(io, dom.desc::Symbol)
-    elseif isrecord(dom)
-        print(io, "{")
-        for (k, osig) in enumerate(dom.desc::Tuple{Vararg{Output}})
-            if k > 1
-                print(io, ", ")
-            end
-            print(io, osig)
-        end
-        print(io, "}")
-    else
-        desc = dom.desc::Type
-        if isunit(desc)
+    if isdata(dom)
+        T = datatype(dom)
+        if isunit(T)
             print(io, "Unit")
-        elseif iszero(desc)
+        elseif iszero(T)
             print(io, "Zero")
         else
-            print(io, desc)
+            print(io, T)
         end
+    elseif isentity(dom)
+        print(io, classname(dom))
+    elseif isrecord(dom)
+        print(io, "{")
+        comma = false
+        for otype in fields(dom)
+            if comma
+                print(io, ", ")
+            end
+            comma = true
+            print(io, otype)
+        end
+        print(io, "}")
+    end
+    decors = decorations(dom)
+    if !isempty(decors)
+        print(io, "[")
+        comma = false
+        for (n, v) in decors
+            if comma
+                print(io, ", ")
+            end
+            comma = true
+            print(io, n, "=")
+            if v !== nothing
+                show(io, v)
+            else
+                print(io, "?")
+            end
+        end
+        print(io, "]")
     end
 end
 
-# Predicates.
+# Decorations.
 
-isdata(dom::Domain) = isa(dom.desc, Type)
-isany(dom::Domain) = isdata(dom) && isany(dom.desc::Type)
-isunit(dom::Domain) = isdata(dom) && isunit(dom.desc::Type)
-iszero(dom::Domain) = isdata(dom) && iszero(dom.desc::Type)
-isentity(dom::Domain) = isa(dom.desc, Symbol)
-isrecord(dom::Domain) = isa(dom.desc, Tuple{Vararg{Output}})
+decorations(dom::Domain) = dom.decors
+
+decoration(dom::Domain, name, T, default) =
+    decoration(dom.decors, name, T, default)
+
+decorate(dom::Domain, d::Decoration) =
+    Domain(dom.desc, decorate(dom.decors, d))
+
+# The domain kind.
+
+isdata(dom::Domain) = isdata(dom.desc)
+isany(dom::Domain) = isany(dom.desc)
+isunit(dom::Domain) = isunit(dom.desc)
+iszero(dom::Domain) = iszero(dom.desc)
+isentity(dom::Domain) = isentity(dom.desc)
+isrecord(dom::Domain) = isrecord(dom.desc)
+
+isdata(desc::Type) = true
+isany(desc::Type) = desc == Any
+isunit(desc::Type) = desc == Unit
+iszero(desc::Type) = desc == Zero
+isentity(desc::Type) = false
+isrecord(desc::Type) = false
+
+isdata(desc::Symbol) = false
+isany(desc::Symbol) = false
+isunit(desc::Symbol) = false
+iszero(desc::Symbol) = false
+isentity(desc::Symbol) = true
+isrecord(desc::Symbol) = false
 
 # The native Julia type that can represent the domain values.
 
-datatype(dom::Domain) =
-    isentity(dom) ?
-        Entity{dom.desc::Symbol} :
-    isrecord(dom) ?
-        Tuple{(datatype(osig) for osig in dom.desc::Tuple{Vararg{Output}})...} :
-        dom.desc::Type
+datatype(dom::Domain) = datatype(dom.desc)
+datatype(desc::Type) = desc
+datatype(desc::Symbol) = Entity{desc}
 
 # The name of an entity class.
 
-classname(dom::Domain) =
-    isentity(dom) ? dom.desc::Symbol : Symbol("")
+const NO_CLASSNAME = Symbol("")
 
-# A tuple of record fields.
+classname(dom::Domain) = classname(dom.desc)
+classname(desc::Type) = NO_CLASSNAME
+classname(desc::Symbol) = desc
 
-fields(dom::Domain) =
-    isrecord(dom) ?
-        dom.desc::Tuple{Vararg{Output}} :
-        (Output(dom),)
+# List of record fields.
+
+fields(dom::Domain) = fields(dom.desc)
 

@@ -60,7 +60,9 @@ Attributes and relationships could be encoded using the mapping primitive.
     using RBT:
         MappingTool,
         Output,
-        run
+        run,
+        setoptional,
+        setplural
 
     t = MappingTool(Int, Int, 1:11, 10:10:100)
     #-> Int64 -> Int64
@@ -72,7 +74,7 @@ Optional and plural attributes could also be represented.
 
     t = MappingTool(
         Int,
-        Output(Int, optional=true),
+        Output(Int) |> setoptional(),
         [1; 1:11; 11],
         10:10:100)
     #-> Int64 -> Int64?
@@ -82,7 +84,7 @@ Optional and plural attributes could also be represented.
 
     t = MappingTool(
         Int,
-        Output(Int, plural=true),
+        Output(Int) |> setplural(),
         1:2:11,
         10:10:100)
     #-> Int64 -> Int64+
@@ -100,12 +102,13 @@ Two queries with compatible input and output could be composed.
         CollectionTool,
         MappingTool,
         Output,
-        run
+        run,
+        setplural
 
     t1 = CollectionTool([2,3,5])
     #-> Any -> Int64*
 
-    t2 = MappingTool(Int, Output(Int, plural=true), 1:2:11, 10:10:100)
+    t2 = MappingTool(Int, Output(Int) |> setplural(), 1:2:11, 10:10:100)
     #-> Int64 -> Int64+
 
     t = t1 >> t2
@@ -127,21 +130,23 @@ The record constructor generates record values.
         RecordTool,
         domain,
         output,
-        run
+        run,
+        setoptional,
+        setplural
 
     t1 = MappingTool(Int, Int, 1:11, 10:10:100)
     #-> Int64 -> Int64
 
     t2 = MappingTool(
         Int,
-        Output(Int, optional=true),
+        Output(Int) |> setoptional(),
         [1; 1:11; 11],
         10:10:100)
     #-> Int64 -> Int64?
 
     t3 = MappingTool(
         Int,
-        Output(Int, plural=true),
+        Output(Int) |> setplural(),
         1:2:11,
         10:10:100)
     #-> Int64 -> Int64+
@@ -190,11 +195,13 @@ The count aggregate counts the number of values in a sequence.
         ExistsTool,
         MappingTool,
         Output,
-        run
+        run,
+        setoptional,
+        setplural
 
     t0 = MappingTool(
         Int,
-        Output(Int, optional=true, plural=true),
+        Output(Int) |> setoptional() |> setplural(),
         [1,1,2,4,7,11],
         1:10)
     #-> Int64 -> Int64*
@@ -224,7 +231,9 @@ Any regular function or operator could be lifted to a query combinator.
         MappingTool,
         OpTool,
         Output,
-        run
+        run,
+        setoptional,
+        setplural
 
     t0 = MappingTool(Int, String, 1:6, ["A","B","C","D","E"])
     #-> Int64 -> String
@@ -237,12 +246,12 @@ Any regular function or operator could be lifted to a query combinator.
 
 It can also be applied to optional or plural queries.
 
-    t1 = MappingTool(Int, Output(String, optional=true), [1,2,2,3,3,4], ["X","Y","Z"])
+    t1 = MappingTool(Int, Output(String) |> setoptional(), [1,2,2,3,3,4], ["X","Y","Z"])
     #-> Int64 -> String?
 
     t2 = MappingTool(
         Int,
-        Output(String, optional=true, plural=true),
+        Output(String) |> setoptional() |> setplural(),
         [1,1,2,4,7,11],
         ["0","1","2","3","4","5","6","7","8","9"])
     #-> Int64 -> String*
@@ -270,11 +279,13 @@ Aggregate combinators transform plural queries to singular queries.
         AggregateTool,
         MappingTool,
         Output,
-        run
+        run,
+        setoptional,
+        setplural
 
     t0 = MappingTool(
         Int,
-        Output(Int, optional=true, plural=true),
+        Output(Int) |> setoptional() |> setplural(),
         [1,1,2,4,7,11],
         1:10)
     #-> Int64 -> Int64*
@@ -332,7 +343,8 @@ The sort combinator sorts the query output.
         Output,
         SortByTool,
         SortTool,
-        run
+        run,
+        setoptional
 
     t0 = CollectionTool([10,1,9,2,8,3,7,4,6,5])
     #-> Any -> Int64*
@@ -344,10 +356,10 @@ The sort combinator sorts the query output.
     #-> [[1,2,3,4,5,6,7,8,9,10]]
 
     t1 = DecorateTool(t0, rev=true)
-    #-> Any -> Int64* [rev=true]
+    #-> Any -> Int64[rev=true]*
 
     t = SortTool(t1)
-    #-> Any -> Int64* [rev=true]
+    #-> Any -> Int64[rev=true]*
 
     run(t, [nothing])
     #-> [[10,9,8,7,6,5,4,3,2,1]]
@@ -368,7 +380,7 @@ It is also possible to sort by a key.
 
 The sorting key could be nullable.
 
-    tkey = MappingTool(Int, Output(Int, optional=true), [1,1,2,2,3,3,4,4,5,5,6], [1,2,3,4,5])
+    tkey = MappingTool(Int, Output(Int) |> setoptional(), [1,1,2,2,3,3,4,4,5,5,6], [1,2,3,4,5])
     #-> Int64 -> Int64?
 
     run(tkey, 1:10)
@@ -393,11 +405,13 @@ The take and skip combinators can be used to paginate the output.
         Output,
         SkipTool,
         TakeTool,
-        run
+        run,
+        setoptional,
+        setplural
 
     t0 = MappingTool(
         Int,
-        Output(Int, optional=true, plural=true),
+        Output(Int) |> setoptional() |> setplural(),
         [1,1,2,4,7,11],
         1:10)
     #-> Int64 -> Int64*
@@ -438,11 +452,16 @@ Hierarchical closure
 The connect combinator calculates a closure of a self-referential query.
 
     using RBT:
-        ConnectTool
+        ConnectTool,
+        MappingTool,
+        Output,
+        run,
+        setoptional,
+        setplural
 
     t0 = MappingTool(
         Int,
-        Output(Int, optional=true),
+        Output(Int) |> setoptional(),
         [1,2,3,4,5,5],
         2:5)
     #-> Int64 -> Int64?
@@ -466,7 +485,7 @@ The connect combinator also works with plural relationships.
 
     t0 = MappingTool(
         Int,
-        Output(Int, optional=true, plural=true),
+        Output(Int) |> setoptional() |> setplural(),
         [1,1,1,1,2,2,4,4,6,7,9,9,12],
         [2,3,2,4,2,3,5,2,6,3,2])
     #-> Int64 -> Int64*
@@ -502,7 +521,9 @@ The group combinator partitions a sequence into groups.
         RollUpTool,
         UniqueTool,
         Output,
-        run
+        run,
+        setoptional,
+        setplural
 
     t0 = CollectionTool([10,1,9,2,8,3,7,4,6,5])
     #-> Any -> Int64*
@@ -528,13 +549,13 @@ The group combinator partitions a sequence into groups.
             Int,
             [k % 2 for k = 1:10]),
         rev=true)
-    #-> Int64 -> Int64 [rev=true]
+    #-> Int64 -> Int64[rev=true]
 
     run(t0 >> RecordTool(HereTool(Int), t2), [nothing])
     #-> [[(10,0),(1,1),(9,1),(2,0),(8,0),(3,1),(7,1),(4,0),(6,0),(5,1)]]
 
     t = GroupByTool(t0, t1, t2)
-    #-> Any -> {Int64+, Int64, Int64 [rev=true]}*
+    #-> Any -> {Int64+, Int64, Int64[rev=true]}*
 
     run(t, [nothing])
     #-> [[([9,3],0,1),([6],0,0),([1,7],1,1),([10,4],1,0),([5],2,1),([2,8],2,0)]]
@@ -551,7 +572,7 @@ The key could be nullable.
 
     t3 = MappingTool(
         Int,
-        Output(Int, optional=true),
+        Output(Int) |> setoptional(),
         [1,1,2,2,3,3,4,4,5,5,6],
         1:5)
 
@@ -568,7 +589,7 @@ The group combinator can also handle empty sequences.
 
     t0 = MappingTool(
         Int,
-        Output(Int, optional=true, plural=true),
+        Output(Int) |> setoptional() |> setplural(),
         [1,11,16,16],
         [1,2,3,4,5,6,7,8,9,10,5,4,3,2,1])
     #-> Int64 -> Int64*
@@ -577,11 +598,11 @@ The group combinator can also handle empty sequences.
     #-> [[1,2,3,4,5,6,7,8,9,10],[5,4,3,2,1],Int64[]]
 
     t = GroupByTool(t0, t1, t2)
-    #-> Int64 -> {Int64+, Int64, Int64 [rev=true]}*
+    #-> Int64 -> {Int64+, Int64, Int64[rev=true]}*
 
     display(run(t, 1:3))
     #=>
-    OutputFlow[3 × {Int64+, Int64, Int64 [rev=true]}*]:
+    OutputFlow[3 × {Int64+, Int64, Int64[rev=true]}*]:
      [([3,9],0,1),([6],0,0),([1,7],1,1),([4,10],1,0),([5],2,1),([2,8],2,0)]
      [([3],0,1),([1],1,1),([4],1,0),([5],2,1),([2],2,0)]
      []
@@ -590,11 +611,11 @@ The group combinator can also handle empty sequences.
 The rollup combinator adds summary rows.
 
     t = RollUpTool(t0, t1, t2)
-    #-> Int64 -> {Int64+, Int64?, Int64? [rev=true]}*
+    #-> Int64 -> {Int64+, Int64?, Int64[rev=true]?}*
 
     display(run(t, 1:3))
     #=>
-    OutputFlow[3 × {Int64+, Int64?, Int64? [rev=true]}*]:
+    OutputFlow[3 × {Int64+, Int64?, Int64[rev=true]?}*]:
      [([3,9],0,1),([6],0,0),([3,6,9],0,#NULL)  …  ([5],2,1),([2,8],2,0),([2,5,8],2,#NULL),([1,2,3,4,5,6,7,8,9,10],#NULL,#NULL)]
      [([3],0,1),([3],0,#NULL)  …  ([5],2,1),([2],2,0),([5,2],2,#NULL),([5,4,3,2,1],#NULL,#NULL)]
      []
@@ -604,7 +625,7 @@ The unique combinator filters out duplicate values.
 
     t0 = MappingTool(
         Int,
-        Output(Int, optional=true, plural=true),
+        Output(Int) |> setoptional() |> setplural(),
         [1,1,2,4,7,11],
         [1,2,1,2,1,2,1,2,1,2])
     #-> Int64 -> Int64*
@@ -666,7 +687,7 @@ The parameter primitive extracts a parameter value from the input flow.
 The value of the parameter could be specified with the given combinator.
 
     t3 = DecorateTool(ConstTool(1), tag=:D)
-    #-> Any -> Int64 [tag=:D]
+    #-> Any -> Int64[tag=:D]
 
     t = GivenTool(t, t3)
     #-> Any -> Int64*

@@ -30,7 +30,7 @@ ThenExists() =
 immutable ExistsPrimTool <: AbstractTool
 end
 
-input(::ExistsPrimTool) = Input((Output(Any, optional=true, plural=true),))
+input(::ExistsPrimTool) = Input((Output(Any) |> setoptional() |> setplural(),))
 
 output(::ExistsPrimTool) = Output(Bool)
 

@@ -132,6 +132,8 @@ The query output is represented as an *output flow*.
         mode,
         offsets,
         output,
+        setoptional,
+        setplural,
         values
 
 The query output is specified by the output signature, a vector of offsets and
@@ -152,7 +154,7 @@ a vector of values.
     =#
 
     int_opt_flow = OutputFlow(
-        Output(Int64, optional=true),
+        Output(Int64) |> setoptional(),
         Column([1; 1:101; 101], 1:100))
     #-> [#NULL,1,2,3  …  99,100,#NULL]
 
@@ -170,7 +172,7 @@ a vector of values.
     =#
 
     int_seq_flow = OutputFlow(
-        Output(Int64, plural=true),
+        Output(Int64) |> setplural(),
         Column(1:50:2001, 1:2000))
     display(int_seq_flow)
     #=>
@@ -222,6 +224,10 @@ The query input is represented as an *input flow*.
         input,
         narrow,
         parameterflows,
+        setoptional,
+        setparameters,
+        setplural,
+        setrelative,
         values
 
 When the input is not position-sensitive and has no parameters, it is specified
@@ -300,7 +306,7 @@ We can easily extract individual components of the input flow.
 
 The input flow could be narrowed to a smaller input signature.
 
-    nrel_flow = narrow(rel_flow, Input(Int64, relative=false))
+    nrel_flow = narrow(rel_flow, Input(Int64) |> setrelative(false))
     display(nrel_flow)
     #=>
     InputFlow[10 × Int64]:
@@ -310,7 +316,7 @@ The input flow could be narrowed to a smaller input signature.
      10
     =#
 
-    nparam_flow = narrow(param_flow, Input(Int64, parameters=(InputParameter(:X, Int64),)))
+    nparam_flow = narrow(param_flow, Input(Int64) |> setparameters([InputParameter(:X, Int64)]))
     display(nparam_flow)
     #=>
     InputFlow[10 × {Int64, X => Int64}]:
@@ -345,7 +351,7 @@ flow.
     =#
 
     oflow = OutputFlow(
-        Output(Int64, optional=true, plural=true),
+        Output(Int64) |> setoptional() |> setplural(),
         [1,1,1,2,2,3,4,6,9,11,11],
         -1:-1:-10)
     display(oflow)
@@ -390,14 +396,16 @@ columns, is called a *dataset*.
         DataSet,
         Output,
         OutputFlow,
-        domain
+        domain,
+        setoptional,
+        setplural
 
 `DataSet` objects are specified by their length and an array of columns.
 
     ds = DataSet(
         OutputFlow(Int64, 1:11, 1:10),
-        OutputFlow(Output(Int64, optional=true), [1; 1:9; 9], 2:9),
-        OutputFlow(Output(Int64, plural=true), 1:5:51, 1:50))
+        OutputFlow(Output(Int64) |> setoptional(), [1; 1:9; 9], 2:9),
+        OutputFlow(Output(Int64) |> setplural(), 1:5:51, 1:50))
     #-> [(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (10,#NULL,[46,47,48,49,50])]
 
     display(ds)
@@ -420,7 +428,7 @@ Datasets could be nested.
     tree_ds = DataSet(
         OutputFlow(Int64, 1:3, 1:2),
         OutputFlow(
-            Output(domain(ds), plural=true),
+            Output(domain(ds)) |> setplural(),
             1:5:11,
             ds))
     display(tree_ds)

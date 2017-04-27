@@ -4,21 +4,27 @@
 
 immutable DecorateTool <: AbstractTool
     F::Tool
-    decors::OutputDecorations
+    decors::Decorations
 end
 
 DecorateTool(F::AbstractTool; decorations...) =
-    DecorateTool(F, ((OutputDecoration(n, v) for (n, v) in sort(decorations))...))
+    DecorateTool(F, [Decoration(n, v) for (n, v) in sort(decorations)])
 
 input(tool::DecorateTool) = input(tool.F)
-output(tool::DecorateTool) = Output(output(tool.F); tool.decors...)
+output(tool::DecorateTool) =
+    let otype = output(tool.F)
+        for d in tool.decors
+            otype = otype |> decorate(d)
+        end
+        otype
+    end
 
 run(tool::DecorateTool, iflow::InputFlow) =
     run(prim(tool), iflow)
 
 prim(tool::DecorateTool) =
     let sig = output(tool)
-        prim(tool.F) >> DecoratePrimTool(domain(sig), decorations(sig))
+        prim(tool.F) >> DecoratePrimTool(domain(sig))
     end
 
 ThenDecorate(; decorations...) =
@@ -30,11 +36,10 @@ ThenTag(tag::Symbol) = ThenDecorate(tag=tag)
 
 immutable DecoratePrimTool <: AbstractTool
     dom::Domain
-    decors::OutputDecorations
 end
 
 input(tool::DecoratePrimTool) = Input(tool.dom)
-output(tool::DecoratePrimTool) = Output(tool.dom, OutputMode(), tool.decors)
+output(tool::DecoratePrimTool) = Output(tool.dom)
 
 run_prim(tool::DecoratePrimTool, vals::AbstractVector) =
     Column(OneTo(length(vals)+1), vals)

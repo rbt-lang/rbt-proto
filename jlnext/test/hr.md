@@ -45,7 +45,9 @@ Next, we convert this data to primitive queries.
         CollectionTool,
         Column,
         MappingTool,
-        Output
+        Output,
+        setoptional,
+        setplural
 
     dept_query = CollectionTool(:Dept, dept_data)
     #-> Any -> Dept*
@@ -57,7 +59,7 @@ Next, we convert this data to primitive queries.
     #-> Dept -> String
 
     dept_employee_query =
-        MappingTool(:Dept, Output(:Emp, optional=true, plural=true), dept_employee_data)
+        MappingTool(:Dept, Output(:Emp) |> setoptional() |> setplural(), dept_employee_data)
     #-> Dept -> Emp*
 
     emp_name_query = MappingTool(:Emp, String, emp_name_data)
@@ -73,11 +75,11 @@ Next, we convert this data to primitive queries.
     #-> Emp -> Dept
 
     emp_manager_query =
-        MappingTool(:Emp, Output(:Emp, optional=true), emp_manager_data)
+        MappingTool(:Emp, Output(:Emp) |> setoptional(), emp_manager_data)
     #-> Emp -> Emp?
 
     emp_subordinate_query =
-        MappingTool(:Emp, Output(:Emp, optional=true, plural=true), emp_subordinate_data)
+        MappingTool(:Emp, Output(:Emp) |> setoptional() |> setplural(), emp_subordinate_data)
     #-> Emp -> Emp*
 
 Finally, we will convert the queries to combinators.
@@ -125,7 +127,7 @@ Extracting data
 *Show the name of each department.*
 
     q = Start() |> Department() |> DeptName()
-    #-> Unit -> String* [tag=:name]
+    #-> Unit -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -141,7 +143,7 @@ Extracting data
 *For each department, show the name of each employee.*
 
     q = Start() |> Department() |> DeptEmployee() |> EmpName()
-    #-> Unit -> String* [tag=:name]
+    #-> Unit -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -157,7 +159,7 @@ Extracting data
 *Show the name of each employee.*
 
     q = Start() |> Employee() |> EmpName()
-    #-> Unit -> String* [tag=:name]
+    #-> Unit -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -173,7 +175,7 @@ Extracting data
 *For each employee, show the name of their department.*
 
     q = Start() |> Employee() |> EmpDepartment() |> DeptName()
-    #-> Unit -> String* [tag=:name]
+    #-> Unit -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -189,7 +191,7 @@ Extracting data
 *Show the position of each employee.*
 
     q = Start() |> Employee() |> EmpPosition()
-    #-> Unit -> String* [tag=:position]
+    #-> Unit -> String[tag=:position]*
 
     display(execute(q))
     #=>
@@ -205,7 +207,7 @@ Extracting data
 *Show all employees.*
 
     q = Start() |> Employee()
-    #-> Unit -> Emp* [tag=:employee]
+    #-> Unit -> Emp[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -279,11 +281,11 @@ Pipeline notation
         |> ThenSort(EmpSalary() |> ThenDesc())
         |> ThenSelect(EmpName(), EmpPosition(), EmpSalary())
         |> ThenTake(Const(10)))
-    #-> Unit -> {Emp [tag=:employee], String [tag=:name], String [tag=:position], Int64 [tag=:salary]}*
+    #-> Unit -> {Emp[tag=:employee], String[tag=:name], String[tag=:position], Int64[tag=:salary]}*
 
     display(execute(q))
     #=>
-    DataSet[10 × {Emp [tag=:employee], String [tag=:name], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[10 × {Emp[tag=:employee], String[tag=:name], String[tag=:position], Int64[tag=:salary]}]:
      (Emp(18040),"GARRY M","SUPERINTENDENT OF POLICE",260004)
      (Emp(31712),"ALFONZA W","FIRST DEPUTY SUPERINTENDENT",197736)
      (Emp(29026),"ROBERT T","CHIEF",194256)
@@ -311,11 +313,11 @@ Filtering data
         |> Employee()
         |> ThenFilter(EmpSalary() .> Const(150000))
         |> EmpRecord())
-    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[151 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[151 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("DANA A","POLICE","DEPUTY CHIEF",170112)
      ("VERDIE A","FIRE","ASST DEPUTY CHIEF PARAMEDIC",156360)
      ("SCOTT A","IPRA","CHIEF ADMINISTRATOR",161856)
@@ -348,7 +350,7 @@ Sorting and paginating data
         |> Department()
         |> DeptName()
         |> ThenSort())
-    #-> Unit -> String* [tag=:name]
+    #-> Unit -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -367,11 +369,11 @@ Sorting and paginating data
         |> Employee()
         |> ThenSort(EmpSalary())
         |> EmpRecord())
-    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[32181 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("STEVEN K","MAYOR'S OFFICE","ADMINISTRATIVE SECRETARY",1)
      ("BETTY A","FAMILY & SUPPORT","FOSTER GRANDPARENT",2756)
      ("VICTOR A","FAMILY & SUPPORT","SENIOR COMPANION",2756)
@@ -386,11 +388,11 @@ Sorting and paginating data
         |> Employee()
         |> ThenSort(EmpSalary() |> ThenDesc())
         |> EmpRecord())
-    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[32181 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
      ("RAHM E","MAYOR'S OFFICE","MAYOR",216210)
      ("JOSE S","FIRE","FIRE COMMISSIONER",202728)
@@ -409,11 +411,11 @@ Sorting and paginating data
         |> ThenSort(EmpSalary() |> ThenDesc())
         |> ThenTake(Count(Employee()) ÷ Const(100))
         |> EmpRecord())
-    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[321 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[321 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
      ("RAHM E","MAYOR'S OFFICE","MAYOR",216210)
      ("JOSE S","FIRE","FIRE COMMISSIONER",202728)
@@ -436,11 +438,11 @@ Query output
         |> ThenSelect(
                 DeptName(),
                 Count(DeptEmployee()) |> ThenTag(:size)))
-    #-> Unit -> {Dept [tag=:department], String [tag=:name], Int64 [tag=:size]}*
+    #-> Unit -> {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}*
 
     display(execute(q))
     #=>
-    DataSet[35 × {Dept [tag=:department], String [tag=:name], Int64 [tag=:size]}]:
+    DataSet[35 × {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}]:
      (Dept(1),"WATER MGMNT",1848)
      (Dept(2),"POLICE",13570)
      (Dept(3),"GENERAL SERVICES",924)
@@ -464,11 +466,11 @@ salaries.*
                 |> ThenFilter(Exists(EmpSubordinate()))
                 |> ThenSelect(EmpName(), EmpSalary())
                 |> ThenTag(:manager)))
-    #-> Unit -> {Dept [tag=:department], String [tag=:name], Int64? [tag=:top_salary], {Emp [tag=:employee], String [tag=:name], Int64 [tag=:salary]}* [tag=:manager]}*
+    #-> Unit -> {Dept[tag=:department], String[tag=:name], Int64[tag=:top_salary]?, {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}*
 
     display(execute(q))
     #=>
-    DataSet[35 × {Dept [tag=:department], String [tag=:name], Int64? [tag=:top_salary], {Emp [tag=:employee], String [tag=:name], Int64 [tag=:salary]}* [tag=:manager]}]:
+    DataSet[35 × {Dept[tag=:department], String[tag=:name], Int64[tag=:top_salary]?, {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}]:
      (Dept(1),"WATER MGMNT",169512,[])
      (Dept(2),"POLICE",260004,[])
      (Dept(3),"GENERAL SERVICES",157092,[])
@@ -490,11 +492,11 @@ Query aliases
         |> ThenSort(DeptSize() |> ThenDesc())
         |> ThenSelect(DeptName(), DeptSize())
         |> ThenTake(Const(3)))
-    #-> Unit -> {Dept [tag=:department], String [tag=:name], Int64 [tag=:size]}*
+    #-> Unit -> {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}*
 
     display(execute(q))
     #=>
-    DataSet[3 × {Dept [tag=:department], String [tag=:name], Int64 [tag=:size]}]:
+    DataSet[3 × {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}]:
      (Dept(2),"POLICE",13570)
      (Dept(7),"FIRE",4875)
      (Dept(5),"STREETS & SAN",2090)
@@ -514,11 +516,11 @@ Hierarchical relationships
         |> Employee()
         |> ThenFilter(EmpSalary() .> (EmpManager() |> EmpSalary()))
         |> EmpRecord())
-    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[1 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[1 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("BRIAN L","TREASURER","AUDITOR IV",114492)
     =#
 
@@ -529,11 +531,11 @@ Hierarchical relationships
         |> ThenFilter(
                 AnyOf((Connect(EmpManager()) |> EmpPosition()) .== Const("CITY TREASURER")))
         |> EmpRecord())
-    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[23 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[23 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("SAEED A","TREASURER","ASST CITY TREASURER",85020)
      ("ELIZABETH A","TREASURER","ACCOUNTANT I",72840)
      ("KONSTANTINES A","TREASURER","ASSISTANT DIRECTOR OF FINANCE",73080)
@@ -562,11 +564,11 @@ employees.*
         |> ThenSelect(
                 DeptName(),
                 DeptEmployee()))
-    #-> Unit -> {Dept [tag=:department], String [tag=:name], Emp* [tag=:employee]}*
+    #-> Unit -> {Dept[tag=:department], String[tag=:name], Emp[tag=:employee]*}*
 
     display(execute(q))
     #=>
-    DataSet[35 × {Dept [tag=:department], String [tag=:name], Emp* [tag=:employee]}]:
+    DataSet[35 × {Dept[tag=:department], String[tag=:name], Emp[tag=:employee]*}]:
      (Dept(1),"WATER MGMNT",Emp[Emp(1)  …  Emp(32171)])
      (Dept(2),"POLICE",Emp[Emp(2)  …  Emp(32180)])
      (Dept(3),"GENERAL SERVICES",Emp[Emp(4)  …  Emp(32177)])
@@ -586,11 +588,11 @@ employees.*
         |> ThenSelect(
                 PosPosition(),
                 PosEmployee()))
-    #-> Unit -> {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Emp+ [tag=:employee]}*
+    #-> Unit -> {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Emp[tag=:employee]+}*
 
     display(execute(q))
     #=>
-    DataSet[1094 × {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Emp+ [tag=:employee]}]:
+    DataSet[1094 × {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Emp[tag=:employee]+}]:
      ((Emp[Emp(8293)],"1ST DEPUTY INSPECTOR GENERAL"),"1ST DEPUTY INSPECTOR GENERAL",Emp[Emp(8293)])
      ((Emp[Emp(10877)],"A/MGR COM SVC-ELECTIONS"),"A/MGR COM SVC-ELECTIONS",Emp[Emp(10877)])
      ((Emp[Emp(29045)],"A/MGR OF MIS-ELECTIONS"),"A/MGR OF MIS-ELECTIONS",Emp[Emp(29045)])
@@ -610,11 +612,11 @@ the top salary.*
                 PosPosition(),
                 Count(PosEmployee()),
                 MaxOf(PosEmployee() |> EmpSalary())))
-    #-> Unit -> {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Int64, Int64}*
+    #-> Unit -> {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Int64, Int64}*
 
     display(execute(q))
     #=>
-    DataSet[129 × {{Emp+ [tag=:employee], String [tag=:position]}, String [tag=:position], Int64, Int64}]:
+    DataSet[129 × {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Int64, Int64}]:
      ((Emp[Emp(26755)],"ACCOUNTANT I"),"ACCOUNTANT I",1,72840)
      ((Emp[Emp(7319),Emp(28313)],"ACCOUNTANT II"),"ACCOUNTANT II",2,80424)
      ((Emp[Emp(6681)],"ACCOUNTANT III"),"ACCOUNTANT III",1,65460)
@@ -635,11 +637,11 @@ the top salary.*
                 |> ThenSelect(
                         Field(:department) |> DeptName(),
                         Field(:employee))))
-    #-> Unit -> {{  …  }, String [tag=:position], {{  …  }, String [tag=:name], Emp+ [tag=:employee]}+}*
+    #-> Unit -> {{  …  }, String[tag=:position], {{  …  }, String[tag=:name], Emp[tag=:employee]+}+}*
 
     display(execute(q))
     #=>
-    DataSet[1094 × {{  …  }, String [tag=:position], {{  …  }, String [tag=:name], Emp+ [tag=:employee]}+}]:
+    DataSet[1094 × {{  …  }, String[tag=:position], {{  …  }, String[tag=:name], Emp[tag=:employee]+}+}]:
      ((  …  ),"1ST DEPUTY INSPECTOR GENERAL",[((  …  ),"INSPECTOR GEN",Emp[Emp(8293)])])
      ((  …  ),"A/MGR COM SVC-ELECTIONS",[((  …  ),"BOARD OF ELECTION",Emp[Emp(10877)])])
      ((  …  ),"A/MGR OF MIS-ELECTIONS",[((  …  ),"BOARD OF ELECTION",Emp[Emp(29045)])])
@@ -661,11 +663,11 @@ position, list the respective departments.*
         |> ThenSelect(
                 PosPosition(),
                 PosDepartment() |> DeptName()))
-    #-> Unit -> {{  …  }, String [tag=:position], String+ [tag=:name]}*
+    #-> Unit -> {{  …  }, String[tag=:position], String[tag=:name]+}*
 
     display(execute(q))
     #=>
-    DataSet[261 × {{  …  }, String [tag=:position], String+ [tag=:name]}]:
+    DataSet[261 × {{  …  }, String[tag=:position], String[tag=:name]+}]:
      ((  …  ),"ACCOUNTANT I",String["TREASURER","FINANCE","PUBLIC LIBRARY","POLICE"])
      ((  …  ),"ACCOUNTANT II",String["FINANCE","FAMILY & SUPPORT"  …  "PUBLIC LIBRARY"])
      ((  …  ),"ACCOUNTANT III",String["FAMILY & SUPPORT","PUBLIC LIBRARY"  …  "BUSINESS AFFAIRS"])
@@ -684,11 +686,11 @@ position, list the respective departments.*
         |> ThenSelect(
                 Field(:level),
                 Count(Field(:employee))))
-    #-> Unit -> {{  …  }, Int64 [tag=:level], Int64}*
+    #-> Unit -> {{  …  }, Int64[tag=:level], Int64}*
 
     display(execute(q))
     #=>
-    DataSet[3 × {{  …  }, Int64 [tag=:level], Int64}]:
+    DataSet[3 × {{  …  }, Int64[tag=:level], Int64}]:
      ((  …  ),0,32158)
      ((  …  ),1,17)
      ((  …  ),2,6)
@@ -704,11 +706,11 @@ department and the grand total.*
                 Field(:department) |> DeptRecord(),
                 Field(:position),
                 MeanOf(Field(:employee) |> EmpSalary())))
-    #-> Unit -> {{  …  }, {String [tag=:name]}? [tag=:department], String? [tag=:position], Float64}*
+    #-> Unit -> {{  …  }, {String[tag=:name]}[tag=:department]?, String[tag=:position]?, Float64}*
 
     display(execute(q))
     #=>
-    DataSet[2001 × {{  …  }, {String [tag=:name]}? [tag=:department], String? [tag=:position], Float64}]:
+    DataSet[2001 × {{  …  }, {String[tag=:name]}[tag=:department]?, String[tag=:position]?, Float64}]:
      ((  …  ),("WATER MGMNT",),"ACCOUNTANT IV",95880.0)
      ((  …  ),("WATER MGMNT",),"ACCOUNTING TECHNICIAN I",63708.0)
      ((  …  ),("WATER MGMNT",),"ACCOUNTING TECHNICIAN III",66684.0)
@@ -739,11 +741,11 @@ where D = "POLICE", S = 150000.*
         |> Employee()
         |> ThenFilter((EmpDepartment() |> DeptName() .== D()) & (EmpSalary() .> S()))
         |> EmpRecord())
-    #-> {Unit, D => String, S => Int64} -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> {Unit, D => String, S => Int64} -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q, D="POLICE", S=150000))
     #=>
-    DataSet[62 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[62 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("DANA A","POLICE","DEPUTY CHIEF",170112)
      ("CONSTANTINE A","POLICE","DEPUTY CHIEF",170112)
      ("KENNETH A","POLICE","COMMANDER",162684)
@@ -754,18 +756,18 @@ where D = "POLICE", S = 150000.*
 
 *Which employees have higher than average salary?*
 
-    MS() = Parameter(:MS, Output(Float64, optional=true))
+    MS() = Parameter(:MS, Output(Float64) |> setoptional())
 
     q = (Start()
         |> Employee()
         |> ThenFilter(EmpSalary() .> MS())
         |> EmpRecord()
         |> Given(MeanOf(Employee() |> EmpSalary()) |> ThenTag(:MS)))
-    #-> Unit -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[19796 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[19796 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
      ("JEFFERY A","POLICE","POLICE OFFICER",80778)
      ("KARINA A","POLICE","POLICE OFFICER",80778)
@@ -781,11 +783,11 @@ where D = "POLICE", S = 150000.*
         |> ThenTake(Const(100))     # FIXME
         |> ThenFilter(EmpSalary() .> MeanOf(HereAndAround() |> EmpSalary()))
         |> EmpRecord())
-    #-> (Unit...) -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> (Unit...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[65 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[65 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
      ("JEFFERY A","POLICE","POLICE OFFICER",80778)
      ("KARINA A","POLICE","POLICE OFFICER",80778)
@@ -801,11 +803,11 @@ average for their position.*
         |> ThenFilter(EmpDepartment() |> DeptName() .== Const("POLICE"))
         |> ThenFilter(EmpSalary() .> MeanOf(HereAndAround(EmpPosition()) |> EmpSalary()))
         |> EmpRecord())
-    #-> (Unit...) -> {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}* [tag=:employee]
+    #-> (Unit...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[29 × {String [tag=:name], String [tag=:department], String [tag=:position], Int64 [tag=:salary]}]:
+    DataSet[29 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
      ("JEFFERY A","POLICE","POLICE OFFICER",80778)
      ("KARINA A","POLICE","POLICE OFFICER",80778)
      ("TERRY A","POLICE","POLICE OFFICER",86520)
@@ -822,11 +824,11 @@ average for their position.*
                 EmpName(),
                 EmpSalary(),
                 SumOf(HereAndBefore() |> EmpSalary()) |> ThenTag(:total)))
-    #-> (Unit...) -> {Emp [tag=:employee], Int64 [tag=:no], String [tag=:name], Int64 [tag=:salary], Int64 [tag=:total]}*
+    #-> (Unit...) -> {Emp[tag=:employee], Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}*
 
     display(execute(q))
     #=>
-    DataSet[100 × {Emp [tag=:employee], Int64 [tag=:no], String [tag=:name], Int64 [tag=:salary], Int64 [tag=:total]}]:
+    DataSet[100 × {Emp[tag=:employee], Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}]:
      (Emp(1),1,"ELVIA A",88968,88968)
      (Emp(2),2,"JEFFERY A",80778,169746)
      (Emp(3),3,"KARINA A",80778,250524)
@@ -847,11 +849,11 @@ total should be reset at the department boundary.*
                         EmpSalary(),
                         SumOf(HereAndBefore() |> EmpSalary()))
                 |> ThenFrame()))
-    #-> Unit -> {Dept [tag=:department], String [tag=:name], {Emp [tag=:employee], String [tag=:name], Int64 [tag=:salary], Int64}*}*
+    #-> Unit -> {Dept[tag=:department], String[tag=:name], {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary], Int64}*}*
 
     display(execute(q))
     #=>
-    DataSet[35 × {Dept [tag=:department], String [tag=:name], {Emp [tag=:employee], String [tag=:name], Int64 [tag=:salary], Int64}*}]:
+    DataSet[35 × {Dept[tag=:department], String[tag=:name], {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary], Int64}*}]:
      (Dept(1),"WATER MGMNT",[(Emp(1),"ELVIA A",88968,88968),(Emp(5),"VICENTE A",104736,193704)  …  ])
      (Dept(2),"POLICE",[(Emp(2),"JEFFERY A",80778,80778),(Emp(3),"KARINA A",80778,161556)  …  ])
      (Dept(3),"GENERAL SERVICES",[(Emp(4),"KIMBERLEI A",84780,84780),(Emp(23),"RASHAD A",91520,176300)  …  ])

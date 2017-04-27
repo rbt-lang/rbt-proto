@@ -1,5 +1,5 @@
 #
-# The type system and the query signature.
+# The query input/output types.
 #
 
 include("type/entity.jl")

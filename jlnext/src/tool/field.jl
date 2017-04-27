@@ -32,7 +32,7 @@ Field(tag::Symbol) =
         P ->
             let dom = domain(output(P)), pos = 0
                 for (k, sig) in enumerate(fields(dom))
-                    if decoration(sig, :tag, Symbol("")) == tag
+                    if decoration(sig, :tag, Symbol, Symbol("")) == tag
                         pos = k
                         break
                     end
