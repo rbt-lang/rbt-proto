@@ -39,8 +39,8 @@ belong to one of three categories: value types, entity classes, and records.
     using RBT:
         Domain,
         Output,
-        Unit,
-        Zero,
+        Void,
+        None,
         classname,
         datatype,
         decorate,
@@ -51,8 +51,8 @@ belong to one of three categories: value types, entity classes, and records.
         isdata,
         isentity,
         isrecord,
-        isunit,
-        iszero,
+        isvoid,
+        isnone,
         setplural
 
 Value types, such as `Bool`, `Int` or `String`, are represented by native Julia
@@ -80,15 +80,15 @@ non-trivial cardinality.  Such fields could be specified as `Domain` or
     dept_with_name_and_salary_seq_t = Domain((dept_t, name_and_salary_seq_t))
     #-> {Dept, {String, Int64}+}
 
-Three special value types are recognized: the type `Zero` with no values, the
-type `Unit` with a distinguished singleton value, and the type `Any` of all
+Three special value types are recognized: the type `None` with no values, the
+type `Void` with a distinguished singleton value, and the type `Any` of all
 values.
 
-    zero_t = Domain(Zero)
-    #-> Zero
+    none_t = Domain(None)
+    #-> None
 
-    unit_t = Domain(Unit)
-    #-> Unit
+    void_t = Domain(Void)
+    #-> Void
 
     any_t = Domain(Any)
     #-> Any
@@ -114,25 +114,25 @@ domain.
     isrecord(text_t)
     #-> false
 
-Similarly, predicates `iszero()`, `isunit()`, `isany()` identify special value
+Similarly, predicates `isnone()`, `isvoid()`, `isany()` identify special value
 types.
 
-    iszero(zero_t)
+    isnone(none_t)
     #-> true
 
-    iszero(unit_t)
+    isnone(void_t)
     #-> false
 
-    isunit(unit_t)
+    isvoid(void_t)
     #-> true
 
-    isunit(any_t)
+    isvoid(any_t)
     #-> false
 
     isany(any_t)
     #-> true
 
-    isany(zero_t)
+    isany(none_t)
     #-> false
 
 Function `datatype()` returns the native Julia type that can represent domain
@@ -194,7 +194,7 @@ output domain and the output cardinality.
         Domain,
         Output,
         OutputMode,
-        Unit,
+        Void,
         decoration,
         decorations,
         domain,
@@ -204,7 +204,7 @@ output domain and the output cardinality.
         isplain,
         isplural,
         isrecord,
-        isunit,
+        isvoid,
         mode,
         setoptional,
         setplural
@@ -246,8 +246,8 @@ output type is created with the `Output` constructor.
     text_ot = Output(String)
     #-> String
 
-    unit_ot = Output(Domain(Unit))
-    #-> Unit
+    void_ot = Output(Domain(Void))
+    #-> Void
 
     name_ot = text_ot |> decorate(:tag => :name)
     #-> String[tag=:name]
@@ -292,7 +292,7 @@ Various predicates and accessors can be used to inspect output types.
     isrecord(record_ot)
     #-> true
 
-    isunit(unit_ot)
+    isvoid(void_ot)
     #-> true
 
     isplain(name_ot)
@@ -334,7 +334,7 @@ input domain, the input *parameters*, and the *flow dependency* indicator.
         Input,
         InputMode,
         InputParameter,
-        Unit,
+        Void,
         domain,
         isdata,
         isentity,
@@ -378,8 +378,8 @@ It is represented by `InputMode` object.
 
 The input type is created using the `Input` constructor.
 
-    unit_it = Input(Unit)
-    #-> Unit
+    void_it = Input(Void)
+    #-> Void
 
     dept_rel_it = Input(:Dept) |> setrelative()
     #-> (Dept...)
@@ -399,13 +399,13 @@ Components of the input type could be extracted using functions `domain()` and
 
 Various predicates and accessors can be used to inspect the input type.
 
-    isdata(unit_it)
+    isdata(void_it)
     #-> true
 
     isentity(dept_rel_it)
     #-> true
 
-    isfree(unit_it)
+    isfree(void_it)
     #-> true
 
     isrelative(dept_rel_it)
@@ -550,19 +550,19 @@ called their *input bound*.
     #-> String
 
     ibound(Domain(Int64), Domain(Float64))
-    #-> Zero
+    #-> None
 
     ibound(Domain(:Emp), Domain(:Emp))
     #-> Emp
 
     ibound(Domain(:Emp), Domain(:Dept))
-    #-> Zero
+    #-> None
 
     ibound(Domain((:Emp, String)), Domain((:Emp, String)))
     #-> {Emp, String}
 
     ibound(Domain((:Emp, String)), Domain((:Emp, String, Int64)))
-    #-> Zero
+    #-> None
 
     ibound(
         Domain((
@@ -571,7 +571,7 @@ called their *input bound*.
         Domain((
             Output(String) |> setplural() |> decorate(:tag => :name),
             Output(:Dept) |> setoptional() |> decorate(:tag => :department))))
-    #-> {String[tag=:name], Zero?}
+    #-> {String[tag=:name], None?}
 
 Functions `ibound()` and `obound()` could also be applied to the input contexts
 and output cardinalities.
@@ -598,7 +598,7 @@ Both `ibound()` and `obound()` could be applied to an arbitrary number of
 domains.
 
     obound(Domain)
-    #-> Zero
+    #-> None
 
     obound(Domain(:Dept))
     #-> Dept

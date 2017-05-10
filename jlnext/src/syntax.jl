@@ -10,38 +10,37 @@ immutable Syntax
     val::Any
     label::Symbol
     args::Vector{Syntax}
-
-    Syntax(src, val) = new(src, val)
-
-    Syntax(src, label::Symbol, ::Void) =
-        new(src, nothing, label)
-
-    Syntax(src, label::Symbol, args::Vector{Syntax}) =
-        new(src, nothing, label, args)
 end
 
+Syntax(src, val) =
+    Syntax(src, val, NO_LABEL, NO_ARGS)
+
+Syntax(src, label::Symbol, ::Void) =
+    Syntax(src, nothing, label, NO_ARGS)
+
+Syntax(src, label::Symbol, args::Vector{Syntax}) =
+    Syntax(src, nothing, label, args)
+
 const NO_LABEL = Symbol("")
+const NO_ARGS = Syntax[]
 
 haslabel(syn::Syntax) =
-    isdefined(syn, :label)
+    syn.label != NO_LABEL
 
 hasargs(syn::Syntax) =
-    isdefined(syn, :args)
+    syn.args != NO_ARGS
 
 source(syn::Syntax) = syn.src
 
 value(syn::Syntax) = syn.val
 
-label(syn::Syntax) =
-    haslabel(syn) ? syn.label : NO_LABEL
+label(syn::Syntax) = syn.label
 
 start(syn::Syntax) = 1
 next(syn::Syntax, st) = (syn.args[st], st+1)
-done(syn::Syntax, st) = !hasargs(syn) || st > length(syn.args)
-length(syn::Syntax) =
-    hasargs(syn) ? length(syn.args) : 0
-isempty(syn::Syntax) =
-    hasargs(syn) ? isempty(syn.args) : true
+done(syn::Syntax, st) = st > length(syn.args)
+length(syn::Syntax) = length(syn.args)
+isempty(syn::Syntax) = isempty(syn.args) : true
 
 function show(io::IO, syn::Syntax)
     if syn.src !== nothing
@@ -95,7 +94,7 @@ function expr2syntax(ex::Expr)
             if isa(call, Symbol)
                 Syntax(Expr(:(:), ex.args[1:end-1]..., call), call, [syn])
             elseif isa(call, Expr) && call.head == :call && isa(call.args[1], Symbol)
-                args = Vector{Syntax}(length(ex.args))
+                args = Vector{Syntax}(length(call.args))
                 args[1] = syn
                 for k = 2:endof(args)
                     args[k] = expr2syntax(call.args[k])
@@ -126,6 +125,8 @@ function expr2syntax(ex::Expr)
         return Syntax(ex, :get, [expr2syntax(arg) for arg in ex.args])
     elseif ex.head == :vect
         return Syntax(ex, :array, [expr2syntax(arg) for arg in ex.args])
+    elseif ex.head == :quote && length(ex.args) == 1
+        return expr2syntax(ex.args[1])
     elseif ex.head == :comparison && length(ex.args) >= 3 && isa(ex.args[2], Symbol)
         syn = expr2syntax(Expr(:call, ex.args[2], ex.args[1], ex.args[3]))
         if length(ex.args) > 3
@@ -143,7 +144,11 @@ destructcall(ex::QuoteNode, args) =
     Expr(:call, ex.value, args...)
 
 destructcall(ex::Expr, args) =
-    Expr(ex.head, ex.args[1:end-1]..., destructcall(ex.args[end], args))
+    if ex.head == :quote && length(ex.args) == 1
+        Expr(:call, ex.args[1], args...)
+    else
+        Expr(ex.head, ex.args[1:end-1]..., destructcall(ex.args[end], args))
+    end
 
 destructcall(ex, args) =
     error("invalid query call notation: $ex")

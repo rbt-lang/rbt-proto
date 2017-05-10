@@ -13,6 +13,8 @@ include("immdict.jl")
 include("type.jl")
 include("data.jl")
 include("tool.jl")
+include("query.jl")
+include("bind.jl")
 
 end
 

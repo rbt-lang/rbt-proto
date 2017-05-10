@@ -127,7 +127,7 @@ Extracting data
 *Show the name of each department.*
 
     q = Start() |> Department() |> DeptName()
-    #-> Unit -> String[tag=:name]*
+    #-> Void -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -143,7 +143,7 @@ Extracting data
 *For each department, show the name of each employee.*
 
     q = Start() |> Department() |> DeptEmployee() |> EmpName()
-    #-> Unit -> String[tag=:name]*
+    #-> Void -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -159,7 +159,7 @@ Extracting data
 *Show the name of each employee.*
 
     q = Start() |> Employee() |> EmpName()
-    #-> Unit -> String[tag=:name]*
+    #-> Void -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -175,7 +175,7 @@ Extracting data
 *For each employee, show the name of their department.*
 
     q = Start() |> Employee() |> EmpDepartment() |> DeptName()
-    #-> Unit -> String[tag=:name]*
+    #-> Void -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -191,7 +191,7 @@ Extracting data
 *Show the position of each employee.*
 
     q = Start() |> Employee() |> EmpPosition()
-    #-> Unit -> String[tag=:position]*
+    #-> Void -> String[tag=:position]*
 
     display(execute(q))
     #=>
@@ -207,7 +207,7 @@ Extracting data
 *Show all employees.*
 
     q = Start() |> Employee()
-    #-> Unit -> Emp[tag=:employee]*
+    #-> Void -> Emp[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -232,7 +232,7 @@ Summarizing data
 *Show the number of departments.*
 
     q = Start() |> Count(Department())
-    #-> Unit -> Int64
+    #-> Void -> Int64
 
     execute(q)
     #-> 35
@@ -240,7 +240,7 @@ Summarizing data
 *What is the highest employee salary?*
 
     q = Start() |> MaxOf(Employee() |> EmpSalary())
-    #-> Unit -> Int64?
+    #-> Void -> Int64?
 
     execute(q)
     #-> Nullable{Int64}(260004)
@@ -248,7 +248,7 @@ Summarizing data
 *For each department, show the number of employees.*
 
     q = Start() |> Department() |> Count(DeptEmployee())
-    #-> Unit -> Int64*
+    #-> Void -> Int64*
 
     execute(q)
     #-> [1848,13570,924  …  39,1]
@@ -256,7 +256,7 @@ Summarizing data
 *How many employees are in the largest department?*
 
     q = q |> ThenMax()
-    #-> Unit -> Int64?
+    #-> Void -> Int64?
 
     execute(q)
     #-> Nullable{Int64}(13570)
@@ -281,7 +281,7 @@ Pipeline notation
         |> ThenSort(EmpSalary() |> ThenDesc())
         |> ThenSelect(EmpName(), EmpPosition(), EmpSalary())
         |> ThenTake(Const(10)))
-    #-> Unit -> {Emp[tag=:employee], String[tag=:name], String[tag=:position], Int64[tag=:salary]}*
+    #-> Void -> {Emp[tag=:employee], String[tag=:name], String[tag=:position], Int64[tag=:salary]}*
 
     display(execute(q))
     #=>
@@ -313,7 +313,7 @@ Filtering data
         |> Employee()
         |> ThenFilter(EmpSalary() .> Const(150000))
         |> EmpRecord())
-    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -332,7 +332,7 @@ Filtering data
         |> Department()
         |> ThenFilter(Count(DeptEmployee()) .> Const(1000))
         |> ThenCount())
-    #-> Unit -> Int64
+    #-> Void -> Int64
 
     execute(q)
     #-> 7
@@ -350,7 +350,7 @@ Sorting and paginating data
         |> Department()
         |> DeptName()
         |> ThenSort())
-    #-> Unit -> String[tag=:name]*
+    #-> Void -> String[tag=:name]*
 
     display(execute(q))
     #=>
@@ -369,7 +369,7 @@ Sorting and paginating data
         |> Employee()
         |> ThenSort(EmpSalary())
         |> EmpRecord())
-    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -388,7 +388,7 @@ Sorting and paginating data
         |> Employee()
         |> ThenSort(EmpSalary() |> ThenDesc())
         |> EmpRecord())
-    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -411,7 +411,7 @@ Sorting and paginating data
         |> ThenSort(EmpSalary() |> ThenDesc())
         |> ThenTake(Count(Employee()) ÷ Const(100))
         |> EmpRecord())
-    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -438,7 +438,7 @@ Query output
         |> ThenSelect(
                 DeptName(),
                 Count(DeptEmployee()) |> ThenTag(:size)))
-    #-> Unit -> {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}*
+    #-> Void -> {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}*
 
     display(execute(q))
     #=>
@@ -466,7 +466,7 @@ salaries.*
                 |> ThenFilter(Exists(EmpSubordinate()))
                 |> ThenSelect(EmpName(), EmpSalary())
                 |> ThenTag(:manager)))
-    #-> Unit -> {Dept[tag=:department], String[tag=:name], Int64[tag=:top_salary]?, {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}*
+    #-> Void -> {Dept[tag=:department], String[tag=:name], Int64[tag=:top_salary]?, {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}*
 
     display(execute(q))
     #=>
@@ -492,7 +492,7 @@ Query aliases
         |> ThenSort(DeptSize() |> ThenDesc())
         |> ThenSelect(DeptName(), DeptSize())
         |> ThenTake(Const(3)))
-    #-> Unit -> {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}*
+    #-> Void -> {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}*
 
     display(execute(q))
     #=>
@@ -516,7 +516,7 @@ Hierarchical relationships
         |> Employee()
         |> ThenFilter(EmpSalary() .> (EmpManager() |> EmpSalary()))
         |> EmpRecord())
-    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -531,7 +531,7 @@ Hierarchical relationships
         |> ThenFilter(
                 AnyOf((Connect(EmpManager()) |> EmpPosition()) .== Const("CITY TREASURER")))
         |> EmpRecord())
-    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -564,7 +564,7 @@ employees.*
         |> ThenSelect(
                 DeptName(),
                 DeptEmployee()))
-    #-> Unit -> {Dept[tag=:department], String[tag=:name], Emp[tag=:employee]*}*
+    #-> Void -> {Dept[tag=:department], String[tag=:name], Emp[tag=:employee]*}*
 
     display(execute(q))
     #=>
@@ -588,7 +588,7 @@ employees.*
         |> ThenSelect(
                 PosPosition(),
                 PosEmployee()))
-    #-> Unit -> {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Emp[tag=:employee]+}*
+    #-> Void -> {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Emp[tag=:employee]+}*
 
     display(execute(q))
     #=>
@@ -612,7 +612,7 @@ the top salary.*
                 PosPosition(),
                 Count(PosEmployee()),
                 MaxOf(PosEmployee() |> EmpSalary())))
-    #-> Unit -> {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Int64, Int64}*
+    #-> Void -> {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Int64, Int64}*
 
     display(execute(q))
     #=>
@@ -637,7 +637,7 @@ the top salary.*
                 |> ThenSelect(
                         Field(:department) |> DeptName(),
                         Field(:employee))))
-    #-> Unit -> {{  …  }, String[tag=:position], {{  …  }, String[tag=:name], Emp[tag=:employee]+}+}*
+    #-> Void -> {{  …  }, String[tag=:position], {{  …  }, String[tag=:name], Emp[tag=:employee]+}+}*
 
     display(execute(q))
     #=>
@@ -663,7 +663,7 @@ position, list the respective departments.*
         |> ThenSelect(
                 PosPosition(),
                 PosDepartment() |> DeptName()))
-    #-> Unit -> {{  …  }, String[tag=:position], String[tag=:name]+}*
+    #-> Void -> {{  …  }, String[tag=:position], String[tag=:name]+}*
 
     display(execute(q))
     #=>
@@ -686,7 +686,7 @@ position, list the respective departments.*
         |> ThenSelect(
                 Field(:level),
                 Count(Field(:employee))))
-    #-> Unit -> {{  …  }, Int64[tag=:level], Int64}*
+    #-> Void -> {{  …  }, Int64[tag=:level], Int64}*
 
     display(execute(q))
     #=>
@@ -706,7 +706,7 @@ department and the grand total.*
                 Field(:department) |> DeptRecord(),
                 Field(:position),
                 MeanOf(Field(:employee) |> EmpSalary())))
-    #-> Unit -> {{  …  }, {String[tag=:name]}[tag=:department]?, String[tag=:position]?, Float64}*
+    #-> Void -> {{  …  }, {String[tag=:name]}[tag=:department]?, String[tag=:position]?, Float64}*
 
     display(execute(q))
     #=>
@@ -741,7 +741,7 @@ where D = "POLICE", S = 150000.*
         |> Employee()
         |> ThenFilter((EmpDepartment() |> DeptName() .== D()) & (EmpSalary() .> S()))
         |> EmpRecord())
-    #-> {Unit, D => String, S => Int64} -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> {Void, D => String, S => Int64} -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q, D="POLICE", S=150000))
     #=>
@@ -763,7 +763,7 @@ where D = "POLICE", S = 150000.*
         |> ThenFilter(EmpSalary() .> MS())
         |> EmpRecord()
         |> Given(MeanOf(Employee() |> EmpSalary()) |> ThenTag(:MS)))
-    #-> Unit -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -783,7 +783,7 @@ where D = "POLICE", S = 150000.*
         |> ThenTake(Const(100))     # FIXME
         |> ThenFilter(EmpSalary() .> MeanOf(HereAndAround() |> EmpSalary()))
         |> EmpRecord())
-    #-> (Unit...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> (Void...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -803,7 +803,7 @@ average for their position.*
         |> ThenFilter(EmpDepartment() |> DeptName() .== Const("POLICE"))
         |> ThenFilter(EmpSalary() .> MeanOf(HereAndAround(EmpPosition()) |> EmpSalary()))
         |> EmpRecord())
-    #-> (Unit...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+    #-> (Void...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
@@ -824,7 +824,7 @@ average for their position.*
                 EmpName(),
                 EmpSalary(),
                 SumOf(HereAndBefore() |> EmpSalary()) |> ThenTag(:total)))
-    #-> (Unit...) -> {Emp[tag=:employee], Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}*
+    #-> (Void...) -> {Emp[tag=:employee], Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}*
 
     display(execute(q))
     #=>
@@ -849,7 +849,7 @@ total should be reset at the department boundary.*
                         EmpSalary(),
                         SumOf(HereAndBefore() |> EmpSalary()))
                 |> ThenFrame()))
-    #-> Unit -> {Dept[tag=:department], String[tag=:name], {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary], Int64}*}*
+    #-> Void -> {Dept[tag=:department], String[tag=:name], {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary], Int64}*}*
 
     display(execute(q))
     #=>

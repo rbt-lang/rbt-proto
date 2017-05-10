@@ -14,7 +14,7 @@ run_prim(tool::HereTool, vals::AbstractVector) =
 
 Here() = Combinator(P -> P)
 
-Start() = HereTool(Unit)
+Start() = HereTool(Void)
 Start(dom) = HereTool(dom)
 Start(tool::AbstractTool) =
     HereTool(domain(output(tool)))

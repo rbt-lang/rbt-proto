@@ -38,7 +38,7 @@ The constant primitive produces the same value on any input.
 The `null` constant produces no value on any input.
 
     t = NullConstTool()
-    #-> Any -> Zero?
+    #-> Any -> None?
 
     run(t, 1:10)
     #-> [#NULL,#NULL  …  #NULL]

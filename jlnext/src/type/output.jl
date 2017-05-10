@@ -65,8 +65,8 @@ mode(otype::Output) = otype.mode
 
 isdata(otype::Output) = isdata(otype.dom)
 isany(otype::Output) = isany(otype.dom)
-isunit(otype::Output) = isunit(otype.dom)
-iszero(otype::Output) = iszero(otype.dom)
+isvoid(otype::Output) = isvoid(otype.dom)
+isnone(otype::Output) = isnone(otype.dom)
 isentity(otype::Output) = isentity(otype.dom)
 isrecord(otype::Output) = isrecord(otype.dom)
 
@@ -99,8 +99,8 @@ convert(::Type{Domain}, desc::Union{Tuple, Vector}) =
 
 isdata(::Vector{Output}) = false
 isany(::Vector{Output}) = false
-isunit(::Vector{Output}) = false
-iszero(::Vector{Output}) = false
+isvoid(::Vector{Output}) = false
+isnone(::Vector{Output}) = false
 isentity(::Vector{Output}) = false
 isrecord(::Vector{Output}) = true
 

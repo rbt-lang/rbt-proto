@@ -18,7 +18,7 @@ run(tool::AbstractTool, iflow::InputFlow) =
 
 run_prim(tool::AbstractTool, ivals::AbstractVector) = error("not implemented")
 
-run(tool::AbstractTool, ctx::InputContext=InputContext(), dom=Domain(Unit), vals::AbstractVector=[nothing]) =
+run(tool::AbstractTool, ctx::InputContext=InputContext(), dom=Domain(Void), vals::AbstractVector=[nothing]) =
     run(tool, InputFlow(ctx, dom, vals))
 
 run(tool::AbstractTool, dom, vals::AbstractVector) =

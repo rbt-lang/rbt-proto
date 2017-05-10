@@ -43,16 +43,16 @@ function vcat(ds1::DataSet, ds2::DataSet)
     if w1 < w2
         dummy1 =
             OutputFlow(
-                Output(Zero, optional=true),
-                Column(fill(1, ds1.len+1), Zero[]))
+                Output(None, optional=true),
+                Column(fill(1, ds1.len+1), None[]))
         for k = w1+1:w2
             push!(flows, vcat(dummy1, ds2.flows[k]))
         end
     elseif w1 > w2
         dummy2 =
             OutputFlow(
-                Output(Zero, optional=true),
-                Column(fill(1, ds2.len+1), Zero[]))
+                Output(None, optional=true),
+                Column(fill(1, ds2.len+1), None[]))
         for k = w2+1:w1
             push!(flows, vcat(ds1.flows[k], dummy2))
         end

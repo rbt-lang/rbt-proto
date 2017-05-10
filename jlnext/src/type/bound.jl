@@ -5,7 +5,7 @@
 # Is the given type compatible with the expected type?
 
 function fits(act::Domain, exp::Domain)
-    if act == exp || iszero(act) || isany(exp)
+    if act == exp || isnone(act) || isany(exp)
         return true
     end
     if isdata(exp)
@@ -95,9 +95,9 @@ function ibound(dom1::Domain, dom2::Domain)
             end
             Decoration[dmap[n] for n in sort(collect(keys(dmap)))]
         end
-    if isany(dom1) || iszero(dom2)
+    if isany(dom1) || isnone(dom2)
         return Domain(dom2.desc, decors)
-    elseif iszero(dom1) || isany(dom2)
+    elseif isnone(dom1) || isany(dom2)
         return Domain(dom1.desc, decors)
     elseif isdata(dom1) && isdata(dom2)
         return Domain(typeintersect(dom1.desc::Type, dom2.desc::Type), decors)
@@ -112,7 +112,7 @@ function ibound(dom1::Domain, dom2::Domain)
                     decors)
         end
     end
-    return Domain(Zero, decors)
+    return Domain(None, decors)
 end
 
 ibound(::Type{OutputMode}) = OutputMode(true, true)
@@ -181,7 +181,7 @@ obound{T}(t1::T, ts::T...) = obound(T, t1, ts...)
 obound{T}(::Type{T}, ts::T...) = foldl(obound, obound(T), ts)
 obound{T}(ts::Vector{T}) = foldl(obound, obound(T), ts)
 
-obound(::Type{Domain}) = Domain(Zero)
+obound(::Type{Domain}) = Domain(None)
 
 function obound(dom1::Domain, dom2::Domain)
     if dom1 == dom2
@@ -220,9 +220,9 @@ function obound(dom1::Domain, dom2::Domain)
             end
             Decoration[dmap[n] for n in sort(collect(keys(dmap)))]
         end
-    if iszero(dom1) || isany(dom2)
+    if isnone(dom1) || isany(dom2)
         return Domain(dom2.desc, decors)
-    elseif isany(dom1) || iszero(dom2)
+    elseif isany(dom1) || isnone(dom2)
         return Domain(dom1.desc, decors)
     elseif isdata(dom1) && isdata(dom2)
         return Domain(typejoin(dom1.desc::Type, dom2.desc::Type), decors)

@@ -4,8 +4,7 @@
 
 # Aliases for special data types.
 
-typealias Unit Void
-typealias Zero Union{}
+typealias None Union{}
 
 # Domain decorations.
 
@@ -62,13 +61,17 @@ end
 convert(::Type{Domain}, desc::Union{Type, Symbol}) =
     Domain(desc)
 
+setdecorations(dom::Domain, decors::Decorations=NO_DECORATIONS) =
+    Domain(dom.desc, decors)
+
+setdecorations(decors::Decorations=NO_DECORATIONS) =
+    dom -> setdecorations(dom, decors)
+
 function show(io::IO, dom::Domain)
     if isdata(dom)
         T = datatype(dom)
-        if isunit(T)
-            print(io, "Unit")
-        elseif iszero(T)
-            print(io, "Zero")
+        if T <: Union{}
+            print(io, "None")
         else
             print(io, T)
         end
@@ -120,22 +123,22 @@ decorate(dom::Domain, d::Decoration) =
 
 isdata(dom::Domain) = isdata(dom.desc)
 isany(dom::Domain) = isany(dom.desc)
-isunit(dom::Domain) = isunit(dom.desc)
-iszero(dom::Domain) = iszero(dom.desc)
+isvoid(dom::Domain) = isvoid(dom.desc)
+isnone(dom::Domain) = isnone(dom.desc)
 isentity(dom::Domain) = isentity(dom.desc)
 isrecord(dom::Domain) = isrecord(dom.desc)
 
 isdata(desc::Type) = true
 isany(desc::Type) = desc == Any
-isunit(desc::Type) = desc == Unit
-iszero(desc::Type) = desc == Zero
+isvoid(desc::Type) = desc == Void
+isnone(desc::Type) = desc == None
 isentity(desc::Type) = false
 isrecord(desc::Type) = false
 
 isdata(desc::Symbol) = false
 isany(desc::Symbol) = false
-isunit(desc::Symbol) = false
-iszero(desc::Symbol) = false
+isvoid(desc::Symbol) = false
+isnone(desc::Symbol) = false
 isentity(desc::Symbol) = true
 isrecord(desc::Symbol) = false
 

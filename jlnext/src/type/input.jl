@@ -38,6 +38,15 @@ isfree(imode::InputMode) = !imode.relative && isempty(imode.params)
 isrelative(imode::InputMode) = imode.relative
 parameters(imode::InputMode) = imode.params
 
+function parameter(imode::InputMode, tag::Symbol)
+    for param in imode.params
+        if param.first == tag
+            return param.second
+        end
+    end
+    return Output(None)
+end
+
 # The type and the context of the input.
 
 immutable Input
@@ -47,27 +56,27 @@ end
 
 Input(dom) = Input(convert(Domain, dom), InputMode())
 
-decorate(itype::Input, d::Decoration) =
-    Input(decorate(itype.dom, d), itype.mode)
+decorate(ity::Input, d::Decoration) =
+    Input(decorate(ity.dom, d), ity.mode)
 
-setrelative(itype::Input, relative::Bool=true) =
-    Input(itype.dom, setrelative(itype.mode, relative))
+setrelative(ity::Input, relative::Bool=true) =
+    Input(ity.dom, setrelative(ity.mode, relative))
 
-setparameters(itype::Input, params::InputParameters=NO_PARAMETERS) =
-    Input(itype.dom, setparameters(itype.mode, params))
+setparameters(ity::Input, params::InputParameters=NO_PARAMETERS) =
+    Input(ity.dom, setparameters(ity.mode, params))
 
 convert(::Type{Input}, dom::Union{Type, Symbol, Tuple, Vector, Domain}) =
     Input(convert(Domain, dom))
 
-function show(io::IO, itype::Input)
-    mode = itype.mode
+function show(io::IO, ity::Input)
+    mode = ity.mode
     if !isempty(mode.params)
         print(io, "{")
     end
     if mode.relative
         print(io, "(")
     end
-    print(io, itype.dom)
+    print(io, ity.dom)
     if mode.relative
         print(io, "...)")
     end
@@ -81,17 +90,18 @@ end
 
 # Predicates and properties.
 
-domain(itype::Input) = itype.dom
-mode(itype::Input) = itype.mode
+domain(ity::Input) = ity.dom
+mode(ity::Input) = ity.mode
 
-isdata(itype::Input) = isdata(itype.dom)
-isany(itype::Input) = isany(itype.dom)
-isunit(itype::Input) = isunit(itype.dom)
-iszero(itype::Input) = iszero(itype.dom)
-isentity(itype::Input) = isentity(itype.dom)
-isrecord(itype::Input) = isentity(itype.dom)
+isdata(ity::Input) = isdata(ity.dom)
+isany(ity::Input) = isany(ity.dom)
+isvoid(ity::Input) = isvoid(ity.dom)
+isnone(ity::Input) = isnone(ity.dom)
+isentity(ity::Input) = isentity(ity.dom)
+isrecord(ity::Input) = isentity(ity.dom)
 
-isfree(itype::Input) = isfree(itype.mode)
-isrelative(itype::Input) = isrelative(itype.mode)
-parameters(itype::Input) = parameters(itype.mode)
+isfree(ity::Input) = isfree(ity.mode)
+isrelative(ity::Input) = isrelative(ity.mode)
+parameters(ity::Input) = parameters(ity.mode)
+parameter(ity::Input, tag::Symbol) = parameter(ity, tag)
 
