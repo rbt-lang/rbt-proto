@@ -32,3 +32,7 @@ Demos
     * TPC-H queries in Rabbit
       (`Julia <https://nbviewer.jupyter.org/github/rbt-lang/rbt-proto/blob/master/jl/demo/tpch-queries.ipynb>`__)
 
+Funding for significant aspects of this work has been provided by
+Prometheus Research, LLC (http://prometheusresearch.com).
+
+(c) 2015-2016 Prometheus Research, LLC
