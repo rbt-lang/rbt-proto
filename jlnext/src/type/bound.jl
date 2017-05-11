@@ -145,22 +145,22 @@ function ibound(imode1::InputMode, imode2::InputMode)
         elseif isempty(imode2.params)
             imode1.params
         else
-            pmap1 = Dict{Symbol,InputParameter}()
+            pmap1 = Dict{Symbol,Output}()
             for p in imode1.params
-                pmap1[p.first] = p
+                pmap1[p.first] = p.second
             end
-            pmap2 = Dict{Symbol,InputParameter}()
+            pmap2 = Dict{Symbol,Output}()
             for p in imode2.params
-                pmap2[p.first] = p
+                pmap2[p.first] = p.second
             end
             ps = InputParameter[]
             for n in sort(unique([collect(keys(pmap1)); collect(keys(pmap2))]))
                 otype =
                     !haskey(pmap1, n) ?
-                        pmap2[n].second :
+                        pmap2[n] :
                     !haskey(pmap2, n) ?
-                        pmap1[n].second :
-                        Output(pmap1[n].second, pmap2[n].second)
+                        pmap1[n] :
+                        ibound(pmap1[n], pmap2[n])
                 push!(ps, n => otype)
             end
             ps
