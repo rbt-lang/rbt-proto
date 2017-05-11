@@ -1,3 +1,5 @@
+#!/usr/bin/env julia
+
 #
 # Executes the sample code in Markdown files.
 #

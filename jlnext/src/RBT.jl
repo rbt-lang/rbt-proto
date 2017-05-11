@@ -12,9 +12,9 @@ include("syntax.jl")
 include("immdict.jl")
 include("type.jl")
 include("data.jl")
-include("tool.jl")
 include("query.jl")
 include("bind.jl")
+include("combinator.jl")
 
 end
 

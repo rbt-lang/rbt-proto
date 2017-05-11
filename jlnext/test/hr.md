@@ -39,94 +39,110 @@ We start with loading the raw data.
     emp_subordinate_data
     #-> Array{Int64,1}[Int64[]  …  Int64[]]
 
-Next, we convert this data to primitive queries.
+Next, we convert this data to query primitives.
 
     using RBT:
-        CollectionTool,
-        Column,
-        MappingTool,
-        Output,
-        setoptional,
-        setplural
+        CollectionQuery,
+        Domain,
+        MappingQuery,
+        decorate
 
-    dept_query = CollectionTool(:Dept, dept_data)
-    #-> Any -> Dept*
+    dept_set =
+        CollectionQuery(
+            Domain(:Dept)
+                |> decorate(:tag => :department)
+                |> decorate(:fmt => :name),
+            dept_data)
+    emp_set =
+        CollectionQuery(
+            Domain(:Emp)
+                |> decorate(:tag => :employee)
+                |> decorate(:fmt => [:name, :department, :position, :salary]),
+            emp_data)
 
-    emp_query = CollectionTool(:Emp, emp_data)
-    #-> Any -> Emp*
+    dept_name_map =
+        MappingQuery(
+            Domain(:Dept),
+            Domain(String)
+                |> decorate(:tag => :name),
+            dept_name_data)
+    dept_employee_map =
+        MappingQuery(
+            Domain(:Dept),
+            Domain(:Emp)
+                |> decorate(:tag => :employee)
+                |> decorate(:fmt => [:name, :position, :salary]),
+            dept_employee_data)
 
-    dept_name_query = MappingTool(:Dept, String, dept_name_data)
-    #-> Dept -> String
+    emp_name_map =
+        MappingQuery(
+            Domain(:Emp),
+            Domain(String)
+                |> decorate(:tag => :name),
+            emp_name_data)
+    emp_position_map =
+        MappingQuery(
+            Domain(:Emp),
+            Domain(String)
+                |> decorate(:tag => :position),
+            emp_position_data)
+    emp_salary_map =
+        MappingQuery(
+            Domain(:Emp),
+            Domain(Int)
+                |> decorate(:tag => :salary),
+            emp_salary_data)
+    emp_department_map =
+        MappingQuery(
+            Domain(:Emp),
+            Domain(:Dept)
+                |> decorate(:tag => :department)
+                |> decorate(:fmt => :name),
+            emp_department_data)
+    emp_manager_map =
+        MappingQuery(
+            Domain(:Emp),
+            Domain(:Emp)
+                |> decorate(:tag => :manager)
+                |> decorate(:fmt => [:name, :position]),
+            emp_manager_data)
+    emp_subordinate_map =
+        MappingQuery(
+            Domain(:Emp),
+            Domain(:Emp)
+                |> decorate(:tag => :employee)
+                |> decorate(:fmt => [:name, :position]),
+            emp_subordinate_data)
 
-    dept_employee_query =
-        MappingTool(:Dept, Output(:Emp) |> setoptional() |> setplural(), dept_employee_data)
-    #-> Dept -> Emp*
-
-    emp_name_query = MappingTool(:Emp, String, emp_name_data)
-    #-> Emp -> String
-
-    emp_position_query = MappingTool(:Emp, String, emp_position_data)
-    #-> Emp -> String
-
-    emp_salary_query = MappingTool(:Emp, Int, emp_salary_data)
-    #-> Emp -> Int64
-
-    emp_department_query = MappingTool(:Emp, :Dept, emp_department_data)
-    #-> Emp -> Dept
-
-    emp_manager_query =
-        MappingTool(:Emp, Output(:Emp) |> setoptional(), emp_manager_data)
-    #-> Emp -> Emp?
-
-    emp_subordinate_query =
-        MappingTool(:Emp, Output(:Emp) |> setoptional() |> setplural(), emp_subordinate_data)
-    #-> Emp -> Emp*
-
-Finally, we will convert the queries to combinators.
+Finally, we register the primitives with the database.
 
     using RBT:
-        Combinator,
-        ThenTag
+        attach!
 
-    Department() = Combinator(dept_query) |> ThenTag(:department)
-    Employee() = Combinator(emp_query) |> ThenTag(:employee)
+    attach!(:department, dept_set)
+    attach!(:employee, emp_set)
 
-    DeptName() = Combinator(dept_name_query) |> ThenTag(:name)
-    DeptEmployee() = Combinator(dept_employee_query) |> ThenTag(:employee)
+    attach!(:name, dept_name_map)
+    attach!(:employee, dept_employee_map)
 
-    EmpName() = Combinator(emp_name_query) |> ThenTag(:name)
-    EmpPosition() = Combinator(emp_position_query) |> ThenTag(:position)
-    EmpSalary() = Combinator(emp_salary_query) |> ThenTag(:salary)
-    EmpDepartment() = Combinator(emp_department_query) |> ThenTag(:department)
-    EmpManager() = Combinator(emp_manager_query) |> ThenTag(:manager)
-    EmpSubordinate() = Combinator(emp_subordinate_query) |> ThenTag(:subordinate)
-
-We also prepare the standard selectors for both entities.
-
-    using RBT:
-        Record
-
-    DeptRecord() = Record(DeptName()) |> ThenTag(:department)
-
-    EmpRecord() =
-        Record(
-            EmpName(),
-            EmpDepartment() |> DeptName() |> ThenTag(:department),
-            EmpPosition(),
-            EmpSalary()) |>
-        ThenTag(:employee)
+    attach!(:name, emp_name_map)
+    attach!(:position, emp_position_map)
+    attach!(:salary, emp_salary_map)
+    attach!(:department, emp_department_map)
+    attach!(:manager, emp_manager_map)
+    attach!(:subordinate, emp_subordinate_map)
 
 
 Extracting data
 ---------------
 
     using RBT:
-        Start,
+        @query,
         execute
 
 *Show the name of each department.*
 
-    q = Start() |> Department() |> DeptName()
+    q = @query(department.name)
     #-> Void -> String[tag=:name]*
 
     display(execute(q))
@@ -142,7 +158,7 @@ Extracting data
 
 *For each department, show the name of each employee.*
 
-    q = Start() |> Department() |> DeptEmployee() |> EmpName()
+    q = @query(department.employee.name)
     #-> Void -> String[tag=:name]*
 
     display(execute(q))
@@ -158,7 +174,7 @@ Extracting data
 
 *Show the name of each employee.*
 
-    q = Start() |> Employee() |> EmpName()
+    q = @query(employee.name)
     #-> Void -> String[tag=:name]*
 
     display(execute(q))
@@ -174,7 +190,7 @@ Extracting data
 
 *For each employee, show the name of their department.*
 
-    q = Start() |> Employee() |> EmpDepartment() |> DeptName()
+    q = @query(employee.department.name)
     #-> Void -> String[tag=:name]*
 
     display(execute(q))
@@ -190,7 +206,7 @@ Extracting data
 
 *Show the position of each employee.*
 
-    q = Start() |> Employee() |> EmpPosition()
+    q = @query(employee.position)
     #-> Void -> String[tag=:position]*
 
     display(execute(q))
@@ -206,32 +222,113 @@ Extracting data
 
 *Show all employees.*
 
-    q = Start() |> Employee()
-    #-> Void -> Emp[tag=:employee]*
+    q = @query(employee)
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    32181-element Array{Emp,1}:
-     Emp(1)
-     Emp(2)
-     Emp(3)
+    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
+     ("JEFFERY A","POLICE","POLICE OFFICER",80778)
+     ("KARINA A","POLICE","POLICE OFFICER",80778)
      ⋮
-     Emp(32180)
-     Emp(32181)
+     ("CARLO Z","POLICE","POLICE OFFICER",86520)
+     ("DARIUSZ Z","DoIT","CHIEF DATA BASE ANALYST",110352)
+    =#
+
+We can also construct the same queries dynamically, using combinator notation.
+
+    using RBT:
+        Field,
+        Query
+
+    Department = Field(:department)
+    Employee = Field(:employee)
+    Name = Field(:name)
+    Position = Field(:position)
+    Salary = Field(:salary)
+    Manager = Field(:manager)
+    Subordinate = Field(:subordinate)
+
+*Show the name of each department.*
+
+    q = Query(Department >> Name)
+    #-> Void -> String[tag=:name]*
+
+    display(execute(q))
+    #=>
+    35-element Array{String,1}:
+     "WATER MGMNT"
+     ⋮
+    =#
+
+*For each department, show the name of each employee.*
+
+    q = Query(Department >> Employee >> Name)
+    #-> Void -> String[tag=:name]*
+
+    display(execute(q))
+    #=>
+    32181-element Array{String,1}:
+     "ELVIA A"
+     ⋮
+    =#
+
+*Show the name of each employee.*
+
+    q = Query(Employee >> Name)
+    #-> Void -> String[tag=:name]*
+
+    display(execute(q))
+    #=>
+    32181-element Array{String,1}:
+     "ELVIA A"
+     ⋮
+    =#
+
+*For each employee, show the name of their department.*
+
+    q = Query(Employee >> Department >> Name)
+    #-> Void -> String[tag=:name]*
+
+    display(execute(q))
+    #=>
+    32181-element Array{String,1}:
+     "WATER MGMNT"
+     ⋮
+    =#
+
+*Show the position of each employee.*
+
+    q = Query(Employee >> Position)
+    #-> Void -> String[tag=:position]*
+
+    display(execute(q))
+    #=>
+    32181-element Array{String,1}:
+     "WATER RATE TAKER"
+     ⋮
+    =#
+
+*Show all employees.*
+
+    q = Query(Employee)
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
+     ⋮
     =#
 
 
 Summarizing data
 ----------------
 
-    using RBT:
-        Count,
-        MaxOf,
-        ThenMax
-
 *Show the number of departments.*
 
-    q = Start() |> Count(Department())
+    q = @query(count(department))
     #-> Void -> Int64
 
     execute(q)
@@ -239,7 +336,7 @@ Summarizing data
 
 *What is the highest employee salary?*
 
-    q = Start() |> MaxOf(Employee() |> EmpSalary())
+    q = @query(max(employee.salary))
     #-> Void -> Int64?
 
     execute(q)
@@ -247,7 +344,7 @@ Summarizing data
 
 *For each department, show the number of employees.*
 
-    q = Start() |> Department() |> Count(DeptEmployee())
+    q = @query(department.count(employee))
     #-> Void -> Int64*
 
     execute(q)
@@ -255,7 +352,45 @@ Summarizing data
 
 *How many employees are in the largest department?*
 
-    q = q |> ThenMax()
+    q = @query(max(department.count(employee)))
+    #-> Void -> Int64?
+
+    execute(q)
+    #-> Nullable{Int64}(13570)
+
+Using combinator notation, these queries could be constructed as follows.
+
+    using RBT:
+        Count,
+        MaxOf
+
+*Show the number of departments.*
+
+    q = Query(Count(Department))
+    #-> Void -> Int64
+
+    execute(q)
+    #-> 35
+
+*What is the highest employee salary?*
+
+    q = Query(MaxOf(Employee >> Salary))
+    #-> Void -> Int64?
+
+    execute(q)
+    #-> Nullable{Int64}(260004)
+
+*For each department, show the number of employees.*
+
+    q = Query(Department >> Count(Employee))
+    #-> Void -> Int64*
+
+    execute(q)
+    #-> [1848,13570,924  …  39,1]
+
+*How many employees are in the largest department?*
+
+    q = Query(MaxOf(q))
     #-> Void -> Int64?
 
     execute(q)
@@ -265,54 +400,64 @@ Summarizing data
 Pipeline notation
 -----------------
 
+*Show the top 10 highest paid employees in the Police department.*
+
+    q = @query(
+        employee
+        :filter(department.name == "POLICE")
+        :sort(salary:desc)
+        :select(name, position, salary)
+        :take(10))
+    #-> Void -> {String[tag=:name], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[10 × {String[tag=:name], String[tag=:position], Int64[tag=:salary]}]:
+     ("GARRY M","SUPERINTENDENT OF POLICE",260004)
+     ("ALFONZA W","FIRST DEPUTY SUPERINTENDENT",197736)
+     ("ROBERT T","CHIEF",194256)
+     ("JOHN E","CHIEF",185364)
+     ("WAYNE G","CHIEF",185364)
+     ("ANTHONY R","CHIEF",185364)
+     ("JUAN R","CHIEF",185364)
+     ("EUGENE W","CHIEF",185364)
+     ("DANA A","DEPUTY CHIEF",170112)
+     ("CONSTANTINE A","DEPUTY CHIEF",170112)
+    =#
+
+We can construct the same query using combinator notation.
+
     using RBT:
-        Const,
-        ThenDesc,
+        Desc,
         ThenFilter,
-        ThenSort,
         ThenSelect,
+        ThenSort,
         ThenTake
 
 *Show the top 10 highest paid employees in the Police department.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenFilter(EmpDepartment() |> DeptName() .== Const("POLICE"))
-        |> ThenSort(EmpSalary() |> ThenDesc())
-        |> ThenSelect(EmpName(), EmpPosition(), EmpSalary())
-        |> ThenTake(Const(10)))
-    #-> Void -> {Emp[tag=:employee], String[tag=:name], String[tag=:position], Int64[tag=:salary]}*
+    q = Query(
+            Employee
+            >> ThenFilter(Department >> Name .== "POLICE")
+            >> ThenSort(Salary >> Desc)
+            >> ThenSelect(Name, Position, Salary)
+            >> ThenTake(10))
+    #-> Void -> {String[tag=:name], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[10 × {Emp[tag=:employee], String[tag=:name], String[tag=:position], Int64[tag=:salary]}]:
-     (Emp(18040),"GARRY M","SUPERINTENDENT OF POLICE",260004)
-     (Emp(31712),"ALFONZA W","FIRST DEPUTY SUPERINTENDENT",197736)
-     (Emp(29026),"ROBERT T","CHIEF",194256)
-     (Emp(8066),"JOHN E","CHIEF",185364)
-     (Emp(11020),"WAYNE G","CHIEF",185364)
-     (Emp(23936),"ANTHONY R","CHIEF",185364)
-     (Emp(24184),"JUAN R","CHIEF",185364)
-     (Emp(31020),"EUGENE W","CHIEF",185364)
-     (Emp(370),"DANA A","DEPUTY CHIEF",170112)
-     (Emp(780),"CONSTANTINE A","DEPUTY CHIEF",170112)
+    DataSet[10 × {String[tag=:name], String[tag=:position], Int64[tag=:salary]}]:
+     ("GARRY M","SUPERINTENDENT OF POLICE",260004)
+     ⋮
     =#
 
 
 Filtering data
 --------------
 
-    using RBT:
-        Const,
-        Record,
-        ThenCount
-
 *Which employees have a salary higher than $150k?*
 
-    q = (Start()
-        |> Employee()
-        |> ThenFilter(EmpSalary() .> Const(150000))
-        |> EmpRecord())
+    q = @query(employee:filter(salary > 150000))
     #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
@@ -328,10 +473,39 @@ Filtering data
 
 *How many departments have more than 1000 employees?*
 
-    q = (Start()
-        |> Department()
-        |> ThenFilter(Count(DeptEmployee()) .> Const(1000))
-        |> ThenCount())
+    q = @query(
+        department
+        :filter(count(employee) > 1000)
+        :count)
+    #-> Void -> Int64
+
+    execute(q)
+    #-> 7
+
+Now, using the combinator notation.
+
+    using RBT:
+        ThenCount,
+        ThenFilter
+
+*Which employees have a salary higher than $150k?*
+
+    q = Query(Employee >> ThenFilter(Salary .> 150000))
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[151 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("DANA A","POLICE","DEPUTY CHIEF",170112)
+     ⋮
+    =#
+
+*How many departments have more than 1000 employees?*
+
+    q = Query(
+            Department
+            >> ThenFilter(Count(Employee) .> 1000)
+            >> ThenCount)
     #-> Void -> Int64
 
     execute(q)
@@ -341,15 +515,9 @@ Filtering data
 Sorting and paginating data
 ---------------------------
 
-    using RBT:
-        Op
-
 *Show the names of all departments in alphabetical order.*
 
-    q = (Start()
-        |> Department()
-        |> DeptName()
-        |> ThenSort())
+    q = @query(sort(department.name))
     #-> Void -> String[tag=:name]*
 
     display(execute(q))
@@ -365,10 +533,7 @@ Sorting and paginating data
 
 *Show all employees ordered by salary.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenSort(EmpSalary())
-        |> EmpRecord())
+    q = @query(employee:sort(salary))
     #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
@@ -384,10 +549,7 @@ Sorting and paginating data
 
 *Show all employees ordered by salary, highest paid first.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenSort(EmpSalary() |> ThenDesc())
-        |> EmpRecord())
+    q = @query(employee:sort(salary:desc))
     #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
@@ -403,14 +565,10 @@ Sorting and paginating data
 
 *Who are the top 1% of the highest paid employees?*
 
-    Base.div(F::Combinator, G::Combinator) =
-        Op(div, (Int, Int), Int, F, G)
-
-    q = (Start()
-        |> Employee()
-        |> ThenSort(EmpSalary() |> ThenDesc())
-        |> ThenTake(Count(Employee()) ÷ Const(100))
-        |> EmpRecord())
+    q = @query(
+        employee
+        :sort(salary:desc)
+        :take(count(employee) ÷ 100))
     #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
@@ -424,59 +582,153 @@ Sorting and paginating data
      ("MARJORIE B","FIRE","PARAMEDIC FIELD CHIEF",135480)
     =#
 
+Using combinator notation.
+
+*Show the names of all departments in alphabetical order.*
+
+    using RBT:
+        Sort
+
+    q = Query(Sort(Department >> Name))
+    #-> Void -> String[tag=:name]*
+
+    display(execute(q))
+    #=>
+    35-element Array{String,1}:
+     "ADMIN HEARNG"
+     ⋮
+    =#
+
+*Show all employees ordered by salary.*
+
+    q = Query(Employee >> ThenSort(Salary))
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("STEVEN K","MAYOR'S OFFICE","ADMINISTRATIVE SECRETARY",1)
+     ⋮
+    =#
+
+*Show all employees ordered by salary, highest paid first.*
+
+    q = Query(Employee >> ThenSort(Salary >> Desc))
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
+     ⋮
+    =#
+
+*Who are the top 1% of the highest paid employees?*
+
+    q = Query(
+            Employee
+            >> ThenSort(Salary >> Desc)
+            >> ThenTake(Count(Employee) .÷ 100))
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[321 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
+     ⋮
+    =#
+
 
 Query output
 ------------
+
+*For each department, show its name and the number of employees.*
+
+    q = @query(
+        department
+        :select(
+            name,
+            size => count(employee)))
+    #-> Void -> {String[tag=:name], Int64[tag=:size]}[tag=:department]*
+
+    display(execute(q))
+    #=>
+    DataSet[35 × {String[tag=:name], Int64[tag=:size]}]:
+     ("WATER MGMNT",1848)
+     ("POLICE",13570)
+     ("GENERAL SERVICES",924)
+     ⋮
+     ("ADMIN HEARNG",39)
+     ("LICENSE APPL COMM",1)
+    =#
+
+*For every department, show the top salary and a list of managers with their
+salaries.*
+
+    q = @query(
+        department
+        :select(
+            name,
+            top_salary =>
+                max(employee.salary),
+            manager =>
+                employee
+                :filter(exists(subordinate))
+                :select(name, salary)))
+    #-> Void -> {String[tag=:name], Int64[tag=:top_salary]?, {String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}[tag=:department]*
+
+    display(execute(q))
+    #=>
+    DataSet[35 × {String[tag=:name], Int64[tag=:top_salary]?, {String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}]:
+     ("WATER MGMNT",169512,[])
+     ("POLICE",260004,[])
+     ("GENERAL SERVICES",157092,[])
+     ⋮
+     ("ADMIN HEARNG",156420,[])
+     ("LICENSE APPL COMM",69888,[])
+    =#
+
+Using combinator notation.
 
     using RBT:
         Exists
 
 *For each department, show its name and the number of employees.*
 
-    q = (Start()
-        |> Department()
-        |> ThenSelect(
-                DeptName(),
-                Count(DeptEmployee()) |> ThenTag(:size)))
-    #-> Void -> {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}*
+    q = Query(
+            Department
+            >> ThenSelect(
+                Name,
+                :size => Count(Employee)))
+    #-> Void -> {String[tag=:name], Int64[tag=:size]}[tag=:department]*
 
     display(execute(q))
     #=>
-    DataSet[35 × {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}]:
-     (Dept(1),"WATER MGMNT",1848)
-     (Dept(2),"POLICE",13570)
-     (Dept(3),"GENERAL SERVICES",924)
+    DataSet[35 × {String[tag=:name], Int64[tag=:size]}]:
+     ("WATER MGMNT",1848)
      ⋮
-     (Dept(34),"ADMIN HEARNG",39)
-     (Dept(35),"LICENSE APPL COMM",1)
     =#
 
 *For every department, show the top salary and a list of managers with their
 salaries.*
 
-    q = (Start()
-        |> Department()
-        |> ThenSelect(
-                DeptName(),
-                DeptEmployee()
-                |> EmpSalary()
-                |> ThenMax()
-                |> ThenTag(:top_salary),
-                DeptEmployee()
-                |> ThenFilter(Exists(EmpSubordinate()))
-                |> ThenSelect(EmpName(), EmpSalary())
-                |> ThenTag(:manager)))
-    #-> Void -> {Dept[tag=:department], String[tag=:name], Int64[tag=:top_salary]?, {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}*
+    q = Query(
+            Department
+            >> ThenSelect(
+                Name,
+                :top_salary =>
+                    MaxOf(Employee >> Salary),
+                :manager =>
+                    Employee
+                    >> ThenFilter(Exists(Subordinate))
+                    >> ThenSelect(Name, Salary)))
+    #-> Void -> {String[tag=:name], Int64[tag=:top_salary]?, {String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}[tag=:department]*
 
     display(execute(q))
     #=>
-    DataSet[35 × {Dept[tag=:department], String[tag=:name], Int64[tag=:top_salary]?, {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}]:
-     (Dept(1),"WATER MGMNT",169512,[])
-     (Dept(2),"POLICE",260004,[])
-     (Dept(3),"GENERAL SERVICES",157092,[])
+    DataSet[35 × {String[tag=:name], Int64[tag=:top_salary]?, {String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}]:
+     ("WATER MGMNT",169512,[])
      ⋮
-     (Dept(34),"ADMIN HEARNG",156420,[])
-     (Dept(35),"LICENSE APPL COMM",69888,[])
     =#
 
 
@@ -485,37 +737,52 @@ Query aliases
 
 *Show the top 3 largest departments and their sizes.*
 
-    DeptSize() = Count(DeptEmployee()) |> ThenTag(:size)
-
-    q = (Start()
-        |> Department()
-        |> ThenSort(DeptSize() |> ThenDesc())
-        |> ThenSelect(DeptName(), DeptSize())
-        |> ThenTake(Const(3)))
-    #-> Void -> {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}*
+    q = @query(
+        department
+        :define(size => count(employee))
+        :sort(size:desc)
+        :select(name, size)
+        :take(3))
+    #-> Void -> {String[tag=:name], Int64[tag=:size]}[tag=:department]*
 
     display(execute(q))
     #=>
-    DataSet[3 × {Dept[tag=:department], String[tag=:name], Int64[tag=:size]}]:
-     (Dept(2),"POLICE",13570)
-     (Dept(7),"FIRE",4875)
-     (Dept(5),"STREETS & SAN",2090)
+    DataSet[3 × {String[tag=:name], Int64[tag=:size]}]:
+     ("POLICE",13570)
+     ("FIRE",4875)
+     ("STREETS & SAN",2090)
+    =#
+
+In pure Julia code, we can use regular variables.
+
+*Show the top 3 largest departments and their sizes.*
+
+    Size = Count(Employee)
+
+    q = Query(
+            Department
+            >> ThenSort(Size >> Desc)
+            >> ThenSelect(Name, :size => Size)
+            >> ThenTake(3))
+    #-> Void -> {String[tag=:name], Int64[tag=:size]}[tag=:department]*
+
+    display(execute(q))
+    #=>
+    DataSet[3 × {String[tag=:name], Int64[tag=:size]}]:
+     ("POLICE",13570)
+     ("FIRE",4875)
+     ("STREETS & SAN",2090)
     =#
 
 
 Hierarchical relationships
 --------------------------
 
-    using RBT:
-        AnyOf,
-        Connect
-
 *Find all employees whose salary is higher than the salary of their manager.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenFilter(EmpSalary() .> (EmpManager() |> EmpSalary()))
-        |> EmpRecord())
+    q = @query(
+        employee
+        :filter(salary > manager.salary))
     #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
@@ -526,11 +793,9 @@ Hierarchical relationships
 
 *Find all direct and indirect subordinates of the City Treasurer.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenFilter(
-                AnyOf((Connect(EmpManager()) |> EmpPosition()) .== Const("CITY TREASURER")))
-        |> EmpRecord())
+    q = @query(
+        employee
+        :filter(any(connect(manager).position == "CITY TREASURER")))
     #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
@@ -544,203 +809,353 @@ Hierarchical relationships
      ("ALEXANDRA S","TREASURER","DEPUTY CITY TREASURER",90000)
     =#
 
+Using combinators.
+
+    using RBT:
+        AnyOf,
+        Connect
+
+*Find all employees whose salary is higher than the salary of their manager.*
+
+    q = Query(
+            Employee
+            >> ThenFilter(Salary .> Manager >> Salary))
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[1 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("BRIAN L","TREASURER","AUDITOR IV",114492)
+    =#
+
+*Find all direct and indirect subordinates of the City Treasurer.*
+
+    q = Query(
+            Employee
+            >> ThenFilter(AnyOf(Connect(Manager) >> Position .== "CITY TREASURER")))
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[23 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("SAEED A","TREASURER","ASST CITY TREASURER",85020)
+     ⋮
+    =#
+
 
 Quotient classes
 ----------------
 
-    using RBT:
-        Field,
-        MeanOf,
-        ThenConnect,
-        ThenGroup,
-        ThenRollUp,
-        ThenUnique
-
 *Show all departments, and, for each department, list the associated
 employees.*
 
-    q = (Start()
-        |> Department()
-        |> ThenSelect(
-                DeptName(),
-                DeptEmployee()))
-    #-> Void -> {Dept[tag=:department], String[tag=:name], Emp[tag=:employee]*}*
+    q = @query(
+        department
+        :select(name, employee))
+    #-> Void -> {String[tag=:name], {String[tag=:name], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*}[tag=:department]*
 
     display(execute(q))
     #=>
-    DataSet[35 × {Dept[tag=:department], String[tag=:name], Emp[tag=:employee]*}]:
-     (Dept(1),"WATER MGMNT",Emp[Emp(1)  …  Emp(32171)])
-     (Dept(2),"POLICE",Emp[Emp(2)  …  Emp(32180)])
-     (Dept(3),"GENERAL SERVICES",Emp[Emp(4)  …  Emp(32177)])
+    DataSet[35 × {String[tag=:name], {String[tag=:name], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*}]:
+     ("WATER MGMNT",[("ELVIA A","WATER RATE TAKER",88968)  …  ("THOMAS Z","POOL MOTOR TRUCK DRIVER",71781)])
+     ("POLICE",[("JEFFERY A","POLICE OFFICER",80778)  …  ("CARLO Z","POLICE OFFICER",86520)])
+     ("GENERAL SERVICES",[("KIMBERLEI A","CHIEF CONTRACT EXPEDITER",84780)  …  ("MICHAEL Z","FRM OF MACHINISTS - AUTOMOTIVE",97448)])
      ⋮
-     (Dept(34),"ADMIN HEARNG",Emp[Emp(2813)  …  Emp(31533)])
-     (Dept(35),"LICENSE APPL COMM",Emp[Emp(11126)])
+     ("ADMIN HEARNG",[("JAMIE B","ADMINISTRATIVE ASST II",63708)  …  ("RACHENETTE W","ADMINISTRATIVE ASST II",58020)])
+     ("LICENSE APPL COMM",[("MICHELLE G","STAFF ASST",69888)])
     =#
 
 *Show all positions, and, for each position, list the associated employees.*
 
-    PosPosition() = Field(:position)
-    PosEmployee() = Field(:employee)
-
-    q = (Start()
-        |> Employee()
-        |> ThenGroup(EmpPosition())
-        |> ThenSelect(
-                PosPosition(),
-                PosEmployee()))
-    #-> Void -> {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Emp[tag=:employee]+}*
+    q = @query(
+        employee
+        :group(position)
+        :select(position, employee))
+    #-> Void -> {String[tag=:position], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}*
 
     display(execute(q))
     #=>
-    DataSet[1094 × {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Emp[tag=:employee]+}]:
-     ((Emp[Emp(8293)],"1ST DEPUTY INSPECTOR GENERAL"),"1ST DEPUTY INSPECTOR GENERAL",Emp[Emp(8293)])
-     ((Emp[Emp(10877)],"A/MGR COM SVC-ELECTIONS"),"A/MGR COM SVC-ELECTIONS",Emp[Emp(10877)])
-     ((Emp[Emp(29045)],"A/MGR OF MIS-ELECTIONS"),"A/MGR OF MIS-ELECTIONS",Emp[Emp(29045)])
+    DataSet[1094 × {String[tag=:position], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}]:
+     ("1ST DEPUTY INSPECTOR GENERAL",[("SHARON F","INSPECTOR GEN","1ST DEPUTY INSPECTOR GENERAL",137052)])
+     ("A/MGR COM SVC-ELECTIONS",[("LAURA G","BOARD OF ELECTION","A/MGR COM SVC-ELECTIONS",99816)])
+     ("A/MGR OF MIS-ELECTIONS",[("TIEN T","BOARD OF ELECTION","A/MGR OF MIS-ELECTIONS",94932)])
      ⋮
-     ((Emp[Emp(23375)],"ZONING INVESTIGATOR"),"ZONING INVESTIGATOR",Emp[Emp(23375)])
-     ((Emp[Emp(1594)  …  Emp(12339)],"ZONING PLAN EXAMINER"),"ZONING PLAN EXAMINER",Emp[Emp(1594)  …  Emp(12339)])
+     ("ZONING INVESTIGATOR",[("CARLOS R","COMMUNITY DEVELOPMENT","ZONING INVESTIGATOR",97596)])
+     ("ZONING PLAN EXAMINER",[("KYLE B","COMMUNITY DEVELOPMENT","ZONING PLAN EXAMINER",50004)  …  ("JANICE H","COMMUNITY DEVELOPMENT","ZONING PLAN EXAMINER",69888)])
     =#
 
 *In the Police department, show all positions with the number of employees and
 the top salary.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenFilter(EmpDepartment() |> DeptName() .== Const("POLICE"))
-        |> ThenGroup(EmpPosition())
-        |> ThenSelect(
-                PosPosition(),
-                Count(PosEmployee()),
-                MaxOf(PosEmployee() |> EmpSalary())))
-    #-> Void -> {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Int64, Int64}*
+    q = @query(
+        employee
+        :filter(department.name == "POLICE")
+        :group(position)
+        :select(
+            position,
+            count(employee),
+            max(employee.salary)))
+    #-> Void -> {String[tag=:position], Int64, Int64}*
 
     display(execute(q))
     #=>
-    DataSet[129 × {{Emp[tag=:employee]+, String[tag=:position]}, String[tag=:position], Int64, Int64}]:
-     ((Emp[Emp(26755)],"ACCOUNTANT I"),"ACCOUNTANT I",1,72840)
-     ((Emp[Emp(7319),Emp(28313)],"ACCOUNTANT II"),"ACCOUNTANT II",2,80424)
-     ((Emp[Emp(6681)],"ACCOUNTANT III"),"ACCOUNTANT III",1,65460)
+    DataSet[129 × {String[tag=:position], Int64, Int64}]:
+     ("ACCOUNTANT I",1,72840)
+     ("ACCOUNTANT II",2,80424)
+     ("ACCOUNTANT III",1,65460)
      ⋮
-     ((Emp[Emp(13404)  …  Emp(30503)],"WARRANT AND EXTRADITION AIDE"),"WARRANT AND EXTRADITION AIDE",5,80328)
-     ((Emp[Emp(28702),Emp(30615)],"YOUTH SERVICES COORD"),"YOUTH SERVICES COORD",2,80916)
+     ("WARRANT AND EXTRADITION AIDE",5,80328)
+     ("YOUTH SERVICES COORD",2,80916)
     =#
 
 *Arrange employees into a hierarchy: first by position, then by department.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenGroup(EmpPosition())
-        |> ThenSelect(
-                Field(:position),
-                Field(:employee)
-                |> ThenGroup(EmpDepartment())
-                |> ThenSelect(
-                        Field(:department) |> DeptName(),
-                        Field(:employee))))
-    #-> Void -> {{  …  }, String[tag=:position], {{  …  }, String[tag=:name], Emp[tag=:employee]+}+}*
+    q = @query(
+        employee
+        :group(position)
+        :select(
+            position,
+            employee
+            :group(department)
+            :select(department.name, employee)))
+    #-> Void -> {String[tag=:position], {String[tag=:name], {  …  }[tag=:employee]+}+}*
 
     display(execute(q))
     #=>
-    DataSet[1094 × {{  …  }, String[tag=:position], {{  …  }, String[tag=:name], Emp[tag=:employee]+}+}]:
-     ((  …  ),"1ST DEPUTY INSPECTOR GENERAL",[((  …  ),"INSPECTOR GEN",Emp[Emp(8293)])])
-     ((  …  ),"A/MGR COM SVC-ELECTIONS",[((  …  ),"BOARD OF ELECTION",Emp[Emp(10877)])])
-     ((  …  ),"A/MGR OF MIS-ELECTIONS",[((  …  ),"BOARD OF ELECTION",Emp[Emp(29045)])])
+    DataSet[1094 × {String[tag=:position], {String[tag=:name], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}+}]:
+     ("1ST DEPUTY INSPECTOR GENERAL",[("INSPECTOR GEN",[("SHARON F","INSPECTOR GEN","1ST DEPUTY INSPECTOR GENERAL",137052)])])
+     ("A/MGR COM SVC-ELECTIONS",[("BOARD OF ELECTION",[("LAURA G","BOARD OF ELECTION","A/MGR COM SVC-ELECTIONS",99816)])])
+     ("A/MGR OF MIS-ELECTIONS",[("BOARD OF ELECTION",[("TIEN T","BOARD OF ELECTION","A/MGR OF MIS-ELECTIONS",94932)])])
      ⋮
-     ((  …  ),"ZONING INVESTIGATOR",[((  …  ),"COMMUNITY DEVELOPMENT",Emp[Emp(23375)])])
-     ((  …  ),"ZONING PLAN EXAMINER",[((  …  ),"COMMUNITY DEVELOPMENT",Emp[Emp(1594)  …  Emp(12339)])])
+     ("ZONING INVESTIGATOR",[("COMMUNITY DEVELOPMENT",[("CARLOS R","COMMUNITY DEVELOPMENT","ZONING INVESTIGATOR",97596)])])
+     ("ZONING PLAN EXAMINER",[("COMMUNITY DEVELOPMENT",[("KYLE B","COMMUNITY DEVELOPMENT","ZONING PLAN EXAMINER",50004)  …  ("JANICE H","COMMUNITY DEVELOPMENT","ZONING PLAN EXAMINER",69888)])])
     =#
 
 *Show all positions available in more than one department, and, for each
 position, list the respective departments.*
 
-    PosDepartment() =
-        PosEmployee() |> EmpDepartment() |> ThenUnique()
-
-    q = (Start()
-        |> Employee()
-        |> ThenGroup(EmpPosition())
-        |> ThenFilter(Count(PosDepartment()) .> Const(1))
-        |> ThenSelect(
-                PosPosition(),
-                PosDepartment() |> DeptName()))
-    #-> Void -> {{  …  }, String[tag=:position], String[tag=:name]+}*
+    q = @query(
+        employee
+        :group(position)
+        :define(department => unique(employee.department))
+        :filter(count(department) > 1)
+        :select(position, department.name))
+    #-> Void -> {String[tag=:position], String[tag=:name]+}*
 
     display(execute(q))
     #=>
-    DataSet[261 × {{  …  }, String[tag=:position], String[tag=:name]+}]:
-     ((  …  ),"ACCOUNTANT I",String["TREASURER","FINANCE","PUBLIC LIBRARY","POLICE"])
-     ((  …  ),"ACCOUNTANT II",String["FINANCE","FAMILY & SUPPORT"  …  "PUBLIC LIBRARY"])
-     ((  …  ),"ACCOUNTANT III",String["FAMILY & SUPPORT","PUBLIC LIBRARY"  …  "BUSINESS AFFAIRS"])
+    DataSet[261 × {String[tag=:position], String[tag=:name]+}]:
+     ("ACCOUNTANT I",String["TREASURER","FINANCE","PUBLIC LIBRARY","POLICE"])
+     ("ACCOUNTANT II",String["FINANCE","FAMILY & SUPPORT"  …  "PUBLIC LIBRARY"])
+     ("ACCOUNTANT III",String["FAMILY & SUPPORT","PUBLIC LIBRARY"  …  "BUSINESS AFFAIRS"])
      ⋮
-     ((  …  ),"WATCHMAN",String["GENERAL SERVICES","WATER MGMNT"])
-     ((  …  ),"YOUTH SERVICES COORD",String["FAMILY & SUPPORT","POLICE"])
+     ("WATCHMAN",String["GENERAL SERVICES","WATER MGMNT"])
+     ("YOUTH SERVICES COORD",String["FAMILY & SUPPORT","POLICE"])
     =#
 
 *How many employees at each level of the organization chart?*
 
-    EmpLevel() = EmpManager() |> ThenConnect() |> ThenCount() |> ThenTag(:level)
-
-    q = (Start()
-        |> Employee()
-        |> ThenGroup(EmpLevel())
-        |> ThenSelect(
-                Field(:level),
-                Count(Field(:employee))))
-    #-> Void -> {{  …  }, Int64[tag=:level], Int64}*
+    q = @query(
+        employee
+        :group(level => count(connect(manager)))
+        :select(level, count(employee)))
+    #-> Void -> {Int64[tag=:level], Int64}*
 
     display(execute(q))
     #=>
-    DataSet[3 × {{  …  }, Int64[tag=:level], Int64}]:
-     ((  …  ),0,32158)
-     ((  …  ),1,17)
-     ((  …  ),2,6)
+    DataSet[3 × {Int64[tag=:level], Int64}]:
+     (0,32158)
+     (1,17)
+     (2,6)
     =#
 
 *Show the average salary by department and position, with subtotals for each
 department and the grand total.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenRollUp(EmpDepartment(), EmpPosition())
-        |> ThenSelect(
-                Field(:department) |> DeptRecord(),
-                Field(:position),
-                MeanOf(Field(:employee) |> EmpSalary())))
-    #-> Void -> {{  …  }, {String[tag=:name]}[tag=:department]?, String[tag=:position]?, Float64}*
+    q = @query(
+        employee
+        :rollup(department, position)
+        :select(
+            department,
+            position,
+            mean(employee.salary)))
+    #-> Void -> {String[tag=:department]?, String[tag=:position]?, Float64}*
 
     display(execute(q))
     #=>
-    DataSet[2001 × {{  …  }, {String[tag=:name]}[tag=:department]?, String[tag=:position]?, Float64}]:
-     ((  …  ),("WATER MGMNT",),"ACCOUNTANT IV",95880.0)
-     ((  …  ),("WATER MGMNT",),"ACCOUNTING TECHNICIAN I",63708.0)
-     ((  …  ),("WATER MGMNT",),"ACCOUNTING TECHNICIAN III",66684.0)
+    DataSet[2001 × {String[tag=:department]?, String[tag=:position]?, Float64}]:
+     ("WATER MGMNT","ACCOUNTANT IV",95880.0)
+     ("WATER MGMNT","ACCOUNTING TECHNICIAN I",63708.0)
+     ("WATER MGMNT","ACCOUNTING TECHNICIAN III",66684.0)
      ⋮
-     ((  …  ),("LICENSE APPL COMM",),#NULL,69888.0)
-     ((  …  ),#NULL,#NULL,79167.5)
+     ("LICENSE APPL COMM",#NULL,69888.0)
+     (#NULL,#NULL,79167.5)
+    =#
+
+Using combinator notation.
+
+    using RBT:
+        MeanOf,
+        ThenGroup,
+        ThenRollUp,
+        Unique
+
+*Show all departments, and, for each department, list the associated
+employees.*
+
+    q = Query(
+            Department
+            >> ThenSelect(Name, Employee))
+    #-> Void -> {String[tag=:name], {String[tag=:name], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*}[tag=:department]*
+
+    display(execute(q))
+    #=>
+    DataSet[35 × {String[tag=:name], {String[tag=:name], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*}]:
+     ("WATER MGMNT",[("ELVIA A","WATER RATE TAKER",88968)  …  ("THOMAS Z","POOL MOTOR TRUCK DRIVER",71781)])
+     ⋮
+    =#
+
+*Show all positions, and, for each position, list the associated employees.*
+
+    q = Query(
+            Employee
+            >> ThenGroup(Position)
+            >> ThenSelect(Position, Employee))
+    #-> Void -> {String[tag=:position], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}*
+
+    display(execute(q))
+    #=>
+    DataSet[1094 × {String[tag=:position], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}]:
+     ("1ST DEPUTY INSPECTOR GENERAL",[("SHARON F","INSPECTOR GEN","1ST DEPUTY INSPECTOR GENERAL",137052)])
+     ⋮
+    =#
+
+*In the Police department, show all positions with the number of employees and
+the top salary.*
+
+    q = Query(
+            Employee
+            >> ThenFilter(Department >> Name .== "POLICE")
+            >> ThenGroup(Position)
+            >> ThenSelect(
+                Position,
+                Count(Employee),
+                MaxOf(Employee >> Salary)))
+    #-> Void -> {String[tag=:position], Int64, Int64}*
+
+    display(execute(q))
+    #=>
+    DataSet[129 × {String[tag=:position], Int64, Int64}]:
+     ("ACCOUNTANT I",1,72840)
+     ⋮
+    =#
+
+*Arrange employees into a hierarchy: first by position, then by department.*
+
+    q = Query(
+            Employee
+            >> ThenGroup(Position)
+            >> ThenSelect(
+                Position,
+                Employee
+                >> ThenGroup(Department)
+                >> ThenSelect(Department >> Name, Employee)))
+    #-> Void -> {String[tag=:position], {String[tag=:name], {  …  }[tag=:employee]+}+}*
+
+    display(execute(q))
+    #=>
+    DataSet[1094 × {String[tag=:position], {String[tag=:name], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}+}]:
+     ("1ST DEPUTY INSPECTOR GENERAL",[("INSPECTOR GEN",[("SHARON F","INSPECTOR GEN","1ST DEPUTY INSPECTOR GENERAL",137052)])])
+     ⋮
+    =#
+
+*Show all positions available in more than one department, and, for each
+position, list the respective departments.*
+
+    UniqueDepartment = Unique(Employee >> Department)
+
+    q = Query(
+            Employee
+            >> ThenGroup(Position)
+            >> ThenFilter(Count(UniqueDepartment) .> 1)
+            >> ThenSelect(Position, UniqueDepartment >> Name))
+    #-> Void -> {String[tag=:position], String[tag=:name]+}*
+
+    display(execute(q))
+    #=>
+    DataSet[261 × {String[tag=:position], String[tag=:name]+}]:
+     ("ACCOUNTANT I",String["TREASURER","FINANCE","PUBLIC LIBRARY","POLICE"])
+     ⋮
+    =#
+
+*How many employees at each level of the organization chart?*
+
+    Level = Field(:level)
+
+    q = Query(
+            Employee
+            >> ThenGroup(:level => Count(Connect(Manager)))
+            >> ThenSelect(Level, Count(Employee)))
+    #-> Void -> {Int64[tag=:level], Int64}*
+
+    display(execute(q))
+    #=>
+    DataSet[3 × {Int64[tag=:level], Int64}]:
+     (0,32158)
+     (1,17)
+     (2,6)
+    =#
+
+*Show the average salary by department and position, with subtotals for each
+department and the grand total.*
+
+    q = Query(
+            Employee
+            >> ThenRollUp(Department, Position)
+            >> ThenSelect(
+                Department,
+                Position,
+                MeanOf(Employee >> Salary)))
+    #-> Void -> {String[tag=:department]?, String[tag=:position]?, Float64}*
+
+    display(execute(q))
+    #=>
+    DataSet[2001 × {String[tag=:department]?, String[tag=:position]?, Float64}]:
+     ("WATER MGMNT","ACCOUNTANT IV",95880.0)
+     ⋮
     =#
 
 
 Query context
 -------------
 
-    using RBT:
-        Given,
-        HereAndAround,
-        HereAndBefore,
-        Parameter,
-        SumOf,
-        ThenFrame
+*Show all employees in the given department D with the salary higher than S,
+where D = "POLICE", S = 150000.*
+
+    q = @query(
+        employee
+        :filter(department.name == D && salary > S)
+        :given(D => "POLICE", S => 150000))
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[62 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("DANA A","POLICE","DEPUTY CHIEF",170112)
+     ("CONSTANTINE A","POLICE","DEPUTY CHIEF",170112)
+     ("KENNETH A","POLICE","COMMANDER",162684)
+     ⋮
+     ("ALFONZA W","POLICE","FIRST DEPUTY SUPERINTENDENT",197736)
+     ("GARY Y","POLICE","COMMANDER",162684)
+    =#
 
 *Show all employees in the given department D with the salary higher than S,
 where D = "POLICE", S = 150000.*
 
-    D() = Parameter(:D, String)
-    S() = Parameter(:S, Int)
-
-    q = (Start()
-        |> Employee()
-        |> ThenFilter((EmpDepartment() |> DeptName() .== D()) & (EmpSalary() .> S()))
-        |> EmpRecord())
+    q = @query(
+        employee
+        :filter(department.name == D && salary > S),
+        D::String, S::Int)
     #-> {Void, D => String, S => Int64} -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q, D="POLICE", S=150000))
@@ -756,13 +1171,10 @@ where D = "POLICE", S = 150000.*
 
 *Which employees have higher than average salary?*
 
-    MS() = Parameter(:MS, Output(Float64) |> setoptional())
-
-    q = (Start()
-        |> Employee()
-        |> ThenFilter(EmpSalary() .> MS())
-        |> EmpRecord()
-        |> Given(MeanOf(Employee() |> EmpSalary()) |> ThenTag(:MS)))
+    q = @query(
+        employee
+        :filter(salary > MS)
+        :given(MS => mean(employee.salary)))
     #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
@@ -778,11 +1190,10 @@ where D = "POLICE", S = 150000.*
 
 *Which employees have higher than average salary?*
 
-    q = (Start()
-        |> Employee()
-        |> ThenTake(Const(100))     # FIXME
-        |> ThenFilter(EmpSalary() .> MeanOf(HereAndAround() |> EmpSalary()))
-        |> EmpRecord())
+    q = @query(
+        employee
+        :take(100)
+        :filter(salary > mean(around.salary)))
     #-> (Void...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
@@ -797,12 +1208,11 @@ where D = "POLICE", S = 150000.*
 *In the Police department, show employees whose salary is higher than the
 average for their position.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenTake(Const(100))     # FIXME
-        |> ThenFilter(EmpDepartment() |> DeptName() .== Const("POLICE"))
-        |> ThenFilter(EmpSalary() .> MeanOf(HereAndAround(EmpPosition()) |> EmpSalary()))
-        |> EmpRecord())
+    q = @query(
+        employee
+        :take(100)
+        :filter(department.name == "POLICE")
+        :filter(salary > mean(around(position).salary)))
     #-> (Void...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
 
     display(execute(q))
@@ -816,49 +1226,178 @@ average for their position.*
 
 *Show a numbered list of employees and their salaries along with the running total.*
 
-    q = (Start()
-        |> Employee()
-        |> ThenTake(Const(100))     # FIXME
-        |> ThenSelect(
-                Count(HereAndBefore()) |> ThenTag(:no),
-                EmpName(),
-                EmpSalary(),
-                SumOf(HereAndBefore() |> EmpSalary()) |> ThenTag(:total)))
-    #-> (Void...) -> {Emp[tag=:employee], Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}*
+    q = @query(
+        employee
+        :take(100)
+        :select(
+            no => count(before),
+            name,
+            salary,
+            total => sum(before.salary)))
+    #-> (Void...) -> {Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}[tag=:employee]*
 
     display(execute(q))
     #=>
-    DataSet[100 × {Emp[tag=:employee], Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}]:
-     (Emp(1),1,"ELVIA A",88968,88968)
-     (Emp(2),2,"JEFFERY A",80778,169746)
-     (Emp(3),3,"KARINA A",80778,250524)
+    DataSet[100 × {Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}]:
+     (1,"ELVIA A",88968,88968)
+     (2,"JEFFERY A",80778,169746)
+     (3,"KARINA A",80778,250524)
      ⋮
     =#
 
 *For each department, show employee salaries along with the running total; the
 total should be reset at the department boundary.*
 
-    q = (Start()
-        |> Department()
-        |> ThenSelect(
-                DeptName(),
-                DeptEmployee()
-                |> ThenTake(Const(100))     # FIXME
-                |> ThenSelect(
-                        EmpName(),
-                        EmpSalary(),
-                        SumOf(HereAndBefore() |> EmpSalary()))
-                |> ThenFrame()))
-    #-> Void -> {Dept[tag=:department], String[tag=:name], {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary], Int64}*}*
+    q = @query(
+        department
+        :select(
+            name,
+            employee
+            :take(100)
+            :select(name, salary, sum(before.salary))
+            :frame))
+    #-> Void -> {String[tag=:name], {String[tag=:name], Int64[tag=:salary], Int64}[tag=:employee]*}[tag=:department]*
 
     display(execute(q))
     #=>
-    DataSet[35 × {Dept[tag=:department], String[tag=:name], {Emp[tag=:employee], String[tag=:name], Int64[tag=:salary], Int64}*}]:
-     (Dept(1),"WATER MGMNT",[(Emp(1),"ELVIA A",88968,88968),(Emp(5),"VICENTE A",104736,193704)  …  ])
-     (Dept(2),"POLICE",[(Emp(2),"JEFFERY A",80778,80778),(Emp(3),"KARINA A",80778,161556)  …  ])
-     (Dept(3),"GENERAL SERVICES",[(Emp(4),"KIMBERLEI A",84780,84780),(Emp(23),"RASHAD A",91520,176300)  …  ])
+    DataSet[35 × {String[tag=:name], {String[tag=:name], Int64[tag=:salary], Int64}[tag=:employee]*}]:
+     ("WATER MGMNT",[("ELVIA A",88968,88968),("VICENTE A",104736,193704)  …  ])
+     ("POLICE",[("JEFFERY A",80778,80778),("KARINA A",80778,161556)  …  ])
+     ("GENERAL SERVICES",[("KIMBERLEI A",84780,84780),("RASHAD A",91520,176300)  …  ])
      ⋮
-     (Dept(34),"ADMIN HEARNG",[(Emp(2813),"JAMIE B",63708,63708),(Emp(3020),"ELOUISE B",66684,130392)  …  ])
-     (Dept(35),"LICENSE APPL COMM",[(Emp(11126),"MICHELLE G",69888,69888)])
+     ("ADMIN HEARNG",[("JAMIE B",63708,63708),("ELOUISE B",66684,130392)  …  ])
+     ("LICENSE APPL COMM",[("MICHELLE G",69888,69888)])
+    =#
+
+Using combinator notation.
+
+    using RBT:
+        Around,
+        Before,
+        Given,
+        Parameter,
+        SumOf,
+        ThenFrame
+
+*Show all employees in the given department D with the salary higher than S,
+where D = "POLICE", S = 150000.*
+
+    D = Parameter(:D, String)
+    S = Parameter(:S, Int)
+
+    q = Query(
+            Employee
+            >> ThenFilter((Department >> Name .== D) & (Salary .> S))
+            >> Given(:D => "POLICE", :S => 150000))
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[62 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("DANA A","POLICE","DEPUTY CHIEF",170112)
+     ⋮
+    =#
+
+*Show all employees in the given department D with the salary higher than S,
+where D = "POLICE", S = 150000.*
+
+    q = Query(
+            Employee
+            >> ThenFilter((Department >> Name .== D) & (Salary .> S)))
+    #-> {Void, D => String, S => Int64} -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q, D="POLICE", S=150000))
+    #=>
+    DataSet[62 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("DANA A","POLICE","DEPUTY CHIEF",170112)
+     ⋮
+    =#
+
+*Which employees have higher than average salary?*
+
+    MS = Parameter(:MS, Float64)
+
+    q = Query(
+            Employee
+            >> ThenFilter(Salary .> MS)
+            >> Given(:MS => MeanOf(Employee >> Salary)))
+    #-> Void -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[19796 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
+     ⋮
+    =#
+
+*Which employees have higher than average salary?*
+
+    q = Query(
+            Employee
+            >> ThenTake(100)
+            >> ThenFilter(Salary .> MeanOf(Around() >> Salary)))
+    #-> (Void...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[65 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
+     ⋮
+    =#
+
+*In the Police department, show employees whose salary is higher than the
+average for their position.*
+
+    q = Query(
+            Employee
+            >> ThenTake(100)
+            >> ThenFilter(Department >> Name .== "POLICE")
+            >> ThenFilter(Salary .> MeanOf(Around(Position) >> Salary)))
+    #-> (Void...) -> {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[29 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+     ("JEFFERY A","POLICE","POLICE OFFICER",80778)
+     ⋮
+    =#
+
+*Show a numbered list of employees and their salaries along with the running total.*
+
+    q = Query(
+            Employee
+            >> ThenTake(100)
+            >> ThenSelect(
+                :no => Count(Before()),
+                Name,
+                Salary,
+                :total => SumOf(Before() >> Salary)))
+    #-> (Void...) -> {Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}[tag=:employee]*
+
+    display(execute(q))
+    #=>
+    DataSet[100 × {Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}]:
+     (1,"ELVIA A",88968,88968)
+     ⋮
+    =#
+
+*For each department, show employee salaries along with the running total; the
+total should be reset at the department boundary.*
+
+    q = Query(
+            Department
+            >> ThenSelect(
+                Name,
+                Employee
+                >> ThenTake(100)
+                >> ThenSelect(Name, Salary, SumOf(Before() >> Salary))
+                >> ThenFrame))
+    #-> Void -> {String[tag=:name], {String[tag=:name], Int64[tag=:salary], Int64}[tag=:employee]*}[tag=:department]*
+
+    display(execute(q))
+    #=>
+    DataSet[35 × {String[tag=:name], {String[tag=:name], Int64[tag=:salary], Int64}[tag=:employee]*}]:
+     ("WATER MGMNT",[("ELVIA A",88968,88968),("VICENTE A",104736,193704)  …  ])
+     ⋮
     =#
 

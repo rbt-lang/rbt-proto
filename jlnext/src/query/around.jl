@@ -90,7 +90,7 @@ function ev_around(refl::Bool, before::Bool, after::Bool, foffs::AbstractVector{
 end
 
 function ev_around_by(refl::Bool, before::Bool, after::Bool, foffs::AbstractVector{Int}, ds::DataSet)
-    perm, offs = run_group_by_keys(foffs, ds)
+    perm, offs = ev_group_by_keys(foffs, ds)
     rng = Vector{Int}(length(ds))
     pos = Vector{Int}(length(ds))
     size = 0

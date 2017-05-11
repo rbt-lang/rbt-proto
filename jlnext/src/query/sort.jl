@@ -25,8 +25,6 @@ SortQuery(qbase::Query, qks::Query...) =
 
 # Custom ordering.
 
-#=
-
 immutable SortByOrdering{O<:AbstractVector{Int}, V<:AbstractVector} <: Base.Ordering
     offs::O
     vals::V
@@ -65,8 +63,6 @@ Base.lt{V}(o::SortByOrdering{OneTo{Int},V}, a::Int, b::Int) =
     !o.rev ?
         isless(o.vals[a], o.vals[b]) :
         isless(o.vals[b], o.vals[a])
-
-=#
 
 # Sorting primitive.
 
