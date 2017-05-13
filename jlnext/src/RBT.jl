@@ -23,6 +23,7 @@ include("data.jl")
 include("query.jl")
 include("bind.jl")
 include("combinator.jl")
+include("pgsql.jl")
 
 end
 
