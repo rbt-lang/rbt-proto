@@ -5,16 +5,16 @@ type PGConnection
     busy::Bool
 end
 
-immutable PGType{tid}
+immutable PGTypeOID{tid}
 end
 
 adapt(tid) =
-    let X = PGType{tid}
+    let X = PGTypeOID{tid}
         method_exists(adapttype, (Type{X},)) ? adapttype(X) : String
     end
 
 adapt(tid, vals::Vector{String}) =
-    let X = PGType{tid}
+    let X = PGTypeOID{tid}
         if method_exists(adapttype, (Type{X},))
             adapt(X, vals)
         else
@@ -22,7 +22,7 @@ adapt(tid, vals::Vector{String}) =
         end
     end
 
-function adapt{N}(X::Type{PGType{N}}, vals::Vector{String})
+function adapt{N}(X::Type{PGTypeOID{N}}, vals::Vector{String})
     T = adapttype(X)
     ovals = Vector{T}(length(vals))
     for k in eachindex(vals)
@@ -31,30 +31,30 @@ function adapt{N}(X::Type{PGType{N}}, vals::Vector{String})
     return ovals
 end
 
-adapttype(::Type{PGType{0x00000010}}) = Bool
-adapttype(::Type{PGType{0x00000012}}) = Char
-adapttype(::Type{PGType{0x00000014}}) = Int64
-adapttype(::Type{PGType{0x00000015}}) = Int16
-adapttype(::Type{PGType{0x00000016}}) = Vector{Int16}
-adapttype(::Type{PGType{0x00000017}}) = Int32
-adapttype(::Type{PGType{0x0000001a}}) = UInt32
-adapttype(::Type{PGType{0x0000001e}}) = Vector{UInt32}
-adapttype(::Type{PGType{0x000003ed}}) = Vector{Int16}
+adapttype(::Type{PGTypeOID{0x00000010}}) = Bool
+adapttype(::Type{PGTypeOID{0x00000012}}) = Char
+adapttype(::Type{PGTypeOID{0x00000014}}) = Int64
+adapttype(::Type{PGTypeOID{0x00000015}}) = Int16
+adapttype(::Type{PGTypeOID{0x00000016}}) = Vector{Int16}
+adapttype(::Type{PGTypeOID{0x00000017}}) = Int32
+adapttype(::Type{PGTypeOID{0x0000001a}}) = UInt32
+adapttype(::Type{PGTypeOID{0x0000001e}}) = Vector{UInt32}
+adapttype(::Type{PGTypeOID{0x000003ed}}) = Vector{Int16}
 
-adaptval{N}(X::Type{PGType{N}}, text::String) = parse(adapttype(X), text)
+adaptval{N}(X::Type{PGTypeOID{N}}, text::String) = parse(adapttype(X), text)
 
-adaptval(::Type{PGType{0x00000010}}, text::String) =
+adaptval(::Type{PGTypeOID{0x00000010}}, text::String) =
     text == "t" ? true : text == "f" ? false : error()
 
-adaptval(::Type{PGType{0x00000012}}, text::String) = text[1]
+adaptval(::Type{PGTypeOID{0x00000012}}, text::String) = text[1]
 
-adaptval(::Type{PGType{0x00000016}}, text::String) =
+adaptval(::Type{PGTypeOID{0x00000016}}, text::String) =
     Int16[parse(Int16, word) for word in split(text)]
 
-adaptval(::Type{PGType{0x0000001e}}, text::String) =
+adaptval(::Type{PGTypeOID{0x0000001e}}, text::String) =
     UInt32[parse(UInt32, word) for word in split(text)]
 
-adaptval(::Type{PGType{0x000003ed}}, text::String) =
+adaptval(::Type{PGTypeOID{0x000003ed}}, text::String) =
     Int16[parse(Int16, word) for word in split(strip(text, ['{','}']), ',')]
 
 function getresult(res)
