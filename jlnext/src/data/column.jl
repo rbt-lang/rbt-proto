@@ -1,42 +1,77 @@
 #
-# A column of values with offsets.
+# A value vector indexed by a vector of offsets.
 #
 
-# Summary of the column data.
+# A slice of a column between two offsets.
 
-type ColumnStat{T}
-    count0::Nullable{Int}
-    count1::Nullable{Int}
-    min::Nullable{T}
-    max::Nullable{T}
-
-    ColumnStat() =
-        new(Nullable{Int}(), Nullable{Int}(), Nullable{T}(), Nullable{T}())
+immutable ColumnSlice{OPT,PLU,V<:AbstractVector}
+    vals::V
+    l::Int
+    r::Int
 end
+
+show(io::IO, cs::ColumnSlice) = show(io, dataview(cs))
+
+dataview(cs::ColumnSlice{false,false}) =
+    cs.vals[cs.l]
+
+dataview(cs::ColumnSlice{true,false}) =
+    let T = Nullable{eltype(cs.vals)}
+        cs.l < cs.r ? T(cs.vals[cs.l]) : T()
+    end
+
+dataview{OPT}(cs::ColumnSlice{OPT,true}) =
+    view(cs.vals, cs.l:cs.r-1)
+
+dataview{T}(::Type{T}, cs::ColumnSlice{false,false}) =
+    convert(T, cs.vals[cs.l])
+
+dataview{T}(::Type{T}, cs::ColumnSlice{true,false}) =
+    cs.l < cs.r ? convert(T, cs.vals[cs.l]) : convert(T, nothing)
+
+dataview{T,OPT}(::Type{T}, cs::ColumnSlice{OPT,true}) =
+    convert(T, view(cs.vals, cs.l:cs.r-1))
+
 
 # The column type.
 
-immutable Column{T,O<:AbstractVector{Int},V<:AbstractVector} <:
-        AbstractVector{SubArray{T,1,V,Tuple{UnitRange{Int}},true}}
+immutable Column{OPT,PLU,O<:AbstractVector{Int},V<:AbstractVector} <:
+        AbstractVector{ColumnSlice{OPT,PLU,V}}
     len::Int
     offs::O
     vals::V
-    stat::ColumnStat{T}
 
     function Column(offs::O, vals::V)
-        @assert length(offs) >= 1
-        @assert offs[1] == 1
-        @assert offs[end] == length(vals)+1
-
-        return new(length(offs)-1, offs, vals, ColumnStat{T}())
+        len = length(offs)-1
+        @assert len > 0 && offs[1] == 1 && offs[end] == length(vals)+1
+        return new(len, offs, vals)
     end
 end
 
-Column{T}(offs::AbstractVector{Int}, vals::AbstractVector{T}) =
-    Column{T,typeof(offs),typeof(vals)}(offs, vals)
+typealias PlainColumn Column{false,false}
+typealias OptionalColumn Column{true,false}
+typealias PluralColumn Column{true,true}
+typealias NonEmptyPluralColumn Column{false,true}
+
+Column(offs::AbstractVector{Int}, vals::AbstractVector) =
+    Column{true,true,typeof(offs),typeof(vals)}(offs, vals)
+
+PlainColumn(offs::AbstractVector{Int}, vals::AbstractVector) =
+    Column{false,false,typeof(offs),typeof(vals)}(offs, vals)
+
+OptionalColumn(offs::AbstractVector{Int}, vals::AbstractVector) =
+    Column{true,false,typeof(offs),typeof(vals)}(offs, vals)
+
+PluralColumn(offs::AbstractVector{Int}, vals::AbstractVector) =
+    Column{true,true,typeof(offs),typeof(vals)}(offs, vals)
+
+NonEmptyPluralColumn(offs::AbstractVector{Int}, vals::AbstractVector) =
+    Column{false,true,typeof(offs),typeof(vals)}(offs, vals)
 
 Column(data::AbstractVector) =
-    Column(OneTo(length(data)+1), data)
+    let offs = OneTo(length(data)+1), vals = data
+        Column{false,false}(offs, vals)
+    end
 
 function Column{T}(data::AbstractVector{Nullable{T}})
     len = 0
@@ -55,7 +90,7 @@ function Column{T}(data::AbstractVector{Nullable{T}})
         end
         offs[i+1] = k
     end
-    return Column(offs, vals)
+    Column{true,false}(offs, vals)
 end
 
 function Column{T}(data::AbstractVector{Vector{T}})
@@ -73,10 +108,51 @@ function Column{T}(data::AbstractVector{Vector{T}})
         end
         offs[i+1] = k
     end
-    return Column(offs, vals)
+    Column{true,true}(offs, vals)
 end
 
-Column(data::Column) = data
+Column(col::Column) = col
+
+function dataview(col::Column{false,false})
+    @boundscheck col.len == 1 && length(col.vals) == 1 || throw(BoundsError())
+    col.vals[1]
+end
+
+function dataview(col::Column{true,false})
+    @boundscheck col.len == 1 && 0 <= length(col.vals) <= 1 || throw(BoundsError())
+    T = Nullable{eltype(col.vals)}
+    !isempty(col.vals) ? T(col.vals[1]) : T()
+end
+
+function dataview(col::Column{false,true})
+    @boundscheck col.len == 1 && 1 <= length(col.vals) || throw(BoundsError())
+    col.vals
+end
+
+function dataview(col::Column{true,true})
+    @boundscheck col.len == 1 || throw(BoundsError())
+    col.vals
+end
+
+function dataview{T}(::Type{T}, col::Column{false,false})
+    @boundscheck col.len == 1 && length(col.vals) == 1 || throw(BoundsError())
+    convert(T, col.vals[1])
+end
+
+function dataview{T}(::Type{T}, col::Column{true,false})
+    @boundscheck col.len == 1 && 0 <= length(col.vals) <= 1 || throw(BoundsError())
+    !isempty(col.vals) ? convert(T, col.vals[1]) : convert(T, nothing)
+end
+
+function dataview{T}(::Type{T}, col::Column{false,true})
+    @boundscheck col.len == 1 && 1 <= length(col.vals) || throw(BoundsError())
+    convert(T, col.vals)
+end
+
+function dataview{T}(::Type{T}, col::Column{true,true})
+    @boundscheck col.len == 1 || throw(BoundsError())
+    convert(T, col.vals)
+end
 
 # Array interface.
 
@@ -84,12 +160,31 @@ size(col::Column) = (col.len,)
 
 length(col::Column) = col.len
 
-getindex(col::Column, i::Int) =
+getindex{O,V}(col::Column{false,false,O,V}, i::Int) =
     let l = col.offs[i], r = col.offs[i+1]
-        view(col.vals, l:r-1)
+        @boundscheck 1 <= r == l+1 <= length(col.vals)+1 || throw(BoundsError())
+        ColumnSlice{false,false,V}(col.vals, l, r)
     end
 
-function getindex{T,O,V}(col::Column{T,O,V}, idxs::AbstractVector{Int})
+getindex{O,V}(col::Column{true,false,O,V}, i::Int) =
+    let l = col.offs[i], r = col.offs[i+1]
+        @boundscheck 1 <= l <= r <= l+1 && r <= length(col.vals)+1 || throw(BoundsError())
+        ColumnSlice{true,false,V}(col.vals, l, r)
+    end
+
+getindex{O,V}(col::Column{false,true,O,V}, i::Int) =
+    let l = col.offs[i], r = col.offs[i+1]
+        @boundscheck 1 <= l < r <= length(col.vals)+1 || throw(BoundsError())
+        ColumnSlice{false,true,V}(col.vals, l, r)
+    end
+
+getindex{O,V}(col::Column{true,true,O,V}, i::Int) =
+    let l = col.offs[i], r = col.offs[i+1]
+        @boundscheck 1 <= l <= r <= length(col.vals)+1 || throw(BoundsError())
+        ColumnSlice{true,true,V}(col.vals, l, r)
+    end
+
+function getindex{OPT,PLU,O,V}(col::Column{OPT,PLU,O,V}, idxs::AbstractVector{Int})
     offs = Vector{Int}(length(idxs)+1)
     offs[1] = 1
     i = 1
@@ -99,47 +194,47 @@ function getindex{T,O,V}(col::Column{T,O,V}, idxs::AbstractVector{Int})
         offs[i+1] = offs[i] + r - l
         i += 1
     end
-    vlen = offs[end] - 1
-    vidxs = Vector{Int}(vlen)
+    perm = Vector{Int}(offs[end]-1)
     i = 1
     for idx in idxs
         l = col.offs[idx]
         r = col.offs[idx+1]
         for j = l:r-1
-            vidxs[i] = j
+            perm[i] = j
             i += 1
         end
     end
-    return Column(offs, col.vals[vidxs])
+    vals = col.vals[perm]
+    return Column{OPT,PLU}(offs, vals)
 end
 
-function getindex{T,O<:OneTo,V}(col::Column{T,O,V}, idxs::AbstractVector{Int})
+function getindex{OPT,PLU,O<:OneTo,V}(col::Column{OPT,PLU,O,V}, idxs::AbstractVector{Int})
     offs = OneTo(length(idxs)+1)
     vals = col.vals[idxs]
-    return Column(offs, vals)
+    return Column{OPT,PLU}(offs, vals)
 end
 
-function getindex{T,O,V}(col::Column{T,O,V}, idxs::OneTo)
+function getindex{OPT,PLU,O,V}(col::Column{OPT,PLU,O,V}, idxs::OneTo)
     len = length(idxs)
     if len == col.len
         return col
     else
-        return Column(
+        return typeof(col)(
             col.offs[OneTo(len+1)],
             col.vals[OneTo(col.offs[len+1]-1)])
     end
 end
 
-function getindex{T,O<:OneTo,V}(col::Column{T,O,V}, idxs::OneTo)
+function getindex{OPT,PLU,O<:OneTo,V}(col::Column{OPT,PLU,O,V}, idxs::OneTo)
     len = length(idxs)
     if len == col.len
         return col
     else
-        return Column(col.offs[idxs], col.vals[idxs])
+        return typeof(col)(col.offs[idxs], col.vals[idxs])
     end
 end
 
-function vcat(col1::Column, col2::Column)
+function vcat{OPT1,OPT2,PLU1,PLU2}(col1::Column{OPT1,PLU1}, col2::Column{OPT2,PLU2})
     offs = Vector{Int}(col1.len+col2.len+1)
     for k = 1:col1.len
         offs[k] = col1.offs[k]
@@ -149,15 +244,15 @@ function vcat(col1::Column, col2::Column)
         offs[col1.len+k] = col2.offs[k] + L
     end
     vals = vcat(col1.vals, col2.vals)
-    return Column(offs, vals)
+    return Column{OPT1||OPT2,PLU1||PLU2}(offs, vals)
 end
 
-vcat{T1,V1,T2,V2}(col1::Column{T1,OneTo{Int},V1}, col2::Column{T2,OneTo{Int},V2}) =
-    Column(
-        OneTo(col1.len+col2.len+1),
-        vcat(col1.vals, col2.vals))
+vcat{OPT1,OPT2,PLU1,PLU2}(col1::Column{OPT1,PLU1,OneTo{Int}}, col2::Column{OPT2,PLU2,OneTo{Int}}) =
+    let offs = OneTo(col1.len+col2.len+1), vals = vcat(col1.vals, col2.vals)
+        Column{OPT1||OPT2,PLU1||PLU2}(offs, vals)
+    end
 
-Base.linearindexing{T,O,V}(::Type{Column{T,O,V}}) = Base.LinearFast()
+Base.linearindexing{C<:Column}(::Type{C}) = Base.LinearFast()
 
 Base.array_eltype_show_how(::Column) = (true, "")
 
@@ -165,4 +260,6 @@ Base.array_eltype_show_how(::Column) = (true, "")
 
 offsets(col::Column) = col.offs
 values(col::Column) = col.vals
+isoptional{OPT,PLU}(col::Column{OPT,PLU}) = OPT
+isplural{OPT,PLU}(col::Column{OPT,PLU}) = PLU
 

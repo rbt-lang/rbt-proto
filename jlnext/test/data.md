@@ -9,7 +9,12 @@ A vector of data values together with a vector of offsets is called a *column*.
 
     using RBT:
         Column,
+        OptionalColumn,
+        PlainColumn,
+        PluralColumn,
         OneTo,
+        isoptional,
+        isplural,
         offsets,
         values
 
@@ -18,66 +23,24 @@ single data vector.  However, for an optional attribute, an entity may have no
 associated attribute value.  Similarly, for a plural attribute, an entity may
 have multiple attribute values.  To support optional and plural attributes, the
 data vector is indexed by an associated vector of offsets, which maps an entity
-to the respective attribute values.
+index to the respective attribute values.
 
-    iso_col = Column(OneTo(11), 1:10)
-    #-> [[1],[2],[3],[4],[5],[6],[7],[8],[9],[10]]
+    iso_col = PlainColumn(OneTo(11), 1:10)
+    #-> [1,2,3,4,5,6,7,8,9,10]
 
-    display(iso_col)
-    #=>
-    10-element RBT.Column{Int64,Base.OneTo{Int64},UnitRange{Int64}}:
-     [1]
-     [2]
-     [3]
-     [4]
-     [5]
-     [6]
-     [7]
-     [8]
-     [9]
-     [10]
-    =#
+    opt_col = OptionalColumn([1; 1:11; 11], 1:10)
+    #-> [#NULL,1,2,3,4,5,6,7,8,9,10,#NULL]
 
-    opt_col = Column([1; 1:11; 11], 1:10)
-    #-> [Int64[],[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],Int64[]]
-
-    display(opt_col)
-    #=>
-    12-element RBT.Column{Int64,Array{Int64,1},UnitRange{Int64}}:
-     Int64[]
-     [1]
-     [2]
-     [3]
-     [4]
-     [5]
-     [6]
-     [7]
-     [8]
-     [9]
-     [10]
-     Int64[]
-    =#
-
-    seq_col = Column(1:2:11, 1:10)
+    seq_col = PluralColumn(1:2:11, 1:10)
     #-> [[1,2],[3,4],[5,6],[7,8],[9,10]]
-
-    display(seq_col)
-    #=>
-    5-element RBT.Column{Int64,StepRange{Int64,Int64},UnitRange{Int64}}:
-     [1,2]
-     [3,4]
-     [5,6]
-     [7,8]
-     [9,10]
-    =#
 
 Columns could also be constructed out of a single vector of data.
 
     Column([2,3,5])
-    #-> [[2],[3],[5]]
+    #-> [2,3,5]
 
-    Column([Nullable{Int}(), Nullable(2), Nullable(3), Nullable{Int}(), Nullable(5)])
-    #-> [Int64[],[2],[3],Int64[],[5]]
+    Column(Nullable{Int}[nothing, 2, 3, nothing, 5])
+    #-> [#NULL,2,3,#NULL,5]
 
     Column([Int[], [2], [3,5]])
     #-> [Int64[],[2],[3,5]]
@@ -86,36 +49,51 @@ Columns could be reordered.
 
     display(iso_col[[1,3,5]])
     #=>
-    3-element RBT.Column{Int64,Base.OneTo{Int64},Array{Int64,1}}:
-     [1]
-     [3]
-     [5]
+    3-element RBT.Column{false,false,Base.OneTo{Int64},Array{Int64,1}}:
+     1
+     3
+     5
     =#
 
     display(opt_col[[1,3,5]])
     #=>
-    3-element RBT.Column{Int64,Array{Int64,1},Array{Int64,1}}:
-     Int64[]
-     [2]
-     [4]
+    3-element RBT.Column{true,false,Array{Int64,1},Array{Int64,1}}:
+     #NULL
+     2
+     4
     =#
 
     display(seq_col[[1,3,5]])
     #=>
-    3-element RBT.Column{Int64,Array{Int64,1},Array{Int64,1}}:
+    3-element RBT.Column{true,true,Array{Int64,1},Array{Int64,1}}:
      [1,2]
      [5,6]
      [9,10]
     =#
 
-The components of the column could be obtained using functions
-`offsets()` and `values()`.
+The components of the column could be obtained using functions `offsets()` and
+`values()`.
 
     offsets(iso_col)
     #-> Base.OneTo(11)
 
     values(opt_col)
     #-> 1:10
+
+Cardinality of the column could be determined using functions `isoptional()`
+and `isplural()`.
+
+    isoptional(iso_col)
+    #-> false
+
+    isoptional(opt_col)
+    #-> true
+
+    isplural(opt_col)
+    #-> false
+
+    isplural(seq_col)
+    #-> true
 
 
 Output flow
