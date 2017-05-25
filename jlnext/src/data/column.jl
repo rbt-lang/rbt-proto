@@ -10,28 +10,27 @@ immutable ColumnSlice{OPT,PLU,V<:AbstractVector}
     r::Int
 end
 
-show(io::IO, cs::ColumnSlice) = show(io, dataview(cs))
+show(io::IO, cs::ColumnSlice) = show(io, getdata(cs))
 
-dataview(cs::ColumnSlice{false,false}) =
+@inline getdata(cs::ColumnSlice{false,false}) =
     cs.vals[cs.l]
 
-dataview(cs::ColumnSlice{true,false}) =
+@inline getdata(cs::ColumnSlice{true,false}) =
     let T = Nullable{eltype(cs.vals)}
-        cs.l < cs.r ? T(cs.vals[cs.l]) : T()
+        cs.l < cs.r ? convert(T, cs.vals[cs.l]) : convert(T, nothing)
     end
 
-dataview{OPT}(cs::ColumnSlice{OPT,true}) =
+@inline getdata{OPT}(cs::ColumnSlice{OPT,true}) =
     view(cs.vals, cs.l:cs.r-1)
 
-dataview{T}(::Type{T}, cs::ColumnSlice{false,false}) =
+@inline getdata{T}(::Type{T}, cs::ColumnSlice{false,false}) =
     convert(T, cs.vals[cs.l])
 
-dataview{T}(::Type{T}, cs::ColumnSlice{true,false}) =
+@inline getdata{T}(::Type{T}, cs::ColumnSlice{true,false}) =
     cs.l < cs.r ? convert(T, cs.vals[cs.l]) : convert(T, nothing)
 
-dataview{T,OPT}(::Type{T}, cs::ColumnSlice{OPT,true}) =
+@inline getdata{T,OPT}(::Type{T}, cs::ColumnSlice{OPT,true}) =
     convert(T, view(cs.vals, cs.l:cs.r-1))
-
 
 # The column type.
 
@@ -68,12 +67,14 @@ PluralColumn(offs::AbstractVector{Int}, vals::AbstractVector) =
 NonEmptyPluralColumn(offs::AbstractVector{Int}, vals::AbstractVector) =
     Column{false,true,typeof(offs),typeof(vals)}(offs, vals)
 
-Column(data::AbstractVector) =
+convert(::Type{Column}, col::Column) = col
+
+convert(::Type{Column}, data::AbstractVector) =
     let offs = OneTo(length(data)+1), vals = data
         Column{false,false}(offs, vals)
     end
 
-function Column{T}(data::AbstractVector{Nullable{T}})
+function convert{T<:Nullable}(::Type{Column}, data::Vector{T})
     len = 0
     for item in data
         if !isnull(item)
@@ -81,7 +82,7 @@ function Column{T}(data::AbstractVector{Nullable{T}})
         end
     end
     offs = Vector{Int}(length(data)+1)
-    vals = Vector{T}(len)
+    vals = Vector{eltype(T)}(len)
     offs[1] = k = 1
     for (i, item) in enumerate(data)
         if !isnull(item)
@@ -93,66 +94,76 @@ function Column{T}(data::AbstractVector{Nullable{T}})
     Column{true,false}(offs, vals)
 end
 
-function Column{T}(data::AbstractVector{Vector{T}})
+function convert{T<:Vector}(::Type{Column}, data::Vector{T})
     len = 0
     for items in data
         len += length(items)
     end
     offs = Vector{Int}(length(data)+1)
-    vals = Vector{T}(len)
+    vals = Vector{eltype(T)}(len)
     offs[1] = k = 1
     for (i, items) in enumerate(data)
-        for item in items
-            vals[k] = item
-            k += 1
-        end
+        copy!(vals, k, items)
+        k += length(items)
         offs[i+1] = k
     end
     Column{true,true}(offs, vals)
 end
 
-Column(col::Column) = col
+datatype(col::Column{false,false}) =
+    eltype(col.vals)
 
-function dataview(col::Column{false,false})
-    @boundscheck col.len == 1 && length(col.vals) == 1 || throw(BoundsError())
-    col.vals[1]
+datatype(col::Column{true,false}) =
+    Nullable{eltype(col.vals)}
+
+datatype{OPT}(col::Column{OPT,true}) =
+    SubArray{eltype(col.vals),1,typeof(col.vals),Tuple{UnitRange{Int}},true}
+
+@inline function getdata(col::Column{false,false}, i::Int)
+    col.vals[i]
 end
 
-function dataview(col::Column{true,false})
-    @boundscheck col.len == 1 && 0 <= length(col.vals) <= 1 || throw(BoundsError())
+@inline function getdata(col::Column{true,false}, i::Int)
+    l = col.offs[i]
+    r = col.offs[i+1]
     T = Nullable{eltype(col.vals)}
-    !isempty(col.vals) ? T(col.vals[1]) : T()
+    l < r ? convert(T, col.vals[l]) : convert(T, nothing)
 end
 
-function dataview(col::Column{false,true})
-    @boundscheck col.len == 1 && 1 <= length(col.vals) || throw(BoundsError())
-    col.vals
+@inline function getdata{OPT}(col::Column{OPT,true}, i::Int)
+    l = col.offs[i]
+    r = col.offs[i+1]
+    view(col.vals, l:r-1)
 end
 
-function dataview(col::Column{true,true})
-    @boundscheck col.len == 1 || throw(BoundsError())
-    col.vals
+@inline function getdata{T}(::Type{T}, col::Column{false,false}, i::Int)
+    convert(T, col.vals[i])
 end
 
-function dataview{T}(::Type{T}, col::Column{false,false})
-    @boundscheck col.len == 1 && length(col.vals) == 1 || throw(BoundsError())
-    convert(T, col.vals[1])
+@inline function getdata{T}(::Type{T}, col::Column{true,false}, i::Int)
+    l = col.offs[i]
+    r = col.offs[i+1]
+    l < r ? convert(T, col.vals[l]) : convert(T, nothing)
 end
 
-function dataview{T}(::Type{T}, col::Column{true,false})
-    @boundscheck col.len == 1 && 0 <= length(col.vals) <= 1 || throw(BoundsError())
-    !isempty(col.vals) ? convert(T, col.vals[1]) : convert(T, nothing)
+@inline function getdata{T,OPT}(::Type{T}, col::Column{OPT,true}, i::Int)
+    l = col.offs[i]
+    r = col.offs[i+1]
+    convert(T, view(col.vals, l:r-1))
 end
 
-function dataview{T}(::Type{T}, col::Column{false,true})
-    @boundscheck col.len == 1 && 1 <= length(col.vals) || throw(BoundsError())
-    convert(T, col.vals)
-end
+@inline getdata(::Tuple{}, i) = ()
 
-function dataview{T}(::Type{T}, col::Column{true,true})
-    @boundscheck col.len == 1 || throw(BoundsError())
-    convert(T, col.vals)
-end
+@inline getdata(css::Tuple{Column, Vararg{Any}}, i::Int) =
+    (getdata(css[1], i), getdata(Base.tail(css), i)...)
+
+@inline getdata(::Type{Tuple{}}, ::Tuple{}, i) = ()
+
+@inline getdata{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, css::Tuple{Column, Vararg{Any}}, i::Int) =
+    (getdata(Base.tuple_type_head(T), css[1], i), getdata(Base.tuple_type_tail(T), Base.tail(css), i)...)
+
+@inline getdata{T<:AbstractRecord}(::Type{T}, css::Tuple{Vararg{Column}}, i::Int) =
+    T(getdata(fieldtypes(T), css, i)...)
 
 # Array interface.
 
@@ -160,28 +171,9 @@ size(col::Column) = (col.len,)
 
 length(col::Column) = col.len
 
-getindex{O,V}(col::Column{false,false,O,V}, i::Int) =
+@inline getindex{OPT,PLU,O,V}(col::Column{OPT,PLU,O,V}, i::Int) =
     let l = col.offs[i], r = col.offs[i+1]
-        @boundscheck 1 <= r == l+1 <= length(col.vals)+1 || throw(BoundsError())
-        ColumnSlice{false,false,V}(col.vals, l, r)
-    end
-
-getindex{O,V}(col::Column{true,false,O,V}, i::Int) =
-    let l = col.offs[i], r = col.offs[i+1]
-        @boundscheck 1 <= l <= r <= l+1 && r <= length(col.vals)+1 || throw(BoundsError())
-        ColumnSlice{true,false,V}(col.vals, l, r)
-    end
-
-getindex{O,V}(col::Column{false,true,O,V}, i::Int) =
-    let l = col.offs[i], r = col.offs[i+1]
-        @boundscheck 1 <= l < r <= length(col.vals)+1 || throw(BoundsError())
-        ColumnSlice{false,true,V}(col.vals, l, r)
-    end
-
-getindex{O,V}(col::Column{true,true,O,V}, i::Int) =
-    let l = col.offs[i], r = col.offs[i+1]
-        @boundscheck 1 <= l <= r <= length(col.vals)+1 || throw(BoundsError())
-        ColumnSlice{true,true,V}(col.vals, l, r)
+        ColumnSlice{OPT,PLU,V}(col.vals, l, r)
     end
 
 function getindex{OPT,PLU,O,V}(col::Column{OPT,PLU,O,V}, idxs::AbstractVector{Int})
@@ -256,10 +248,27 @@ Base.linearindexing{C<:Column}(::Type{C}) = Base.LinearFast()
 
 Base.array_eltype_show_how(::Column) = (true, "")
 
+Base.summary(col::Column) =
+    "$(col.len)-element column of $(valuetype(col))$(valuesigil(col))"
+
 # Attributes and properties.
+
+valuesigil{C<:Column{false,false}}(::Type{C}) = ""
+valuesigil{C<:Column{true,false}}(::Type{C}) = "?"
+valuesigil{C<:Column{false,true}}(::Type{C}) = "+"
+valuesigil{C<:Column{true,true}}(::Type{C}) = "*"
+valuesigil(col::Column) = valuesigil(typeof(col))
+
+valuetype{OPT,PLU,O,V}(::Type{Column{OPT,PLU,O,V}}) = eltype(V)
+valuetype(col::Column) = valuetype(typeof(col))
+
+isoptional{C<:Union{Column{false,false},Column{false,true}}}(::Type{C}) = false
+isoptional{C<:Union{Column{true,false},Column{true,true}}}(::Type{C}) = true
+isplural{C<:Union{Column{false,false},Column{true,false}}}(::Type{C}) = false
+isplural{C<:Union{Column{false,true},Column{true,true}}}(::Type{C}) = true
+isoptional(col::Column) = isoptional(typeof(col))
+isplural(col::Column) = isplural(typeof(col))
 
 offsets(col::Column) = col.offs
 values(col::Column) = col.vals
-isoptional{OPT,PLU}(col::Column{OPT,PLU}) = OPT
-isplural{OPT,PLU}(col::Column{OPT,PLU}) = PLU
 

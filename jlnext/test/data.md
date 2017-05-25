@@ -2,6 +2,75 @@ Data containers
 ===============
 
 
+Records
+-------
+
+A record is an immutable composite type with named fields.
+
+    using RBT:
+        @Record,
+        recordtype
+
+The `@Record` constructor creates an anonymous record type with the given list
+of fields.
+
+    R = @Record(a, b, c)
+    #-> @Record(a, b, c)
+
+    r = R(1, 2, 3)
+    #-> @Record(a = 1, b = 2, c = 3)
+
+We can also create a new record object in one step.
+
+    @Record(a = 1, b = 2, c = 3)
+    #-> @Record(a = 1, b = 2, c = 3)
+
+When creating a record type, the type of the fields can be explicitly declared.
+
+    R2 = @Record(a::Int, b::Nullable{Int}, c::Vector{Int})
+    #-> @Record(a::Int64, b::Nullable{Int64}, c::Array{Int64,1})
+
+    r2 = R2(1, 2, 3:10)
+    #-> @Record(a = 1, b = Nullable{Int64}(2), c = [3,4,5,6,7,8,9,10])
+
+Again, this could be done in one step.
+
+    @Record(a::Int = 1, b::Nullable{Int} = 2, c::Vector{Int} = 3:10)
+    #-> @Record(a = 1, b = Nullable{Int64}(2), c = [3,4,5,6,7,8,9,10])
+
+Finally, a new record type can be created without using a macro.
+
+    recordtype([:a, :b, :c])
+    #-> @Record(a, b, c)
+
+
+Entity classes
+--------------
+
+Entity classes represent abstract concepts such as *departments* or
+*employees*.  They are distinguished by their *class name* and their identities
+are encoded by integer values.
+
+    using RBT:
+        Entity,
+        classname
+
+    Emp = Entity{:Emp}
+    #-> Emp
+
+    e = Emp(1)
+    #-> Emp(1)
+
+    classname(Emp)
+    #-> :Emp
+
+    classname(e)
+    #-> :Emp
+
+    get(e)
+    #-> 1
+
+
 Columns
 -------
 
@@ -49,7 +118,7 @@ Columns could be reordered.
 
     display(iso_col[[1,3,5]])
     #=>
-    3-element RBT.Column{false,false,Base.OneTo{Int64},Array{Int64,1}}:
+    3-element column of Int64:
      1
      3
      5
@@ -57,7 +126,7 @@ Columns could be reordered.
 
     display(opt_col[[1,3,5]])
     #=>
-    3-element RBT.Column{true,false,Array{Int64,1},Array{Int64,1}}:
+    3-element column of Int64?:
      #NULL
      2
      4
@@ -65,7 +134,7 @@ Columns could be reordered.
 
     display(seq_col[[1,3,5]])
     #=>
-    3-element RBT.Column{true,true,Array{Int64,1},Array{Int64,1}}:
+    3-element column of Int64*:
      [1,2]
      [5,6]
      [9,10]
@@ -96,334 +165,110 @@ and `isplural()`.
     #-> true
 
 
-Output flow
------------
+Record vector
+-------------
 
-The query output is represented as an *output flow*.
-
-    using RBT:
-        Column,
-        Output,
-        OutputFlow,
-        column,
-        domain,
-        mode,
-        offsets,
-        output,
-        setoptional,
-        setplural,
-        values
-
-The query output is specified by the output signature, a vector of offsets and
-a vector of values.
-
-    int_flow = OutputFlow(Int64, Column(1:101, 1:100))
-    #-> [1,2,3  …  99,100]
-
-    display(int_flow)
-    #=>
-    OutputFlow[100 × Int64]:
-       1
-       2
-       3
-       ⋮
-      99
-     100
-    =#
-
-    int_opt_flow = OutputFlow(
-        Output(Int64) |> setoptional(),
-        Column([1; 1:101; 101], 1:100))
-    #-> [#NULL,1,2,3  …  99,100,#NULL]
-
-    display(int_opt_flow)
-    #=>
-    OutputFlow[102 × Int64?]:
-     #NULL
-     1
-     2
-     3
-     ⋮
-     99
-     100
-     #NULL
-    =#
-
-    int_seq_flow = OutputFlow(
-        Output(Int64) |> setplural(),
-        Column(1:50:2001, 1:2000))
-    display(int_seq_flow)
-    #=>
-    OutputFlow[40 × Int64+]:
-     [1,2,3  …  49,50]
-     [51,52,53  …  99,100]
-     [101,102,103  …  149,150]
-     ⋮
-     [1901,1902,1903  …  1949,1950]
-     [1951,1952,1953  …  1999,2000]
-    =#
-
-The query output could be deconstructed.
-
-    output(int_opt_flow)
-    #-> Int64?
-
-    domain(int_opt_flow)
-    #-> Int64
-
-    mode(int_opt_flow)
-    #-> RBT.OutputMode(true,false)
-
-    column(int_seq_flow)
-    #-> [[1,2  …  50],[51,52  …  100]  …  [1951,1952  …  2000]]
-
-    offsets(int_seq_flow)
-    #-> 1:50:2001
-
-    values(int_seq_flow)
-    #-> 1:2000
-
-
-Input flow
-----------
-
-The query input is represented as an *input flow*.
+A record vector is a vector of tuples stored in a column-oriented format.
 
     using RBT:
-        Input,
-        InputContext,
-        InputFlow,
-        InputFrame,
-        InputParameter,
-        InputParameterFlow,
-        context,
-        distribute,
-        frameoffsets,
-        input,
-        narrow,
-        parameterflows,
-        setoptional,
-        setparameters,
-        setplural,
-        setrelative,
-        values
+        DataVector,
+        RecordVector,
+        TupleVector,
+        getdata
 
-When the input is not position-sensitive and has no parameters, it is specified
-with the query context, the input domain and a vector of input values.
+    tv0 = TupleVector('a':'e', 1:5)
+    #-> [('a',1),('b',2),('c',3),('d',4),('e',5)]
 
-    ctx = InputContext()
+    eltype(tv0)
+    #-> Tuple{Char,Int64}
 
-    flow = InputFlow(ctx, Int64, 1:10)
-    #-> [1,2,3,4,5,6,7,8,9,10]
+The vector may contain nullable and plural columns.
 
-    display(flow)
+    tv = TupleVector(1:5, Nullable{Int}[1,2,3,4,nothing], Vector{Int}[[],[1],[2,3],[4,5,6,7],[8,9,10,11,12]])
+
+    eltype(tv)
+    #-> Tuple{Int64,Nullable{Int64},SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true}}
+
+    display(tv)
     #=>
-    InputFlow[10 × Int64]:
-      1
-      2
-      3
-      ⋮
-      9
-     10
+    5-element vector of Tuple{  …  }:
+     (1,1,Int64[])
+     (2,2,[1])
+     (3,3,[2,3])
+     (4,4,[4,5,6,7])
+     (5,#NULL,[8,9,10,11,12])
     =#
 
-When the query is aware of the input relative position, we need to specify the
-input frame.
+Moreover, record vectors could be nested in order to represent hierarchical
+output.
 
-    rel_flow = InputFlow(ctx, Int64, 1:10, InputFrame(1:2:11))
-    display(rel_flow)
+    hcol = Column([1,1,3,6], tv)
+
+    display(hcol)
     #=>
-    InputFlow[10 × (Int64...)]:
-     (1,[1,2])
-     (2,[1,2])
-     (1,[3,4])
-     (2,[3,4])
-     ⋮
-     (1,[9,10])
-     (2,[9,10])
+    3-element column of Tuple{Int64,Nullable{Int64},SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true}}*:
+     Tuple{  …  }[]
+     Tuple{  …  }[(1,1,Int64[]),(2,2,[1])]
+     Tuple{  …  }[(3,3,[2,3]),(4,4,[4,5,6,7]),(5,#NULL,[8,9,10,11,12])]
     =#
 
-Similarly, when the query input has non-trivial parameter environment, we need
-to specify the values of the parameters.
+    htv = TupleVector('a':'c', hcol)
 
-    param_flow = InputFlow(
-        ctx,
-        Int64,
-        1:10,
-        [
-            InputParameterFlow(:X, OutputFlow(Int64, 1:11, 10:10:100)),
-            InputParameterFlow(:Y, OutputFlow(Int64, 1:11, 100:100:1000)),
-        ])
-    display(param_flow)
+    display(htv)
     #=>
-    InputFlow[10 × {Int64, X => Int64, Y => Int64}]:
-     (1,:X=>10,:Y=>100)
-     (2,:X=>20,:Y=>200)
-     (3,:X=>30,:Y=>300)
-     ⋮
-     (9,:X=>90,:Y=>900)
-     (10,:X=>100,:Y=>1000)
+    3-element vector of Tuple{  …  }:
+     ('a',Tuple{  …  }[])
+     ('b',Tuple{  …  }[(1,1,Int64[]),(2,2,[1])])
+     ('c',Tuple{  …  }[(3,3,[2,3]),(4,4,[4,5,6,7]),(5,#NULL,[8,9,10,11,12])])
     =#
 
-We can easily extract individual components of the input flow.
+The length of the vector can be explicitly specified.
 
-    context(flow)
-    #-> Dict{Symbol,Any}()
+    TupleVector(5)
+    #-> [(),(),(),(),()]
 
-    input(flow)
-    #-> Int64
+It is also possible to create a record vector with named fields.
 
-    values(flow)
-    #-> 1:10
+    rv = RecordVector(ch='a':'e', x=1:5)
 
-    frameoffsets(rel_flow)
-    #-> 1:2:11
-
-    parameterflows(param_flow)
-    #-> Pair{Symbol,RBT.OutputFlow}[:X=>[10  …  100],:Y=>[100  …  1000]]
-
-The input flow could be narrowed to a smaller input signature.
-
-    nrel_flow = narrow(rel_flow, Input(Int64) |> setrelative(false))
-    display(nrel_flow)
+    display(rv)
     #=>
-    InputFlow[10 × Int64]:
-      1
-      2
-      ⋮
-     10
+    5-element vector of @Record(ch::Char, x::Int64):
+     @Record(ch = 'a', x = 1)
+     @Record(ch = 'b', x = 2)
+     @Record(ch = 'c', x = 3)
+     @Record(ch = 'd', x = 4)
+     @Record(ch = 'e', x = 5)
     =#
 
-    nparam_flow = narrow(param_flow, Input(Int64) |> setparameters([InputParameter(:X, Int64)]))
-    display(nparam_flow)
+    eltype(rv)
+    #-> @Record(ch::Char, x::Int64)
+
+By default, the record vector exposes the type of the columns in its signature.
+We can also use a record type that conceals the types of its columns.
+
+    dv = DataVector(1:5, Nullable{Int}[1,2,3,4,nothing], Vector{Int}[[],[1],[2,3],[4,5,6,7],[8,9,10,11,12]])
+
+    display(dv)
     #=>
-    InputFlow[10 × {Int64, X => Int64}]:
-     (1,:X=>10)
-     (2,:X=>20)
-     ⋮
-     (10,:X=>100)
+    5-element vector of Tuple{Int64,Nullable{Int64},SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true}}:
+     (1,1,Int64[])
+     (2,2,[1])
+     (3,3,[2,3])
+     (4,4,[4,5,6,7])
+     (5,#NULL,[8,9,10,11,12])
     =#
 
-Given an input flow and the corresponding output flow, we can form a new input
-flow.
+It is possible to convert it to a regular record vector.
 
-    iflow = InputFlow(
-        ctx,
-        Int64,
-        1:10,
-        InputFrame(1:2:11),
-        [InputParameterFlow(:X, OutputFlow(Int64, 1:11, 10:10:100))])
-    display(iflow)
-    #=>
-    InputFlow[10 × {(Int64...), X => Int64}]:
-     ((1,[1,2]),:X=>10)
-     ((2,[1,2]),:X=>20)
-     ((1,[3,4]),:X=>30)
-     ((2,[3,4]),:X=>40)
-     ((1,[5,6]),:X=>50)
-     ((2,[5,6]),:X=>60)
-     ((1,[7,8]),:X=>70)
-     ((2,[7,8]),:X=>80)
-     ((1,[9,10]),:X=>90)
-     ((2,[9,10]),:X=>100)
-    =#
+    typeof(dv)
+    #-> RBT.DataVector
 
-    oflow = OutputFlow(
-        Output(Int64) |> setoptional() |> setplural(),
-        [1,1,1,2,2,3,4,6,9,11,11],
-        -1:-1:-10)
-    display(oflow)
-    #=>
-    OutputFlow[10 × Int64*]:
-     Int64[]
-     Int64[]
-     [-1]
-     Int64[]
-     [-2]
-     [-3]
-     [-4,-5]
-     [-6,-7,-8]
-     [-9,-10]
-     Int64[]
-    =#
+    typeof(getdata(dv))
+    #-> RBT.TupleVector{Tuple{Int64  …  },Tuple{RBT.Column{false,false,Base.OneTo{Int64},UnitRange{Int64}}  …  }}
 
-    display(distribute(iflow, oflow))
-    #=>
-    InputFlow[10 × {(Int64...), X => Int64}]:
-     ((1,[-1]),:X=>30)
-     ((1,[-2,-3]),:X=>50)
-     ((2,[-2,-3]),:X=>60)
-     ((1,[-4,-5,-6,-7,-8]),:X=>70)
-     ((2,[-4,-5,-6,-7,-8]),:X=>70)
-     ((3,[-4,-5,-6,-7,-8]),:X=>80)
-     ((4,[-4,-5,-6,-7,-8]),:X=>80)
-     ((5,[-4,-5,-6,-7,-8]),:X=>80)
-     ((1,[-9,-10]),:X=>90)
-     ((2,[-9,-10]),:X=>90)
-    =#
+We can also convert it a record with named fields.
 
-
-Datasets
---------
-
-An array of records, where the values of each field are stored in separate
-columns, is called a *dataset*.
-
-    using RBT:
-        Column,
-        DataSet,
-        Output,
-        OutputFlow,
-        domain,
-        setoptional,
-        setplural
-
-`DataSet` objects are specified by their length and an array of columns.
-
-    ds = DataSet(
-        OutputFlow(Int64, 1:11, 1:10),
-        OutputFlow(Output(Int64) |> setoptional(), [1; 1:9; 9], 2:9),
-        OutputFlow(Output(Int64) |> setplural(), 1:5:51, 1:50))
-    #-> [(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (10,#NULL,[46,47,48,49,50])]
-
-    display(ds)
-    #=>
-    DataSet[10 × {Int64, Int64?, Int64+}]:
-     (1,#NULL,[1,2,3,4,5])
-     (2,2,[6,7,8,9,10])
-     ⋮
-     (10,#NULL,[46,47,48,49,50])
-    =#
-
-    length(ds)
-    #-> 10
-
-    domain(ds)
-    #-> {Int64, Int64?, Int64+}
-
-Datasets could be nested.
-
-    tree_ds = DataSet(
-        OutputFlow(Int64, 1:3, 1:2),
-        OutputFlow(
-            Output(domain(ds)) |> setplural(),
-            1:5:11,
-            ds))
-    display(tree_ds)
-    #=>
-    DataSet[2 × {Int64, {Int64, Int64?, Int64+}+}]:
-     (1,[(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (5,5,[21,22,23,24,25])])
-     (2,[(6,6,[26,27,28,29,30]),(7,7,[31,32,33,34,35])  …  (10,#NULL,[46,47,48,49,50])])
-    =#
-
-Datasets could be rearranged.
-
-    display(tree_ds[[2,1,2,1]])
-    #=>
-    DataSet[4 × {Int64, {Int64, Int64?, Int64+}+}]:
-     (2,[(6,6,[26,27,28,29,30]),(7,7,[31,32,33,34,35])  …  (10,#NULL,[46,47,48,49,50])])
-     (1,[(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (5,5,[21,22,23,24,25])])
-     (2,[(6,6,[26,27,28,29,30]),(7,7,[31,32,33,34,35])  …  (10,#NULL,[46,47,48,49,50])])
-     (1,[(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (5,5,[21,22,23,24,25])])
-    =#
+    typeof(getdata(@Record(a::Int, b::Nullable{Int}, c::Vector{Int}), dv))
+    #-> RBT.TupleVector{@Record(a::Int64  …  ),Tuple{RBT.Column{false,false,Base.OneTo{Int64},UnitRange{Int64}}  …  }}
 

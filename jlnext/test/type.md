@@ -1,33 +1,5 @@
-Domains and signatures
-======================
-
-
-Entity classes
---------------
-
-Entity classes represent abstract concepts such as *departments* or
-*employees*.  They are distinguished by their *class name*.  The actual type of
-entity values depends on the data source, but when they are exposed to the
-user, they are wrapped into containers of type `Entity`.
-
-    using RBT:
-        Entity,
-        classname
-
-    Emp = Entity{:Emp}
-    #-> Emp
-
-    e = Emp(1)
-    #-> Emp(1)
-
-    classname(Emp)
-    #-> :Emp
-
-    classname(e)
-    #-> :Emp
-
-    get(e)
-    #-> 1
+Domains and input/output types
+==============================
 
 
 Domains
