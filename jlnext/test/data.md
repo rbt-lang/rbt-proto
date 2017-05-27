@@ -82,8 +82,10 @@ A vector of data values together with a vector of offsets is called a *column*.
         PlainColumn,
         PluralColumn,
         OneTo,
+        cursor,
         isoptional,
         isplural,
+        next!,
         offsets,
         values
 
@@ -95,10 +97,10 @@ data vector is indexed by an associated vector of offsets, which maps an entity
 index to the respective attribute values.
 
     iso_col = PlainColumn(OneTo(11), 1:10)
-    #-> [1,2,3,4,5,6,7,8,9,10]
+    #-> [[1],[2],[3],[4],[5],[6],[7],[8],[9],[10]]
 
     opt_col = OptionalColumn([1; 1:11; 11], 1:10)
-    #-> [#NULL,1,2,3,4,5,6,7,8,9,10,#NULL]
+    #-> [[],[1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[]]
 
     seq_col = PluralColumn(1:2:11, 1:10)
     #-> [[1,2],[3,4],[5,6],[7,8],[9,10]]
@@ -106,30 +108,30 @@ index to the respective attribute values.
 Columns could also be constructed out of a single vector of data.
 
     Column([2,3,5])
-    #-> [2,3,5]
+    #-> [[2],[3],[5]]
 
     Column(Nullable{Int}[nothing, 2, 3, nothing, 5])
-    #-> [#NULL,2,3,#NULL,5]
+    #-> [[],[2],[3],[],[5]]
 
     Column([Int[], [2], [3,5]])
-    #-> [Int64[],[2],[3,5]]
+    #-> [[],[2],[3,5]]
 
 Columns could be reordered.
 
     display(iso_col[[1,3,5]])
     #=>
     3-element column of Int64:
-     1
-     3
-     5
+     [1]
+     [3]
+     [5]
     =#
 
     display(opt_col[[1,3,5]])
     #=>
     3-element column of Int64?:
-     #NULL
-     2
-     4
+     []
+     [2]
+     [4]
     =#
 
     display(seq_col[[1,3,5]])
@@ -138,6 +140,23 @@ Columns could be reordered.
      [1,2]
      [5,6]
      [9,10]
+    =#
+
+A column cursor could be used to iterate over column elements.
+
+    cr = cursor(seq_col)
+    #-> []
+
+    while !done(seq_col, cr)
+        next!(seq_col, cr)
+        println(cr)
+    end
+    #=>
+    [1,2]
+    [3,4]
+    [5,6]
+    [7,8]
+    [9,10]
     =#
 
 The components of the column could be obtained using functions `offsets()` and
@@ -165,10 +184,10 @@ and `isplural()`.
     #-> true
 
 
-Record vector
--------------
+Data vector
+-----------
 
-A record vector is a vector of tuples stored in a column-oriented format.
+A data vector is a vector of composite data stored in a column-oriented format.
 
     using RBT:
         DataVector,
@@ -191,7 +210,7 @@ The vector may contain nullable and plural columns.
 
     display(tv)
     #=>
-    5-element vector of Tuple{  …  }:
+    5-element composite vector of {Int64, Int64?, Int64*}:
      (1,1,Int64[])
      (2,2,[1])
      (3,3,[2,3])
@@ -206,17 +225,17 @@ output.
 
     display(hcol)
     #=>
-    3-element column of Tuple{Int64,Nullable{Int64},SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true}}*:
-     Tuple{  …  }[]
-     Tuple{  …  }[(1,1,Int64[]),(2,2,[1])]
-     Tuple{  …  }[(3,3,[2,3]),(4,4,[4,5,6,7]),(5,#NULL,[8,9,10,11,12])]
+    3-element column of {Int64, Int64?, Int64*}*:
+     []
+     [(1,1,Int64[]),(2,2,[1])]
+     [(3,3,[2,3]),(4,4,[4,5,6,7]),(5,#NULL,[8,9,10,11,12])]
     =#
 
     htv = TupleVector('a':'c', hcol)
 
     display(htv)
     #=>
-    3-element vector of Tuple{  …  }:
+    3-element composite vector of {Char, {Int64, Int64?, Int64*}*}:
      ('a',Tuple{  …  }[])
      ('b',Tuple{  …  }[(1,1,Int64[]),(2,2,[1])])
      ('c',Tuple{  …  }[(3,3,[2,3]),(4,4,[4,5,6,7]),(5,#NULL,[8,9,10,11,12])])
@@ -224,7 +243,7 @@ output.
 
 The length of the vector can be explicitly specified.
 
-    TupleVector(5)
+    TupleVector(5, ())
     #-> [(),(),(),(),()]
 
 It is also possible to create a record vector with named fields.
@@ -233,7 +252,7 @@ It is also possible to create a record vector with named fields.
 
     display(rv)
     #=>
-    5-element vector of @Record(ch::Char, x::Int64):
+    5-element composite vector of {ch::Char, x::Int64}:
      @Record(ch = 'a', x = 1)
      @Record(ch = 'b', x = 2)
      @Record(ch = 'c', x = 3)
@@ -251,7 +270,7 @@ We can also use a record type that conceals the types of its columns.
 
     display(dv)
     #=>
-    5-element vector of Tuple{Int64,Nullable{Int64},SubArray{Int64,1,Array{Int64,1},Tuple{UnitRange{Int64}},true}}:
+    5-element composite vector of {Int64, Int64?, Int64*}:
      (1,1,Int64[])
      (2,2,[1])
      (3,3,[2,3])
@@ -264,11 +283,6 @@ It is possible to convert it to a regular record vector.
     typeof(dv)
     #-> RBT.DataVector
 
-    typeof(getdata(dv))
+    typeof(convert(TupleVector, dv))
     #-> RBT.TupleVector{Tuple{Int64  …  },Tuple{RBT.Column{false,false,Base.OneTo{Int64},UnitRange{Int64}}  …  }}
-
-We can also convert it a record with named fields.
-
-    typeof(getdata(@Record(a::Int, b::Nullable{Int}, c::Vector{Int}), dv))
-    #-> RBT.TupleVector{@Record(a::Int64  …  ),Tuple{RBT.Column{false,false,Base.OneTo{Int64},UnitRange{Int64}}  …  }}
 

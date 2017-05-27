@@ -1,74 +1,198 @@
 #
-# Record vector that hides its signature.
+# A vector of composite data stored in a column-oriented format.
 #
 
-immutable DataVector <: AbstractVector{Tuple}
-    len::Int
-    cols::Vector{Column}
+abstract AbstractCompositeVector{R} <: AbstractVector{R}
 
-    function DataVector(len::Int, cols::Vector{Column})
-        for col in cols
+@inline column(cv::AbstractCompositeVector, k::Int) =
+    columns(cv)[k]
+
+guesslength(cols::Columns) =
+    !isempty(cols) ? length(cols[1]) : 0
+
+guesstype(cols::Columns) =
+    Tuple{map(datatype, cols)...}
+
+linearindexing{T<:AbstractCompositeVector}(::Type{T}) = Base.LinearFast()
+
+Base.array_eltype_show_how(::AbstractCompositeVector) = (true, "")
+
+Base.summary(cv::AbstractCompositeVector) =
+    "$(length(cv))-element composite vector of $(typesummary(cv))"
+
+function typesummary(cv::AbstractCompositeVector)
+    names = fieldnames(eltype(cv))
+    cols = columns(cv)
+    fields =
+        if eltype(names) == Symbol && length(names) == length(cols)
+            map((n, c) -> "$n::$(typesummary(c))", names, cols)
+        else
+            map(typesummary, cols)
+        end
+    return string("{", join(fields, ", "), "}")
+end
+
+# Composite vector with an open signature.
+
+immutable TupleVector{R,C<:ColumnTuple} <: AbstractCompositeVector{R}
+    len::Int
+    cols::C
+
+    function TupleVector(len::Int, cols::C)
+        @boundscheck for col in cols
             length(col) == len || error("unexpected column length")
         end
         new(len, cols)
     end
 end
 
+typealias RecordVector{R<:AbstractRecord} TupleVector{R}
+
+TupleVector(len::Int, cols::ColumnTuple) =
+    TupleVector{guesstype(cols),typeof(cols)}(len, cols)
+
+TupleVector(len::Int, cols::Tuple{AbstractVector, Vararg{AbstractVector}}) =
+    TupleVector(len, map(Column, cols))
+
+TupleVector(cols::ColumnTuple) =
+    TupleVector(guesslength(cols), cols)
+
+TupleVector(cols::Tuple{AbstractVector, Vararg{AbstractVector}}) =
+    TupleVector(map(Column, cols))
+
+TupleVector(len::Int, cols::AbstractVector...) =
+    TupleVector(len, map(Column, cols))
+
+TupleVector(cols::AbstractVector...) =
+    TupleVector(map(Column, cols))
+
+function RecordVector(len::Int, fcols::Vector{Tuple{Symbol,Column}})
+    nfields = length(fcols)
+    fieldnames = Vector{Symbol}(nfields)
+    fieldcols = Vector{Column}(nfields)
+    fieldtypes = Vector{Type}(nfields)
+    seen = Set{Symbol}()
+    for (k, (field, col)) in enumerate(fcols)
+        if field == Symbol("")
+            field = Symbol("_", k)
+        end
+        if field in seen
+            field = Symbol(field, "′")
+        end
+        fieldnames[k] = field
+        fieldcols[k] = col
+        fieldtypes[k] = datatype(col)
+        push!(seen, field)
+    end
+    R = recordtype(fieldnames){fieldtypes...}
+    cols = (fieldcols...)
+    return TupleVector{R,typeof(cols)}(len, cols)
+end
+
+RecordVector(fcols::Vector{Tuple{Symbol,Column}}) =
+    RecordVector(!isempty(fcols) ? length(fcols[1][2]) : 0, fcols)
+
+RecordVector(len::Int; kwargs...) =
+    RecordVector(len, collect(Tuple{Symbol,Column}, kwargs))
+
+RecordVector(; kwargs...) =
+    RecordVector(collect(Tuple{Symbol,Column}, kwargs))
+
+@inline columns(tv::TupleVector) = tv.cols
+
+@inline size(tv::TupleVector) = (tv.len,)
+
+@inline length(tv::TupleVector) = tv.len
+
+@inline getindex{R}(tv::TupleVector{R}, i::Int) =
+    getdata(R, tv.cols, i)
+
+@inline getindex{R,C}(tv::TupleVector{R,C}, idxs::AbstractVector{Int}) =
+    TupleVector{R,C}(length(idxs), map(col -> col[idx], tv.cols))
+
+# Composite vector with a hidden signature.
+
+immutable DataVector <: AbstractCompositeVector{Any}
+    R::Type
+    len::Int
+    cols::ColumnVector
+
+    function DataVector(T::Type, len::Int, cols::ColumnVector)
+        @boundscheck for col in cols
+            length(col) == len || error("unexpected column length")
+        end
+        new(T, len, cols)
+    end
+end
+
+DataVector(R::Type, cols::ColumnVector) =
+    DataVector(R, guesslength(cols), cols)
+
+DataVector(len::Int, cols::ColumnVector) =
+    DataVector(Any, len, cols)
+
+DataVector(cols::ColumnVector) =
+    DataVector(Any, guesslength(cols), cols)
+
+DataVector(R::Type, len::Int, cols::AbstractVector...) =
+    DataVector(R, len, collect(Column, cols))
+
+DataVector(R::Type, cols::AbstractVector...) =
+    DataVector(R, collect(Column, cols))
+
 DataVector(len::Int, cols::AbstractVector...) =
     DataVector(len, collect(Column, cols))
 
 DataVector(cols::AbstractVector...) =
-    DataVector(!isempty(cols) ? length(cols[1]) : 0, collect(Column, cols))
+    DataVector(collect(Column, cols))
 
-datatype(dv::DataVector) =
-    Tuple{map(datatype, dv.cols)...}
+convert(::Type{TupleVector}, dv::DataVector) =
+    let cols = (dv.cols...), R = dv.R != Any ? dv.R : guesstype(cols)
+        TupleVector{R,typeof(cols)}(dv.len, cols)
+    end
 
-getdata(dv::DataVector) =
-    TupleVector(dv.len, dv.cols...)
+convert{R<:Type,C<:ColumnTuple}(::Type{TupleVector{R,C}}, dv::DataVector) =
+    let cols = (dv.cols...)
+        TupleVector{R,typeof(cols)}(dv.len, cols)
+    end
 
-getdata(R::Type, dv::DataVector) =
-    TupleVector(R, dv.len, dv.cols...)
+@inline columns(dv::DataVector) =
+    dv.cols
 
-# Vector interface.
+@inline eltype(dv::DataVector) =
+    dv.R
 
-size(dv::DataVector) = (dv.len,)
+@inline size(dv::DataVector) = (dv.len,)
 
-length(dv::DataVector) = dv.len
+@inline length(dv::DataVector) = dv.len
 
 getindex(dv::DataVector, i::Int) =
-    getdata((dv.cols...), i)
+    getdata(dv.R, dv.cols, i)
 
 getindex(dv::DataVector, idxs::AbstractVector{Int}) =
-    DataVector(length(idxs), Column[col[idxs] for col in dv.cols])
-
-Base.linearindexing(::Type{DataVector}) = Base.LinearFast()
-
-Base.array_eltype_show_how(::DataVector) = (true, "")
-
-Base.summary(dv::DataVector) =
-    "$(dv.len)-element vector of $(datatype(dv))"
+    DataVector(length(idxs), map(col -> col[idx], dv.cols))
 
 Base.mapfoldl(f, op, v0, dv::DataVector) =
-    mapfoldl(f, op, v0, getdata(dv))
+    mapfoldl(f, op, v0, convert(TupleVector, dv))
 
 Base.mapfoldl(f, op, dv::DataVector) =
-    mapfoldl(f, op, getdata(dv))
+    mapfoldl(f, op, convert(TupleVector, dv))
 
 Base.mapfoldr(f, op, v0, dv::DataVector) =
-    mapfoldr(f, op, v0, getdata(dv))
+    mapfoldr(f, op, v0, convert(TupleVector, dv))
 
 Base.mapfoldr(f, op, dv::DataVector) =
-    mapfoldr(f, op, getdata(dv))
+    mapfoldr(f, op, convert(TupleVector, dv))
 
 Base.mapreduce(f, op, v0, dv::DataVector) =
-    mapreduce(f, op, v0, getdata(dv))
+    mapreduce(f, op, v0, convert(TupleVector, dv))
 
 Base.mapreduce(f, op, dv::DataVector) =
-    mapreduce(f, op, getdata(dv))
+    mapreduce(f, op, convert(TupleVector, dv))
 
 Base.foreach(f, dv::DataVector) =
-    foreach(f, getdata(dv))
+    foreach(f, convert(TupleVector, dv))
 
 Base.map(f, dv::DataVector) =
-    map(f, getdata(dv))
+    map(f, convert(TupleVector, dv))
 
