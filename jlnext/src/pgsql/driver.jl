@@ -60,14 +60,7 @@ adaptval(::Type{PGTypeOID{0x000003ed}}, text::String) =
 function getresult(res)
     ntuples = PQntuples(res)
     nfields = PQnfields(res)
-    out = Array{String}(ntuples, nfields)
-    for i = 1:ntuples
-        for j = 1:nfields
-            val = unsafe_string(PQgetvalue(res, Int32(i-1), Int32(j-1)))
-            out[i,j] = val
-        end
-    end
-    flows = Vector{OutputFlow}(nfields)
+    cols = Vector{Column}(nfields)
     for j = 1:nfields
         tag  = Symbol(unsafe_string(PQfname(res, Int32(j-1))))
         tid = PQftype(res, Int32(j-1))
@@ -77,16 +70,16 @@ function getresult(res)
                 nnulls += 1
             end
         end
-        col =
+        cols[j] =
             if nnulls == 0
                 vals = Vector{String}(ntuples)
                 for i = 1:ntuples
                     val = unsafe_string(PQgetvalue(res, Int32(i-1), Int32(j-1)))
                     vals[i] = val
                 end
-                Column(1:ntuples+1, adapt(tid, vals))
+                OptionalColumn(OneTo(ntuples+1), adapt(tid, vals))
             elseif nnulls == ntuples
-                Column(fill(1, ntuples+1), adapt(tid, String[]))
+                OptionalColumn(fill(1, ntuples+1), adapt(tid, String[]))
             else
                 offs = Vector{Int}(ntuples+1)
                 vals = Vector{String}(ntuples-nnulls)
@@ -100,12 +93,10 @@ function getresult(res)
                     end
                     offs[i+1] = n
                 end
-                Column(offs, adapt(tid, vals))
+                OptionalColumn(offs, adapt(tid, vals))
             end
-        flow = OutputFlow(Output(adapt(tid)) |> setoptional() |> decorate(:tag => tag) |> decorate(:tid => tid), col)
-        flows[j] = flow
     end
-    return DataSet(Int64(ntuples), flows)
+    return DataVector(Int64(ntuples), cols)
 end
 
 function connect(uri)
@@ -188,6 +179,9 @@ function execute(conn::PGConnection, sql::String)
     conn.busy = false
     return out
 end
+
+execute(fn::Function, conn::PGConnection, sql::String) =
+    foreach(fn, execute(conn, sql))
 
 function disconnect(conn::PGConnection)
     if !conn.closed

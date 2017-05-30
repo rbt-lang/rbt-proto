@@ -13,6 +13,11 @@ guesslength(cols::Columns) =
 guesstype(cols::Columns) =
     Tuple{map(datatype, cols)...}
 
+guesstype(::Type{Any}, cols::Columns) =
+    guesstype(cols)
+
+guesstype{T}(::Type{T}, cols::Columns) = T
+
 linearindexing{T<:AbstractCompositeVector}(::Type{T}) = Base.LinearFast()
 
 Base.array_eltype_show_how(::AbstractCompositeVector) = (true, "")
@@ -113,32 +118,23 @@ RecordVector(; kwargs...) =
 # Composite vector with a hidden signature.
 
 immutable DataVector <: AbstractCompositeVector{Any}
-    R::Type
+    meta::Any
     len::Int
     cols::ColumnVector
 
-    function DataVector(T::Type, len::Int, cols::ColumnVector)
+    function DataVector(meta, len::Int, cols::ColumnVector)
         @boundscheck for col in cols
             length(col) == len || error("unexpected column length")
         end
-        new(T, len, cols)
+        new(meta, len, cols)
     end
 end
-
-DataVector(R::Type, cols::ColumnVector) =
-    DataVector(R, guesslength(cols), cols)
 
 DataVector(len::Int, cols::ColumnVector) =
     DataVector(Any, len, cols)
 
 DataVector(cols::ColumnVector) =
     DataVector(Any, guesslength(cols), cols)
-
-DataVector(R::Type, len::Int, cols::AbstractVector...) =
-    DataVector(R, len, collect(Column, cols))
-
-DataVector(R::Type, cols::AbstractVector...) =
-    DataVector(R, collect(Column, cols))
 
 DataVector(len::Int, cols::AbstractVector...) =
     DataVector(len, collect(Column, cols))
@@ -147,12 +143,7 @@ DataVector(cols::AbstractVector...) =
     DataVector(collect(Column, cols))
 
 convert(::Type{TupleVector}, dv::DataVector) =
-    let cols = (dv.cols...), R = dv.R != Any ? dv.R : guesstype(cols)
-        TupleVector{R,typeof(cols)}(dv.len, cols)
-    end
-
-convert{R<:Type,C<:ColumnTuple}(::Type{TupleVector{R,C}}, dv::DataVector) =
-    let cols = (dv.cols...)
+    let cols = (dv.cols...), R = guesstype(dv.meta, dv.cols)
         TupleVector{R,typeof(cols)}(dv.len, cols)
     end
 
@@ -160,17 +151,17 @@ convert{R<:Type,C<:ColumnTuple}(::Type{TupleVector{R,C}}, dv::DataVector) =
     dv.cols
 
 @inline eltype(dv::DataVector) =
-    dv.R
+    guesstype(dv.meta, dv.cols)
 
 @inline size(dv::DataVector) = (dv.len,)
 
 @inline length(dv::DataVector) = dv.len
 
 getindex(dv::DataVector, i::Int) =
-    getdata(dv.R, dv.cols, i)
+    getdata(dv.meta, dv.cols, i)
 
 getindex(dv::DataVector, idxs::AbstractVector{Int}) =
-    DataVector(length(idxs), map(col -> col[idx], dv.cols))
+    DataVector(dv.meta, length(idxs), map(col -> col[idx], dv.cols))
 
 Base.mapfoldl(f, op, v0, dv::DataVector) =
     mapfoldl(f, op, v0, convert(TupleVector, dv))

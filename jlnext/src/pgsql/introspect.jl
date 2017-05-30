@@ -428,27 +428,23 @@ function introspect(conn::PGConnection)
     catalog = newcatalog()
     # Extract schemas.
     oid2schema = Dict{UInt32,PGImage{PGSchema}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT n.oid, n.nspname
         FROM pg_catalog.pg_namespace n
         ORDER BY n.nspname
-    """)
-    for (oid, nspname) in res
-        oid = get(oid)
-        nspname = get(nspname)
+    """) do row
+        oid, nspname = map(get, row)
         schema = addschema(catalog, nspname)
         oid2schema[oid] = schema
     end
     # Extract ENUM labels.
     oid2labels = Dict{UInt32,Vector{String}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT e.enumtypid, e.enumlabel
         FROM pg_catalog.pg_enum e
         ORDER BY e.enumtypid, e.enumsortorder, e.oid
-    """)
-    for (enumtypid, enumlabel) in res
-        enumtypid = get(enumtypid)
-        enumlabel = get(enumlabel)
+    """) do row
+        enumtypid, enumlabel = map(get, row)
         if !(enumtypid in keys(oid2labels))
             oid2labels[enumtypid] = String[]
         end
@@ -456,17 +452,13 @@ function introspect(conn::PGConnection)
     end
     # Extract data types.
     oid2type = Dict{UInt32,PGImage{PGType}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT t.oid, t.typnamespace, t.typname, t.typtype,
-               t.typbasetype, t.typlen, t.typtypmod, t.typdefault
+               t.typbasetype, t.typlen, t.typtypmod
         FROM pg_catalog.pg_type t
         ORDER BY t.typnamespace, t.typname
-    """)
-    for (oid, typnamespace, typname, typtype, typbasetype, typlen, typtypmod, typdefault) in res
-        oid = get(oid)
-        typnamespace = get(typnamespace)
-        typname = get(typname)
-        typtype = get(typtype)
+    """) do row
+        oid, typnamespace, typname, typtype, typbasetype, typlen, typtypmod = map(get, row)
         schema = oid2schema[typnamespace]
         type_ =
             if typtype == 'e'
@@ -479,19 +471,13 @@ function introspect(conn::PGConnection)
     end
     # Extract stored procedures.
     oid2procedure = Dict{UInt32,PGImage{PGProcedure}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT p.oid, p.pronamespace, p.proname,
                p.proargtypes, p.prorettype, p.prosrc
         FROM pg_catalog.pg_proc p
         ORDER BY p.pronamespace, p.proname
-    """)
-    for (oid, pronamespace, proname, proargtypes, prorettype, prosrc) in res
-        oid = get(oid)
-        pronamespace = get(pronamespace)
-        proname = get(proname)
-        proargtypes = get(proargtypes)
-        prorettype = get(prorettype)
-        prosrc = get(prosrc)
+    """) do row
+        oid, pronamespace, proname, proargtypes, prorettype, prosrc = map(get, row)
         schema = oid2schema[pronamespace]
         argtypes = PGImage{PGType}[oid2type[proargtype] for proargtype in proargtypes]
         rettype = oid2type[prorettype]
@@ -500,44 +486,35 @@ function introspect(conn::PGConnection)
     end
     # Extract tables.
     oid2table = Dict{UInt32,PGImage{PGTable}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT c.oid, c.relnamespace, c.relname
         FROM pg_catalog.pg_class c
         WHERE c.relkind IN ('r', 'v') AND
               HAS_TABLE_PRIVILEGE(c.oid, 'SELECT')
         ORDER BY c.relnamespace, c.relname
-    """)
-    for (oid, relnamespace, relname) in res
-        oid = get(oid)
-        relnamespace = get(relnamespace)
-        relname = get(relname)
+    """) do row
+        oid, relnamespace, relname = map(get, row)
         schema = oid2schema[relnamespace]
         table = addtable(schema, relname)
         oid2table[oid] = table
     end
     # Extract columns.
     num2column = Dict{Tuple{UInt32,Int16},PGImage{PGColumn}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT a.attrelid, a.attnum, a.attname, a.atttypid, a.atttypmod,
                a.attnotnull, a.atthasdef, a.attisdropped
         FROM pg_catalog.pg_attribute a
         ORDER BY a.attrelid, a.attnum
-    """)
-    for (attrelid, attnum, attname, atttypid, atttypmod, attnotnull, atthasdef, attisdropped) in res
-        attrelid = get(attrelid)
-        attnum = get(attnum)
-        attname = get(attname)
-        atttypid = get(atttypid)
-        attnotnull = get(attnotnull)
-        attisdropped = get(attisdropped)
+    """) do row
+        attrelid, attnum, attname, atttypid, atttypmod, attnotnull, atthasdef, attisdropped = map(get, row)
         if attisdropped
-            continue
+            return
         end
         if attname in ["tableoid", "cmax", "xmax", "cmin", "xmin", "ctid"]
-            continue
+            return
         end
         if !(attrelid in keys(oid2table))
-            continue
+            return
         end
         table = oid2table[attrelid]
         type_ = oid2type[atttypid]
@@ -546,15 +523,12 @@ function introspect(conn::PGConnection)
         num2column[(attrelid, attnum)] = column
     end
     # Extract default values.
-    res = execute(conn, """
+    execute(conn, """
         SELECT a.adrelid, a.adnum, pg_get_expr(a.adbin, a.adrelid)
         FROM pg_catalog.pg_attrdef a
         ORDER BY a.adrelid, a.adnum
-    """)
-    for (adrelid, adnum, adsrc) in res
-        adrelid = get(adrelid)
-        adnum = get(adnum)
-        adsrc = get(adsrc)
+    """) do row
+        adrelid, adnum, adsrc = map(get, row)
         if (adrelid, adnum) in keys(num2column)
             column = num2column[(adrelid, adnum)]
             setdefault(column, adsrc)
@@ -562,22 +536,19 @@ function introspect(conn::PGConnection)
     end
     # Extract sequences.
     oid2sequence = Dict{UInt32,PGImage{PGSequence}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT c.oid, c.relnamespace, c.relname
         FROM pg_catalog.pg_class c
         WHERE c.relkind = 'S'
         ORDER BY c.relnamespace, c.relname
-    """)
-    for (oid, relnamespace, relname) in res
-        oid = get(oid)
-        relnamespace = get(relnamespace)
-        relname = get(relname)
+    """) do row
+        oid, relnamespace, relname = map(get, row)
         schema = oid2schema[relnamespace]
         sequence = addsequence(schema, relname)
         oid2sequence[oid] = sequence
     end
     # Associate sequences with the columns that own them.
-    res = execute(conn, """
+    execute(conn, """
         SELECT d.objid, d.refobjid, d.refobjsubid
         FROM pg_catalog.pg_depend d
         JOIN pg_catalog.pg_class c
@@ -586,33 +557,25 @@ function introspect(conn::PGConnection)
               d.refclassid = 'pg_class'::regclass AND
               d.objsubid IS NOT NULL
         ORDER BY d.objid, d.refobjid, d.objsubid
-    """)
-    for (objid, refobjid, refobjsubid) in res
-        objid = get(objid)
-        refobjid = get(refobjid)
-        refobjsubid = get(refobjsubid)
+    """) do row
+        objid, refobjid, refobjsubid = map(get, row)
         sequence = oid2sequence[objid]
         column = num2column[(refobjid, refobjsubid)]
         setcolumn(sequence, column)
     end
     # Extract indexes.
     oid2index = Dict{UInt32,PGImage{PGIndex}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT c.oid, c.relnamespace, c.relname, i.indrelid, i.indkey
         FROM pg_catalog.pg_class c
         JOIN pg_catalog.pg_index i
         ON (c.oid = i.indexrelid)
         WHERE c.relkind = 'i'
         ORDER BY c.relnamespace, c.relname
-    """)
-    for (oid, relnamespace, relname, indrelid, indkey) in res
-        oid = get(oid)
-        relnamespace = get(relnamespace)
-        relname = get(relname)
-        indrelid = get(indrelid)
-        indkey = get(indkey)
+    """) do row
+        oid, relnamespace, relname, indrelid, indkey = map(get, row)
         if !(indrelid in keys(oid2table))
-            continue
+            return
         end
         schema = oid2schema[relnamespace]
         table = oid2table[indrelid]
@@ -627,20 +590,15 @@ function introspect(conn::PGConnection)
     end
     # Extract unique keys.
     oid2ukey = Dict{UInt32,PGImage{PGUniqueKey}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT c.oid, c.conname, c.contype, c.conrelid, c.conkey
         FROM pg_catalog.pg_constraint c
         WHERE c.contype IN ('p', 'u')
         ORDER BY c.oid
-    """)
-    for (oid, conname, contype, conrelid, conkey) in res
-        oid = get(oid)
-        conname = get(conname)
-        contype = get(contype)
-        conrelid = get(conrelid)
-        conkey = get(conkey)
+    """) do row
+        oid, conname, contype, conrelid, conkey = map(get, row)
         if !(conrelid in keys(oid2table))
-            continue
+            return
         end
         table = oid2table[conrelid]
         columns = [num2column[(conrelid, num)] for num in conkey]
@@ -653,24 +611,16 @@ function introspect(conn::PGConnection)
     end
     # Extract foreign keys.
     oid2fkey = Dict{UInt32, PGImage{PGForeignKey}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT c.oid, c.conname, c.conrelid, c.conkey,
                c.confrelid, c.confkey, c.confupdtype, c.confdeltype
         FROM pg_catalog.pg_constraint c
         WHERE c.contype = 'f'
         ORDER BY c.oid
-    """)
-    for (oid, conname, conrelid, conkey, confrelid, confkey, confupdtype, confdeltype) in res
-        oid = get(oid)
-        conname = get(conname)
-        conrelid = get(conrelid)
-        conkey = get(conkey)
-        confrelid = get(confrelid)
-        confkey = get(confkey)
-        confupdtype = get(confupdtype)
-        confdeltype = get(confdeltype)
+    """) do row
+        oid, conname, conrelid, conkey, confrelid, confkey, confupdtype, confdeltype = map(get, row)
         if !(conrelid in keys(oid2table)) || !(confrelid in keys(oid2table))
-            continue
+            return
         end
         table = oid2table[conrelid]
         columns = [num2column[(conrelid, num)] for num in conkey]
@@ -693,24 +643,20 @@ function introspect(conn::PGConnection)
     end
     # Extract triggers.
     oid2trigger = Dict{UInt32,PGImage{PGTrigger}}()
-    res = execute(conn, """
+    execute(conn, """
         SELECT t.oid, t.tgrelid, t.tgname, t.tgfoid
         FROM pg_catalog.pg_trigger AS t
         WHERE NOT t.tgisinternal
         ORDER BY t.tgrelid, t.tgname
-    """)
-    for (oid, tgrelid, tgname, tgfoid) in res
-        oid = get(oid)
-        tgrelid = get(tgrelid)
-        tgname = get(tgname)
-        tgfoid = get(tgfoid)
+    """) do row
+        oid, tgrelid, tgname, tgfoid = map(get, row)
         table = oid2table[tgrelid]
         procedure = oid2procedure[tgfoid]
         trigger = addtrigger(table, tgname, procedure)
         oid2trigger[oid] = trigger
     end
     # Extract comments.
-    res = execute(conn, """
+    execute(conn, """
         SELECT c.relname, d.objoid, d.objsubid, d.description
         FROM pg_catalog.pg_description d
         JOIN pg_catalog.pg_class c
@@ -722,12 +668,8 @@ function introspect(conn::PGConnection)
                              'pg_catalog.pg_constraint'::regclass,
                              'pg_catalog.pg_trigger'::regclass)
         ORDER BY d.objoid, d.classoid, d.objsubid
-    """)
-    for (relname, objoid, objsubid, description) in res
-        relname = get(relname)
-        objoid = get(objoid)
-        objsubid = get(objsubid)
-        description = get(description)
+    """) do row
+        relname, objoid, objsubid, description = map(get, row)
         if relname == "pg_namespace"
             schema = oid2schema[objoid]
             setcomment(schema, description)
