@@ -245,12 +245,12 @@ function execute{T}(q::Query, val::T=nothing; paramvals...)
     else
         frameoffs = InputFrame()
     end
-    pflows = InputParameterFlow[]
+    pflows = InputSlotFlow[]
     parammap = Dict{Symbol,Any}(paramvals)
-    for (pname, ptype) in parameters(itype)
+    for (pname, ptype) in slots(itype)
         paramval = get(parammap, pname, nothing)
         paramcol = Column(OneTo(2), [paramval])
-        paramflow = InputParameterFlow(pname, OutputFlow(ptype, paramcol))
+        paramflow = InputSlotFlow(pname, OutputFlow(ptype, paramcol))
         push!(pflows, paramflow)
     end
     iflow = InputFlow(InputContext(), T, T[val], frameoffs, pflows)

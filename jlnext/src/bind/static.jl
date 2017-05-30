@@ -354,7 +354,7 @@ function compile(sig::StaticBinding{:given}, scope::Scope, base::Syntax, keys::V
         kq = compile(scope, key)
         push!(kqs, kq)
         tag = decoration(domain(output(kq)), :tag, Symbol, Symbol(""))
-        binding = QueryBinding(ParameterQuery(tag, output(kq)) |> setnamespace(kq.ns))
+        binding = QueryBinding(SlotQuery(tag, output(kq)) |> setnamespace(kq.ns))
         globs = assoc(globs, (tag, 0), binding)
         scope = Scope(scope.db, scope.dom, globs, scope.locs)
     end

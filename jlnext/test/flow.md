@@ -100,22 +100,22 @@ The query input is represented as an *input flow*.
         InputContext,
         InputFlow,
         InputFrame,
-        InputParameter,
-        InputParameterFlow,
+        InputSlot,
+        InputSlotFlow,
         context,
         distribute,
         frameoffsets,
         input,
         narrow,
-        parameterflows,
+        slotflows,
         setoptional,
-        setparameters,
+        setslots,
         setplural,
         setrelative,
         values
 
-When the input is not position-sensitive and has no parameters, it is specified
-with the query context, the input domain and a vector of input values.
+When the input is not position-sensitive and has no slots, it is specified with
+the query context, the input domain and a vector of input values.
 
     ctx = InputContext()
 
@@ -149,16 +149,16 @@ input frame.
      (2,[9,10])
     =#
 
-Similarly, when the query input has non-trivial parameter environment, we need
-to specify the values of the parameters.
+Similarly, when the query input has non-trivial environment, we need to specify
+the values of the slots.
 
     param_flow = InputFlow(
         ctx,
         Int64,
         1:10,
         [
-            InputParameterFlow(:X, OutputFlow(Int64, 1:11, 10:10:100)),
-            InputParameterFlow(:Y, OutputFlow(Int64, 1:11, 100:100:1000)),
+            InputSlotFlow(:X, OutputFlow(Int64, 1:11, 10:10:100)),
+            InputSlotFlow(:Y, OutputFlow(Int64, 1:11, 100:100:1000)),
         ])
     display(param_flow)
     #=>
@@ -185,7 +185,7 @@ We can easily extract individual components of the input flow.
     frameoffsets(rel_flow)
     #-> 1:2:11
 
-    parameterflows(param_flow)
+    slotflows(param_flow)
     #-> Pair{Symbol,RBT.OutputFlow}[:X=>[10  …  100],:Y=>[100  …  1000]]
 
 The input flow could be narrowed to a smaller input signature.
@@ -200,7 +200,7 @@ The input flow could be narrowed to a smaller input signature.
      10
     =#
 
-    nparam_flow = narrow(param_flow, Input(Int64) |> setparameters([InputParameter(:X, Int64)]))
+    nparam_flow = narrow(param_flow, Input(Int64) |> setslots([InputSlot(:X, Int64)]))
     display(nparam_flow)
     #=>
     InputFlow[10 × {Int64, X => Int64}]:
@@ -218,7 +218,7 @@ flow.
         Int64,
         1:10,
         InputFrame(1:2:11),
-        [InputParameterFlow(:X, OutputFlow(Int64, 1:11, 10:10:100))])
+        [InputSlotFlow(:X, OutputFlow(Int64, 1:11, 10:10:100))])
     display(iflow)
     #=>
     InputFlow[10 × {(Int64...), X => Int64}]:

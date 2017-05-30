@@ -624,19 +624,19 @@ The unique combinator filters out duplicate values.
     #-> [Int64[],[1],[2,1],[2,1],[1,2]]
 
 
-Parameters
-----------
+Slots
+-----
 
-The parameter primitive extracts a parameter value from the input flow.
+The slot primitive extracts a slot value from the input flow.
 
     using RBT:
         GivenQuery,
         InputContext,
         InputFlow,
         InputFrame,
-        InputParameterFlow,
+        InputSlotFlow,
         OutputFlow,
-        ParameterQuery
+        SlotQuery
 
     q0 = CollectionQuery(1:10)
     #-> Void -> Int64*
@@ -644,7 +644,7 @@ The parameter primitive extracts a parameter value from the input flow.
     q1 = LiftQuery(%, ItQuery(Int), ConstQuery(3))
     #-> Int64 -> Int64
 
-    q2 = ParameterQuery(:D, Int)
+    q2 = SlotQuery(:D, Int)
     #-> {Any, D => Int64} -> Int64
 
     q = FilterQuery(q0, LiftQuery(==, q1, q2))
@@ -655,13 +655,13 @@ The parameter primitive extracts a parameter value from the input flow.
         Void,
         [nothing],
         InputFrame(),
-        InputParameterFlow[:D => OutputFlow(Int, [1, 2], [1])])
+        InputSlotFlow[:D => OutputFlow(Int, [1, 2], [1])])
     #-> [(nothing,:D=>1)]
 
     ev(q, iflow)
     #-> [[1,4,7,10]]
 
-The value of the parameter could be specified with the given combinator.
+The value of the slot could be specified with the given combinator.
 
     q = GivenQuery(q, :D => ConstQuery(1))
     #-> Void -> Int64*

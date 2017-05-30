@@ -324,7 +324,7 @@ Unique(F::Combinator) =
 
 Parameter(tag::Symbol, oty) =
     Combinator() do q::Query
-        (q >> ParameterQuery(tag, oty)) |> setnamespace(q.ns.db)
+        (q >> SlotQuery(tag, oty)) |> setnamespace(q.ns.db)
     end
 
 Given(Fs::Combinator...) =

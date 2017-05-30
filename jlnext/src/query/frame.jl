@@ -22,7 +22,7 @@ ev(::FrameSig, arg::Query, ::Input, oty::Output, iflow::InputFlow) =
             domain(iflow),
             iflow.vals,
             InputFrame(OneTo(iflow.len+1)),
-            iflow.paramflows)
+            iflow.slotflows)
         OutputFlow(
             oty,
             column(ev(arg, iflow)))

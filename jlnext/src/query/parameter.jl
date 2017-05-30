@@ -1,25 +1,25 @@
 #
-# Extracting a parameter from the environment.
+# Extracting a slot from the environment.
 #
 
-ParameterQuery(tag::Symbol, oty::Output) =
+SlotQuery(tag::Symbol, oty::Output) =
     Query(
-        ParameterSig(tag),
-        Input(Any) |> setparameters([InputParameter(tag, oty)]),
+        SlotSig(tag),
+        Input(Any) |> setslots([InputSlot(tag, oty)]),
         oty)
 
-ParameterQuery(tag::Symbol, oty) =
-    ParameterQuery(tag, convert(Output, oty))
+SlotQuery(tag::Symbol, oty) =
+    SlotQuery(tag, convert(Output, oty))
 
-ParameterQuery(ity::Input, tag::Symbol) =
-    ParameterQuery(tag, parameter(ity, tag))
+SlotQuery(ity::Input, tag::Symbol) =
+    SlotQuery(tag, slot(ity, tag))
 
-immutable ParameterSig <: AbstractPrimitive
+immutable SlotSig <: AbstractPrimitive
     tag::Symbol
 end
 
-function ev(sig::ParameterSig, ::Input, oty::Output, iflow::InputFlow)
-    for (name, flow) in parameterflows(iflow)
+function ev(sig::SlotSig, ::Input, oty::Output, iflow::InputFlow)
+    for (name, flow) in slotflows(iflow)
         if name == sig.tag
             return flow
         end

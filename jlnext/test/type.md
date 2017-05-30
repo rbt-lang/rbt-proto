@@ -299,13 +299,13 @@ Input type
 ----------
 
 The *input type* describes the form of the query input.  It includes the
-input domain, the input *parameters*, and the *flow dependency* indicator.
+input domain, the input *slots*, and the *flow dependency* indicator.
 
     using RBT:
         Domain,
         Input,
         InputMode,
-        InputParameter,
+        InputSlot,
         Void,
         domain,
         isdata,
@@ -313,11 +313,11 @@ input domain, the input *parameters*, and the *flow dependency* indicator.
         isfree,
         isrelative,
         mode,
-        parameters,
-        setparameters,
+        slots,
+        setslots,
         setrelative
 
-The input context includes the input parameters and flow dependency indicator.
+The input context includes the input slots and flow dependency indicator.
 It is represented by `InputMode` object.
 
     free_mode = InputMode()
@@ -326,8 +326,8 @@ It is represented by `InputMode` object.
     rel_mode = free_mode |> setrelative()
     #-> RBT.InputMode(true,Pair{Symbol,RBT.Output}[])
 
-    param_mode =
-        rel_mode |> setrelative(false) |> setparameters([InputParameter(:D,:Dept), InputParameter(:S,Int64)])
+    slot_mode =
+        rel_mode |> setrelative(false) |> setslots([InputSlot(:D,:Dept), InputSlot(:S,Int64)])
     #-> RBT.InputMode(false,Pair{Symbol,RBT.Output}[:D=>Dept,:S=>Int64])
 
     isfree(free_mode)
@@ -339,13 +339,13 @@ It is represented by `InputMode` object.
     isrelative(rel_mode)
     #-> true
 
-    isrelative(param_mode)
+    isrelative(slot_mode)
     #-> false
 
-    parameters(param_mode)
+    slots(slot_mode)
     #-> Pair{Symbol,RBT.Output}[:D=>Dept,:S=>Int64]
 
-    parameters(free_mode)
+    slots(free_mode)
     #-> Pair{Symbol,RBT.Output}[]
 
 The input type is created using the `Input` constructor.
@@ -356,8 +356,8 @@ The input type is created using the `Input` constructor.
     dept_rel_it = Input(:Dept) |> setrelative()
     #-> (Dept...)
 
-    emp_param_it =
-        Input(:Emp, InputMode(false, [InputParameter(:S, Output(Int64) |> setoptional())]))
+    emp_slot_it =
+        Input(:Emp, InputMode(false, [InputSlot(:S, Output(Int64) |> setoptional())]))
     #-> {Emp, S => Int64?}
 
 Components of the input type could be extracted using functions `domain()` and
@@ -383,7 +383,7 @@ Various predicates and accessors can be used to inspect the input type.
     isrelative(dept_rel_it)
     #-> true
 
-    parameters(emp_param_it)
+    slots(emp_slot_it)
     #-> Pair{Symbol,RBT.Output}[:S=>Int64?]
 
 
@@ -397,7 +397,7 @@ Domains are partially ordered with respect to inclusion.
         Domain,
         Input,
         InputMode,
-        InputParameter,
+        InputSlot,
         Output,
         OutputMode,
         fits,
@@ -453,11 +453,11 @@ Finally, we can check if the given input type fits the expected input type.
     #-> false
 
     fits(
-        Input(:Dept) |> setparameters([InputParameter(:S, Int64)]),
-        Input(:Dept) |> setparameters([InputParameter(:S, Output(Int64) |> setoptional())]))
+        Input(:Dept) |> setslots([InputSlot(:S, Int64)]),
+        Input(:Dept) |> setslots([InputSlot(:S, Output(Int64) |> setoptional())]))
     #-> true
 
-    fits(Input(:Dept), Input(:Dept) |> setparameters([InputParameter(:S, Int64)]))
+    fits(Input(:Dept), Input(:Dept) |> setslots([InputSlot(:S, Int64)]))
     #-> false
 
 For any two domains, the smallest domain that encapsulates both of them is

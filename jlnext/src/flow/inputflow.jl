@@ -4,8 +4,8 @@
 
 typealias InputContext Dict{Symbol,Any}
 typealias InputFrame Nullable{AbstractVector{Int}}
-typealias InputParameterFlow Pair{Symbol, OutputFlow}
-typealias InputParameterFlows Vector{InputParameterFlow}
+typealias InputSlotFlow Pair{Symbol, OutputFlow}
+typealias InputSlotFlows Vector{InputSlotFlow}
 
 immutable InputFlow <: AbstractVector{Any}
     ctx::InputContext
@@ -13,32 +13,32 @@ immutable InputFlow <: AbstractVector{Any}
     len::Int
     vals::AbstractVector
     frameoffs::InputFrame
-    paramflows::InputParameterFlows
+    slotflows::InputSlotFlows
 
     function InputFlow(
             ctx,
             dom,
             vals::AbstractVector,
             frameoffs::InputFrame=InputFrame(),
-            paramflows::InputParameterFlows=InputParameterFlow[])
+            slotflows::InputSlotFlows=InputSlotFlow[])
         relative = !isnull(frameoffs)
-        parameters = InputParameter[n => output(pflow) for (n, pflow) in paramflows]
-        sig = Input(dom) |> setrelative(relative) |> setparameters(parameters)
+        slots = InputSlot[n => output(pflow) for (n, pflow) in slotflows]
+        sig = Input(dom) |> setrelative(relative) |> setslots(slots)
         len = length(vals)
         if !isnull(frameoffs)
             @assert length(get(frameoffs)) >= 1
             @assert get(frameoffs)[1] == 1
             @assert get(frameoffs)[end] == len+1
         end
-        for (n, pflow) in paramflows
+        for (n, pflow) in slotflows
             @assert length(pflow) == len
         end
-        return new(ctx, sig, len, vals, frameoffs, paramflows)
+        return new(ctx, sig, len, vals, frameoffs, slotflows)
     end
 end
 
-InputFlow(ctx, dom, vals::AbstractVector, paramflows::InputParameterFlows) =
-    InputFlow(ctx, dom, vals, InputFrame(), paramflows)
+InputFlow(ctx, dom, vals::AbstractVector, slotflows::InputSlotFlows) =
+    InputFlow(ctx, dom, vals, InputFrame(), slotflows)
 
 # Array interface.
 
@@ -46,7 +46,7 @@ size(flow::InputFlow) = (flow.len,)
 length(flow::InputFlow) = flow.len
 
 function getindex(flow::InputFlow, i::Int)
-    if isnull(flow.frameoffs) && isempty(flow.paramflows)
+    if isnull(flow.frameoffs) && isempty(flow.slotflows)
         return flow.vals[i]
     end
     val =
@@ -62,10 +62,10 @@ function getindex(flow::InputFlow, i::Int)
             r = frameoffs[frame+1]
             (i - l + 1, view(flow.vals, l:r-1))
         end
-    if isempty(flow.paramflows)
+    if isempty(flow.slotflows)
         return val
     end
-    return (val, ((n => pflow[i]) for (n, pflow) in flow.paramflows)...)
+    return (val, ((n => pflow[i]) for (n, pflow) in flow.slotflows)...)
 end
 
 Base.array_eltype_show_how(::InputFlow) = (true, "")
@@ -79,11 +79,11 @@ input(flow::InputFlow) = flow.sig
 domain(flow::InputFlow) = domain(flow.sig)
 isfree(flow::InputFlow) = isfree(flow.sig)
 isrelative(flow::InputFlow) = isrelative(flow.sig)
-parameters(flow::InputFlow) = parameters(flow.sig)
+slots(flow::InputFlow) = slots(flow.sig)
 
 values(flow::InputFlow) = flow.vals
 frameoffsets(flow::InputFlow) = get(flow.frameoffs)
-parameterflows(flow::InputFlow) = flow.paramflows
+slotflows(flow::InputFlow) = flow.slotflows
 
 # Converting to a smaller input signature.
 
@@ -93,16 +93,16 @@ function narrow(flow::InputFlow, sig::Input)
     end
     @assert fits(mode(flow.sig), mode(sig))
     frameoffs = !isrelative(sig) ? InputFrame() : flow.frameoffs
-    paramflows =
-        if length(flow.paramflows) == length(parameters(sig))
-            flow.paramflows
-        elseif length(parameters(sig)) == 0
-            InputParameterFlow[]
+    slotflows =
+        if length(flow.slotflows) == length(slots(sig))
+            flow.slotflows
+        elseif length(slots(sig)) == 0
+            InputSlotFlow[]
         else
-            keep = Set(n for (n, param) in parameters(sig))
-            filter(p -> p.first in keep, flow.paramflows)
+            keep = Set(n for (n, sl) in slots(sig))
+            filter(p -> p.first in keep, flow.slotflows)
         end
-    return InputFlow(flow.ctx, domain(sig), flow.vals, frameoffs, paramflows)
+    return InputFlow(flow.ctx, domain(sig), flow.vals, frameoffs, slotflows)
 end
 
 # Converting output flow to a new input flow.
@@ -116,9 +116,9 @@ function distribute(iflow::InputFlow, oflow::OutputFlow)
         !isnull(iflow.frameoffs) ?
             InputFrame(dist_frameoffs(get(iflow.frameoffs), offsets(oflow))) :
             iflow.frameoffs,
-        !isempty(iflow.paramflows) ?
-            dist_paramflows(iflow.paramflows, offsets(oflow)) :
-            iflow.paramflows)
+        !isempty(iflow.slotflows) ?
+            dist_slotflows(iflow.slotflows, offsets(oflow)) :
+            iflow.slotflows)
 end
 
 function dist_frameoffs(frameoffs::AbstractVector{Int}, offs::AbstractVector{Int})
@@ -146,7 +146,7 @@ end
 
 dist_frameoffs(frameoffs::AbstractVector{Int}, ::OneTo) = frameoffs
 
-function dist_paramflows(paramflows::InputParameterFlows, offs::AbstractVector{Int})
+function dist_slotflows(slotflows::InputSlotFlows, offs::AbstractVector{Int})
     remap = Vector{Int}(offs[end]-1)
     for i = 1:endof(offs)-1
         l = offs[i]
@@ -155,8 +155,8 @@ function dist_paramflows(paramflows::InputParameterFlows, offs::AbstractVector{I
             remap[k] = i
         end
     end
-    return InputParameterFlow[n => pflow[remap] for (n, pflow) in paramflows]
+    return InputSlotFlow[n => pflow[remap] for (n, pflow) in slotflows]
 end
 
-dist_paramflows(paramflows::InputParameterFlows, ::OneTo) = paramflows
+dist_slotflows(slotflows::InputSlotFlows, ::OneTo) = slotflows
 

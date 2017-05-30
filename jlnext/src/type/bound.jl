@@ -35,14 +35,14 @@ function fits(act::InputMode, exp::InputMode)
     if act.relative < exp.relative
         return false
     end
-    if isempty(exp.params) || exp.params == act.params
+    if isempty(exp.slots) || exp.slots == act.slots
         return true
     end
-    pmap = Dict{Symbol,InputParameter}()
-    for actp in act.params
+    pmap = Dict{Symbol,InputSlot}()
+    for actp in act.slots
         pmap[actp.first] = actp
     end
-    for (n, p) in exp.params
+    for (n, p) in exp.slots
         if !(n in keys(pmap)) || !fits(pmap[n].second, p)
             return false
         end
@@ -139,21 +139,21 @@ function ibound(imode1::InputMode, imode2::InputMode)
         return imode1
     end
     relative = imode1.relative || imode2.relative
-    params =
-        if isempty(imode1.params) || imode1.params == imode2.params
-            imode2.params
-        elseif isempty(imode2.params)
-            imode1.params
+    slots =
+        if isempty(imode1.slots) || imode1.slots == imode2.slots
+            imode2.slots
+        elseif isempty(imode2.slots)
+            imode1.slots
         else
             pmap1 = Dict{Symbol,Output}()
-            for p in imode1.params
+            for p in imode1.slots
                 pmap1[p.first] = p.second
             end
             pmap2 = Dict{Symbol,Output}()
-            for p in imode2.params
+            for p in imode2.slots
                 pmap2[p.first] = p.second
             end
-            ps = InputParameter[]
+            ps = InputSlot[]
             for n in sort(unique([collect(keys(pmap1)); collect(keys(pmap2))]))
                 otype =
                     !haskey(pmap1, n) ?
@@ -165,7 +165,7 @@ function ibound(imode1::InputMode, imode2::InputMode)
             end
             ps
         end
-    return InputMode(relative, params)
+    return InputMode(relative, slots)
 end
 
 ibound(::Type{Input}) = Input(ibound(Domain), ibound(InputMode))
