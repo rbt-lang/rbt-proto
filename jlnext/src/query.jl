@@ -199,15 +199,6 @@ function optimize(q::Query)
     return oq
 end
 
-prim(q::Query) = prim(q.sig, Query[prim(arg) for arg in q.args])
-prim(sig::AbstractSignature, args::Vector{Query}) =
-    Query(sig, args)
-prim(sig::AbstractPrimitive, args::Vector{Query}) =
-    begin
-        @assert isempty(args)
-        Query(sig)
-    end
-
 format(q::Query) =
     format(q, decoration(domain(output(q)), :fmt, Union{Void, Symbol, Vector{Symbol}}, nothing))
 
@@ -255,7 +246,7 @@ function execute{T}(q::Query, val::T=nothing; paramvals...)
     end
     iflow = InputFlow(InputContext(), T, T[val], frameoffs, pflows)
     oflow = ev(q, iflow)
-    return oflow[1]
+    return oflow[nothing]
 end
 
 include("query/const.jl")

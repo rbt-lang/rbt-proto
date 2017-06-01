@@ -37,7 +37,7 @@ end
 function ev(::ComposeSig, args::Vector{Query}, ::Input, oty::Output, iflow::InputFlow)
     oflow = OutputFlow(
             domain(iflow),
-            Column(OneTo(length(iflow)+1), values(iflow)))
+            PlainColumn(values(iflow)))
     first = true
     for arg in args
         iflow′ =
@@ -51,10 +51,12 @@ function ev(::ComposeSig, args::Vector{Query}, ::Input, oty::Output, iflow::Inpu
             if first
                 oflow′
             else
+                optional = isoptional(oflow) || isoptional(oflow′)
+                plural = isplural(oflow) || isplural(oflow′)
                 OutputFlow(
                     output(oflow′),
-                    Column(
-                        ev_compose(offsets(oflow), offsets(oflow′)),
+                    Column{optional,plural}(
+                        compose_impl(offsets(oflow), offsets(oflow′)),
                         values(oflow′)))
             end
         first = false
@@ -62,12 +64,12 @@ function ev(::ComposeSig, args::Vector{Query}, ::Input, oty::Output, iflow::Inpu
     return OutputFlow(oty, column(oflow))
 end
 
-ev_compose(offs1::AbstractVector{Int}, offs2::AbstractVector{Int}) =
+compose_impl(offs1::AbstractVector{Int}, offs2::AbstractVector{Int}) =
     Int[offs2[off] for off in offs1]
 
-ev_compose(offs1::OneTo, offs2::OneTo) = offs1
+compose_impl(offs1::OneTo, offs2::OneTo) = offs1
 
-ev_compose(offs1::OneTo, offs2::AbstractVector{Int}) = offs2
+compose_impl(offs1::OneTo, offs2::AbstractVector{Int}) = offs2
 
-ev_compose(offs1::AbstractVector{Int}, offs2::OneTo) = offs1
+compose_impl(offs1::AbstractVector{Int}, offs2::OneTo) = offs1
 

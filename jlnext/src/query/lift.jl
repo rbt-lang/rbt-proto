@@ -50,12 +50,12 @@ immutable LiftSig <: AbstractPrimitive
     restype::Type
 end
 
-ev(sig::LiftSig, ds::DataSet) =
-    all(isplain(output(flow)) for flow in flows(ds)) ?
-        ev_plain_fn(sig.fn, sig.restype, length(ds), (values(flow) for flow in flows(ds))...) :
-        ev_fn(sig.fn, sig.restype, length(ds), (column(flow) for flow in flows(ds))...)
+ev(sig::LiftSig, dv::DataVector) =
+    all(isplain, columns(dv)) ?
+        plain_lift_impl(sig.fn, sig.restype, length(dv), map(values, columns(dv))...) :
+        lift_impl(sig.fn, sig.restype, length(dv), columns(dv)...)
 
-@generated function ev_plain_fn{T}(
+@generated function plain_lift_impl{T}(
         fn::Function,
         otype::Type{T},
         len::Int,
@@ -72,20 +72,21 @@ ev(sig::LiftSig, ds::DataSet) =
     return quote
         $init
         ($(argvals_vars...),) = args
-        offs = OneTo(len+1)
         vals = Vector{T}(len)
-        for k = 1:len
+        @inbounds for k = 1:len
             vals[k] = fn($((:($argvals_var[k]) for argvals_var in argvals_vars)...))
         end
-        return Column(offs, vals)
+        return PlainColumn(vals)
     end
 end
 
-@generated function ev_fn{T}(
+@generated function lift_impl{T}(
         fn::Function,
         otype::Type{T},
         len::Int,
         args::Column...)
+    optional = any(isoptional, args)
+    plural = any(isplural, args)
     ar = length(args)
     argoffs_vars = ((Symbol("argoffs", i) for i = 1:ar)...)
     argvals_vars = ((Symbol("argvars", i) for i = 1:ar)...)
@@ -124,14 +125,14 @@ end
             for k = 1:len
                 offs[k+1] = 1
             end
-            return Column(offs, vals)
+            return Column{$optional,$plural}(offs, vals)
         end
         n = 1
         for k = 1:len
             $loop
             offs[k+1] = n
         end
-        return Column(offs, vals)
+        return Column{$optional,$plural}(offs, vals)
     end
 end
 
@@ -160,7 +161,7 @@ function ev{T}(::DecodeNullableSig, ivals::AbstractVector{Nullable{T}})
         end
         offs[k+1] = n
     end
-    return Column(offs, vals)
+    return OptionalColumn(offs, vals)
 end
 
 # Vector to plural decoder.
@@ -185,6 +186,6 @@ function ev{T}(::DecodeVectorSig, ivals::AbstractVector{Vector{T}})
         end
         offs[k+1] = n
     end
-    return Column(offs, vals)
+    return PluralColumn(offs, vals)
 end
 

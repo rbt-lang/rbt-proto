@@ -18,10 +18,10 @@ immutable TakeSig <: AbstractPrimitive
     rev::Bool
 end
 
-ev(sig::TakeSig, ds::DataSet) =
-    ev_take(sig.rev, column(ds, 1), column(ds, 2))
+ev(sig::TakeSig, dv::DataVector) =
+    take_impl(sig.rev, column(dv, 1), column(dv, 2))
 
-function ev_take(rev::Bool, icol::Column, ncol::Column)
+function take_impl{OPT,PLU}(rev::Bool, icol::Column{OPT,PLU}, ncol::Column)
     len = length(icol)
     ioffs = offsets(icol)
     ivals = values(icol)
@@ -69,6 +69,6 @@ function ev_take(rev::Bool, icol::Column, ncol::Column)
         end
         offs[k+1] = n
     end
-    return Column(offs, ivals[idxs])
+    return Column{true,PLU}(offs, ivals[idxs])
 end
 

@@ -18,9 +18,9 @@ immutable ConstSig <: AbstractPrimitive
 end
 
 ev(sig::ConstSig, ity::Input, oty::Output, iflow::InputFlow) =
-    ev_const(sig.val, ity, oty, iflow)
+    const_impl(sig.val, ity, oty, iflow)
 
-ev_const(val, ::Input, oty::Output, iflow::InputFlow) =
+const_impl(val, ::Input, oty::Output, iflow::InputFlow) =
     let len = length(iflow)
         OutputFlow(oty, Column(OneTo(len+1), fill(val, len)))
     end

@@ -9,7 +9,7 @@ typealias InputSlotFlows Vector{InputSlotFlow}
 
 immutable InputFlow <: AbstractVector{Any}
     ctx::InputContext
-    sig::Input
+    ity::Input
     len::Int
     vals::AbstractVector
     frameoffs::InputFrame
@@ -23,7 +23,7 @@ immutable InputFlow <: AbstractVector{Any}
             slotflows::InputSlotFlows=InputSlotFlow[])
         relative = !isnull(frameoffs)
         slots = InputSlot[n => output(pflow) for (n, pflow) in slotflows]
-        sig = Input(dom) |> setrelative(relative) |> setslots(slots)
+        ity = Input(dom) |> setrelative(relative) |> setslots(slots)
         len = length(vals)
         if !isnull(frameoffs)
             @assert length(get(frameoffs)) >= 1
@@ -33,7 +33,7 @@ immutable InputFlow <: AbstractVector{Any}
         for (n, pflow) in slotflows
             @assert length(pflow) == len
         end
-        return new(ctx, sig, len, vals, frameoffs, slotflows)
+        return new(ctx, ity, len, vals, frameoffs, slotflows)
     end
 end
 
@@ -69,40 +69,40 @@ function getindex(flow::InputFlow, i::Int)
 end
 
 Base.array_eltype_show_how(::InputFlow) = (true, "")
-summary(flow::InputFlow) = "InputFlow[$(flow.len) \ud7 $(flow.sig)]"
+summary(flow::InputFlow) = "InputFlow[$(flow.len) \ud7 $(flow.ity)]"
 
 # Components and other properties.
 
 context(flow::InputFlow) = flow.ctx
 
-input(flow::InputFlow) = flow.sig
-domain(flow::InputFlow) = domain(flow.sig)
-isfree(flow::InputFlow) = isfree(flow.sig)
-isrelative(flow::InputFlow) = isrelative(flow.sig)
-slots(flow::InputFlow) = slots(flow.sig)
+input(flow::InputFlow) = flow.ity
+domain(flow::InputFlow) = domain(flow.ity)
+isfree(flow::InputFlow) = isfree(flow.ity)
+isrelative(flow::InputFlow) = isrelative(flow.ity)
+slots(flow::InputFlow) = slots(flow.ity)
 
 values(flow::InputFlow) = flow.vals
 frameoffsets(flow::InputFlow) = get(flow.frameoffs)
 slotflows(flow::InputFlow) = flow.slotflows
 
-# Converting to a smaller input signature.
+# Converting to a smaller input itynature.
 
-function narrow(flow::InputFlow, sig::Input)
-    if mode(flow.sig) == mode(sig)
+function narrow(flow::InputFlow, ity::Input)
+    if mode(flow.ity) == mode(ity)
         return flow
     end
-    @assert fits(mode(flow.sig), mode(sig))
-    frameoffs = !isrelative(sig) ? InputFrame() : flow.frameoffs
+    @assert fits(mode(flow.ity), mode(ity))
+    frameoffs = !isrelative(ity) ? InputFrame() : flow.frameoffs
     slotflows =
-        if length(flow.slotflows) == length(slots(sig))
+        if length(flow.slotflows) == length(slots(ity))
             flow.slotflows
-        elseif length(slots(sig)) == 0
+        elseif length(slots(ity)) == 0
             InputSlotFlow[]
         else
-            keep = Set(n for (n, sl) in slots(sig))
+            keep = Set(n for (n, sl) in slots(ity))
             filter(p -> p.first in keep, flow.slotflows)
         end
-    return InputFlow(flow.ctx, domain(sig), flow.vals, frameoffs, slotflows)
+    return InputFlow(flow.ctx, domain(ity), flow.vals, frameoffs, slotflows)
 end
 
 # Converting output flow to a new input flow.

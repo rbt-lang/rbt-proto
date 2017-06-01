@@ -3,11 +3,11 @@
 #
 
 immutable OutputFlow <: AbstractVector{Any}
-    sig::Output
+    oty::Output
     col::Column
 end
 
-OutputFlow(sig, offs, vals) = OutputFlow(sig, Column(offs, vals))
+OutputFlow(oty, offs, vals) = OutputFlow(oty, Column(offs, vals))
 
 # Array interface.
 
@@ -15,46 +15,37 @@ size(flow::OutputFlow) = (flow.col.len,)
 
 length(flow::OutputFlow) = flow.col.len
 
-function getindex(flow::OutputFlow, i::Int)
-    offs = offsets(flow)
-    vals = values(flow)
-    l = offs[i]
-    r = offs[i+1]
-    T = eltype(vals)
-    if isentity(flow.sig)
-        E = Entity{classname(domain(flow.sig))}
-        item =
-            isplural(flow.sig) ?
-                E[E(i) for i in view(vals, l:r-1)] :
-            isoptional(flow.sig) ?
-                (l < r ? Nullable{E}(E(vals[l])) : Nullable{E}()) :
-                E(vals[l])
-    else
-        item =
-            isplural(flow.sig) && length(flow) == 1 ?
-                vals :
-            isplural(flow.sig) ?
-                view(vals, l:r-1) :
-            isoptional(flow.sig) ?
-                (l < r ? Nullable{T}(vals[l]) : Nullable{T}()) :
-                vals[l]
+function getindex(flow::OutputFlow, i)
+    data = getdata(Any, flow.col, i)
+    if isentity(flow.oty)
+        N = classname(domain(flow.oty))
+        E = Entity{N}
+        data =
+            isplural(flow.oty) ?
+                EntityVector{N,typeof(data)}(data) :
+            isoptional(flow.oty) ?
+                !isnull(data) ? Nullable{E}(get(data)) : Nullable{E}() :
+                E(data)
     end
-    return item
+    return data
 end
 
 getindex(flow::OutputFlow, idxs::AbstractVector{Int}) =
-    OutputFlow(flow.sig, flow.col[idxs])
+    OutputFlow(flow.oty, flow.col[idxs])
 
 Base.linearindexing(flow::OutputFlow) = Base.LinearFast()
 
 vcat(flow1::OutputFlow, flow2::OutputFlow) =
-    OutputFlow(obound(flow1.sig, flow2.sig), vcat(flow1.col, flow2.col))
+    OutputFlow(obound(flow1.oty, flow2.oty), vcat(flow1.col, flow2.col))
 
 Base.array_eltype_show_how(::OutputFlow) = (true, "")
 
-summary(flow::OutputFlow) = "OutputFlow[$(length(flow.col)) \ud7 $(flow.sig)]"
+summary(flow::OutputFlow) = "OutputFlow[$(length(flow.col)) \ud7 $(flow.oty)]"
 
 # Data components.
+
+convert(::Type{Column}, flow::OutputFlow) =
+    flow.col
 
 column(flow::OutputFlow) = flow.col
 offsets(flow::OutputFlow) = offsets(flow.col)
@@ -62,8 +53,12 @@ values(flow::OutputFlow) = values(flow.col)
 
 # Output signature and its properties.
 
-output(flow::OutputFlow) = flow.sig
-domain(flow::OutputFlow) = domain(flow.sig)
-mode(flow::OutputFlow) = mode(flow.sig)
-decorations(flow::OutputFlow) = decorations(flow.sig)
+output(flow::OutputFlow) = flow.oty
+domain(flow::OutputFlow) = domain(flow.oty)
+mode(flow::OutputFlow) = mode(flow.oty)
+decorations(flow::OutputFlow) = decorations(flow.oty)
+
+isplain(flow::OutputFlow) = isregular(flow.oty)
+isoptional(flow::OutputFlow) = isoptional(flow.oty)
+isplural(flow::OutputFlow) = isplural(flow.oty)
 

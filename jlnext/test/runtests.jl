@@ -49,6 +49,7 @@ immutable Fail
     code::String
     expected::String
     actual::String
+    trace::StackTrace
 end
 
 function show(io::IO, fail::Fail)
@@ -62,6 +63,10 @@ function show(io::IO, fail::Fail)
     println(io, "Actual output:")
     showindented(io, fail.actual)
     println(io)
+    if !isempty(fail.trace)
+        showindented(io, join(fail.trace, "\n"))
+        println(io)
+    end
 end
 
 immutable Error
@@ -190,7 +195,7 @@ function testjl(file, start, lines)
         commented = false
         fire = false
         for (linenum, line) in enumerate(lines)
-            linenum += start
+            linenum += start - 1
             isblank = isempty(strip(line))
             if commented && isempty(line)
                 produce(Error(file, linenum, "Error: incomplete multiline output block"))
@@ -216,7 +221,7 @@ function testjl(file, start, lines)
                 produce(Error(file, linenum, "Error: orphaned output block"))
                 empty!(outlines)
             elseif fire && !isempty(codelines)
-                produce(testcase(file, linenum, join(codelines), join(outlines)))
+                produce(testcase(file, casestart, join(codelines), join(outlines)))
                 empty!(codelines)
                 empty!(outlines)
             end
@@ -244,11 +249,13 @@ function testcase(file, start, code, output)
     redirect_stdout(pipe.in)
     redirect_stderr(pipe.in)
     pushdisplay(TextDisplay(IOContext(pipe.in, limit=true)))
+    trace = StackTrace()
     try
         ans = try
             eval(mod, body)
         catch err
             showerror(STDERR, err)
+            trace = catch_stacktrace()
             nothing
         end
         if ans !== nothing && !isempty(output)
@@ -265,9 +272,13 @@ function testcase(file, start, code, output)
     close(pipe)
     expected = rstrip(output)
     actual = rstrip(join(map(rstrip, eachline(IOBuffer(String(out)))), "\n"))
+    traceend = findlast(f -> f.func == :testcase, trace)
+    if traceend > 0
+        trace = trace[1:traceend-1]
+    end
     return expected == actual || ismatch(asregex(expected), actual) ?
         Pass(file, start, code, expected) :
-        Fail(file, start, code, expected, actual)
+        Fail(file, start, code, expected, actual, trace)
 end
 
 function asregex(pat::String)

@@ -11,6 +11,7 @@ import Base:
     length,
     linearindexing,
     next,
+    setindex!,
     show,
     size,
     start,

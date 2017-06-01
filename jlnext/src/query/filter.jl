@@ -19,12 +19,12 @@ end
 immutable FilterSig <: AbstractPrimitive
 end
 
-ev(sig::FilterSig, ds::DataSet) =
-    isplain(output(flow(ds, 2))) ?
-        ev_plain_filter(values(ds, 1), values(ds, 2)) :
-        ev_filter(values(ds, 1), offsets(ds, 2), values(ds, 2))
+ev(sig::FilterSig, dv::DataVector) =
+    isplain(column(dv, 2)) ?
+        plain_filter_impl(values(dv, 1), values(dv, 2)) :
+        filter_impl(values(dv, 1), offsets(dv, 2), values(dv, 2))
 
-function ev_plain_filter(vals::AbstractVector, predvals::AbstractVector{Bool})
+function plain_filter_impl(vals::AbstractVector, predvals::AbstractVector{Bool})
     len = length(vals)
     size = 0
     for pred in predvals
@@ -33,7 +33,7 @@ function ev_plain_filter(vals::AbstractVector, predvals::AbstractVector{Bool})
         end
     end
     if size == len
-        return Column(OneTo(len+1), vals)
+        return OptionalColumn(OneTo(len+1), vals)
     end
     offs = Vector{Int}(len+1)
     offs[1] = 1
@@ -46,10 +46,10 @@ function ev_plain_filter(vals::AbstractVector, predvals::AbstractVector{Bool})
         end
         offs[k+1] = n
     end
-    return Column(offs, vals[idxs])
+    return OptionalColumn(offs, vals[idxs])
 end
 
-function ev_filter(vals::AbstractVector, predoffs::AbstractVector{Int}, predvals::AbstractVector{Bool})
+function filter_impl(vals::AbstractVector, predoffs::AbstractVector{Int}, predvals::AbstractVector{Bool})
     len = length(vals)
     size = 0
     for pred in predvals
@@ -58,7 +58,7 @@ function ev_filter(vals::AbstractVector, predoffs::AbstractVector{Int}, predvals
         end
     end
     if size == len
-        return Column(OneTo(len+1), vals)
+        return OptionalColumn(OneTo(len+1), vals)
     end
     offs = Vector{Int}(len+1)
     offs[1] = 1
@@ -73,6 +73,6 @@ function ev_filter(vals::AbstractVector, predoffs::AbstractVector{Int}, predvals
         end
         offs[k+1] = n
     end
-    return Column(offs, vals[idxs])
+    return OptionalColumn(offs, vals[idxs])
 end
 

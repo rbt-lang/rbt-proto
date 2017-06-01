@@ -7,6 +7,12 @@ abstract AbstractCompositeVector{R} <: AbstractVector{R}
 @inline column(cv::AbstractCompositeVector, k::Int) =
     columns(cv)[k]
 
+@inline offsets(cv::AbstractCompositeVector, k::Int) =
+    offsets(column(cv, k))
+
+@inline values(cv::AbstractCompositeVector, k::Int) =
+    values(column(cv, k))
+
 guesslength(cols::Columns) =
     !isempty(cols) ? length(cols[1]) : 0
 
@@ -21,6 +27,7 @@ guesstype{T}(::Type{T}, cols::Columns) = T
 linearindexing{T<:AbstractCompositeVector}(::Type{T}) = Base.LinearFast()
 
 Base.array_eltype_show_how(::AbstractCompositeVector) = (true, "")
+Base.array_eltype_show_how{T,N,P<:AbstractCompositeVector,I,L}(::SubArray{T,N,P,I,L}) = (true, "")
 
 Base.summary(cv::AbstractCompositeVector) =
     "$(length(cv))-element composite vector of $(typesummary(cv))"
@@ -161,7 +168,7 @@ getindex(dv::DataVector, i::Int) =
     getdata(dv.meta, dv.cols, i)
 
 getindex(dv::DataVector, idxs::AbstractVector{Int}) =
-    DataVector(dv.meta, length(idxs), map(col -> col[idx], dv.cols))
+    DataVector(dv.meta, length(idxs), Column[col[idxs] for col in dv.cols])
 
 Base.mapfoldl(f, op, v0, dv::DataVector) =
     mapfoldl(f, op, v0, convert(TupleVector, dv))

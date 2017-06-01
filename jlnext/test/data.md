@@ -236,9 +236,9 @@ output.
     display(htv)
     #=>
     3-element composite vector of {Char, {Int64, Int64?, Int64*}*}:
-     ('a',Tuple{  …  }[])
-     ('b',Tuple{  …  }[(1,1,Int64[]),(2,2,[1])])
-     ('c',Tuple{  …  }[(3,3,[2,3]),(4,4,[4,5,6,7]),(5,#NULL,[8,9,10,11,12])])
+     ('a',[])
+     ('b',[(1,1,Int64[]),(2,2,[1])])
+     ('c',[(3,3,[2,3]),(4,4,[4,5,6,7]),(5,#NULL,[8,9,10,11,12])])
     =#
 
 The length of the vector can be explicitly specified.

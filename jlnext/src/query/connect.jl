@@ -35,13 +35,13 @@ function ev(sig::ConnectSig, arg::Query, ::Input, oty::Output, iflow::InputFlow)
     else
         pile = cols[end]
         for k = endof(cols)-1:-1:1
-            pile = ev_connect(cols[k], pile)
+            pile = connect_impl(cols[k], pile)
         end
     end
     return OutputFlow(oty, pile)
 end
 
-function ev_connect(col1::Column, col2::Column)
+function connect_impl(col1::Column, col2::Column)
     len1 = length(col1)
     len2 = length(col2)
     offs1 = offsets(col1)

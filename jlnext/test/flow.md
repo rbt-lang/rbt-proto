@@ -8,9 +8,11 @@ Output flow
 The query output is represented as an *output flow*.
 
     using RBT:
-        Column,
+        NonEmptyPluralColumn,
+        OptionalColumn,
         Output,
         OutputFlow,
+        PlainColumn,
         column,
         domain,
         mode,
@@ -23,7 +25,7 @@ The query output is represented as an *output flow*.
 The query output is specified by the output signature, a vector of offsets and
 a vector of values.
 
-    int_flow = OutputFlow(Int64, Column(1:101, 1:100))
+    int_flow = OutputFlow(Int64, PlainColumn(1:100))
     #-> [1,2,3  …  99,100]
 
     display(int_flow)
@@ -39,7 +41,7 @@ a vector of values.
 
     int_opt_flow = OutputFlow(
         Output(Int64) |> setoptional(),
-        Column([1; 1:101; 101], 1:100))
+        OptionalColumn([1; 1:101; 101], 1:100))
     #-> [#NULL,1,2,3  …  99,100,#NULL]
 
     display(int_opt_flow)
@@ -57,7 +59,7 @@ a vector of values.
 
     int_seq_flow = OutputFlow(
         Output(Int64) |> setplural(),
-        Column(1:50:2001, 1:2000))
+        NonEmptyPluralColumn(1:50:2001, 1:2000))
     display(int_seq_flow)
     #=>
     OutputFlow[40 × Int64+]:
@@ -157,8 +159,8 @@ the values of the slots.
         Int64,
         1:10,
         [
-            InputSlotFlow(:X, OutputFlow(Int64, 1:11, 10:10:100)),
-            InputSlotFlow(:Y, OutputFlow(Int64, 1:11, 100:100:1000)),
+            InputSlotFlow(:X, OutputFlow(Int64, 10:10:100)),
+            InputSlotFlow(:Y, OutputFlow(Int64, 100:100:1000)),
         ])
     display(param_flow)
     #=>
@@ -218,7 +220,7 @@ flow.
         Int64,
         1:10,
         InputFrame(1:2:11),
-        [InputSlotFlow(:X, OutputFlow(Int64, 1:11, 10:10:100))])
+        [InputSlotFlow(:X, OutputFlow(Int64, 10:10:100))])
     display(iflow)
     #=>
     InputFlow[10 × {(Int64...), X => Int64}]:
@@ -266,70 +268,5 @@ flow.
      ((5,[-4,-5,-6,-7,-8]),:X=>80)
      ((1,[-9,-10]),:X=>90)
      ((2,[-9,-10]),:X=>90)
-    =#
-
-
-Datasets
---------
-
-An array of records, where the values of each field are stored in separate
-columns, is called a *dataset*.
-
-    using RBT:
-        Column,
-        DataSet,
-        Output,
-        OutputFlow,
-        domain,
-        setoptional,
-        setplural
-
-`DataSet` objects are specified by their length and an array of columns.
-
-    ds = DataSet(
-        OutputFlow(Int64, 1:11, 1:10),
-        OutputFlow(Output(Int64) |> setoptional(), [1; 1:9; 9], 2:9),
-        OutputFlow(Output(Int64) |> setplural(), 1:5:51, 1:50))
-    #-> [(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (10,#NULL,[46,47,48,49,50])]
-
-    display(ds)
-    #=>
-    DataSet[10 × {Int64, Int64?, Int64+}]:
-     (1,#NULL,[1,2,3,4,5])
-     (2,2,[6,7,8,9,10])
-     ⋮
-     (10,#NULL,[46,47,48,49,50])
-    =#
-
-    length(ds)
-    #-> 10
-
-    domain(ds)
-    #-> {Int64, Int64?, Int64+}
-
-Datasets could be nested.
-
-    tree_ds = DataSet(
-        OutputFlow(Int64, 1:3, 1:2),
-        OutputFlow(
-            Output(domain(ds)) |> setplural(),
-            1:5:11,
-            ds))
-    display(tree_ds)
-    #=>
-    DataSet[2 × {Int64, {Int64, Int64?, Int64+}+}]:
-     (1,[(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (5,5,[21,22,23,24,25])])
-     (2,[(6,6,[26,27,28,29,30]),(7,7,[31,32,33,34,35])  …  (10,#NULL,[46,47,48,49,50])])
-    =#
-
-Datasets could be rearranged.
-
-    display(tree_ds[[2,1,2,1]])
-    #=>
-    DataSet[4 × {Int64, {Int64, Int64?, Int64+}+}]:
-     (2,[(6,6,[26,27,28,29,30]),(7,7,[31,32,33,34,35])  …  (10,#NULL,[46,47,48,49,50])])
-     (1,[(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (5,5,[21,22,23,24,25])])
-     (2,[(6,6,[26,27,28,29,30]),(7,7,[31,32,33,34,35])  …  (10,#NULL,[46,47,48,49,50])])
-     (1,[(1,#NULL,[1,2,3,4,5]),(2,2,[6,7,8,9,10])  …  (5,5,[21,22,23,24,25])])
     =#
 

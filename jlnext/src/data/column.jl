@@ -35,6 +35,12 @@ ColumnCursor(pos, l, r, vals::AbstractVector) =
     val
 end
 
+@inline function setindex!(cr::ColumnCursor, val, i::Int)
+    @boundscheck checkbounds(cr, i)
+    @inbounds cr.vals[cr.l + i - 1] = val
+    cr
+end
+
 linearindexing{CR<:ColumnCursor}(::Type{CR}) = Base.LinearFast()
 
 Base.array_eltype_show_how(::ColumnCursor) = (true, "")
@@ -266,10 +272,13 @@ Base.valtype{OPT,PLU,O,V}(::Type{Column{OPT,PLU,O,V}}) = eltype(V)
 Base.keytype(col::Column) = keytype(typeof(col))
 Base.valtype(col::Column) = valtype(typeof(col))
 
+isplain{C<:Union{Column{false,true},Column{true,false},Column{true,true}}}(::Type{C}) = false
+isplain{C<:Column{false,false}}(::Type{C}) = true
 isoptional{C<:Union{Column{false,false},Column{false,true}}}(::Type{C}) = false
 isoptional{C<:Union{Column{true,false},Column{true,true}}}(::Type{C}) = true
 isplural{C<:Union{Column{false,false},Column{true,false}}}(::Type{C}) = false
 isplural{C<:Union{Column{false,true},Column{true,true}}}(::Type{C}) = true
+isplain(col::Column) = isplain(typeof(col))
 isoptional(col::Column) = isoptional(typeof(col))
 isplural(col::Column) = isplural(typeof(col))
 
@@ -293,6 +302,20 @@ datatype{OPT}(col::Column{OPT,true}) =
 
 datatype(cols::Columns) =
     Tuple{map(datatype, cols)...}
+
+function getdata{T}(::Type{T}, col::Column, ::Void)
+    @assert col.len == 1
+    return getdata(T, col, 1)
+end
+
+@inline function getdata{OPT}(::Type{Any}, col::Column{OPT,true}, ::Void)
+    @assert col.len == 1
+    return col.vals
+end
+
+@inline function getdata{T,OPT}(::Type{T}, col::Column{OPT,true}, ::Void)
+    return convert(T, col.vals)
+end
 
 @inline function getdata(::Type{Any}, col::Column{false,false}, i::Int)
     col.vals[i]
@@ -329,17 +352,17 @@ end
 
 @inline getdata(::Type{Any}, ::Tuple{}, i) = ()
 
-@inline getdata(::Type{Any}, cols::Tuple{Column, Vararg{Any}}, i::Int) =
+@inline getdata(::Type{Any}, cols::Tuple{Column, Vararg{Any}}, i) =
     (getdata(Any, cols[1], i), getdata(Any, Base.tail(cols), i)...)
 
 @inline getdata(::Type{Tuple{}}, ::Tuple{}, i) = ()
 
-@inline getdata{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, cols::Tuple{Column, Vararg{Any}}, i::Int) =
+@inline getdata{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, cols::Tuple{Column, Vararg{Any}}, i) =
     (getdata(Base.tuple_type_head(T), cols[1], i), getdata(Base.tuple_type_tail(T), Base.tail(cols), i)...)
 
-@inline getdata{T<:AbstractRecord}(::Type{T}, cols::Tuple{Vararg{Column}}, i::Int) =
+@inline getdata{T<:AbstractRecord}(::Type{T}, cols::Tuple{Vararg{Column}}, i) =
     T(getdata(fieldtypes(T), cols, i)...)
 
-@inline getdata{T}(::Type{T}, cols::ColumnVector, i::Int) =
+@inline getdata{T}(::Type{T}, cols::ColumnVector, i) =
     getdata(T, (cols...), i)
 

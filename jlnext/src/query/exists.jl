@@ -8,14 +8,18 @@ ExistsQuery(q::Query) =
 immutable ExistsSig <: AbstractPrimitive
 end
 
-ev(::ExistsSig, ds::DataSet) =
-    ev_exists(length(ds), offsets(ds, 1))
+ev(::ExistsSig, dv::DataVector) =
+    exists_impl(length(dv), offsets(dv, 1))
 
-function ev_exists(len::Int, ioffs::AbstractVector{Int})
+function exists_impl(len::Int, ioffs::AbstractVector{Int})
+    @boundscheck checkbounds(ioffs, len+1)
     vals = Vector{Bool}(len)
+    @inbounds l = ioffs[1]
     for i = 1:len
-        vals[i] = ioffs[i+1] > ioffs[i]
+        @inbounds r = ioffs[i+1]
+        @inbounds vals[i] = r > l
+        l = r
     end
-    return Column(OneTo(len+1), vals)
+    return PlainColumn(vals)
 end
 

@@ -116,7 +116,7 @@ primitive.
     #-> Void -> Emp*
 
     ev(q)
-    #-> [Emp[Emp(2),Emp(3),Emp(5),Emp(7)]]
+    #-> [[Emp(2),Emp(3),Emp(5),Emp(7)]]
 
 Attributes and relationships can be encoded using the mapping primitive.
 
@@ -361,7 +361,7 @@ condition.
     #-> Void -> Emp*
 
     ev(q)
-    #-> [Emp[Emp(1),Emp(3),Emp(5),Emp(7),Emp(9)]]
+    #-> [[Emp(1),Emp(3),Emp(5),Emp(7),Emp(9)]]
 
 
 Sorting

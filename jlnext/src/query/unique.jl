@@ -12,11 +12,13 @@ UniqueQuery(q) =
 immutable UniqueSig <: AbstractPrimitive
 end
 
-ev(::UniqueSig, ds::DataSet) =
-    ev_unique(length(ds), offsets(ds, 1), values(ds, 1))
+ev(::UniqueSig, dv::DataVector) =
+    unique_impl(length(dv), column(dv, 1))
 
-function ev_unique{T}(len::Int, offs::AbstractVector{Int}, vals::AbstractVector{T})
-    dict = Dict{T,Int}()
+function unique_impl{OPT,PLU,O,V}(len::Int, col::Column{OPT,PLU,O,V})
+    offs = offsets(col)
+    vals = values(col)
+    dict = Dict{eltype(V),Int}()
     offs′ = Vector{Int}(len+1)
     offs′[1] = 1
     idxs = Vector{Int}(length(vals))
@@ -37,6 +39,6 @@ function ev_unique{T}(len::Int, offs::AbstractVector{Int}, vals::AbstractVector{
         offs′[k+1] = n
     end
     resize!(idxs, n-1)
-    return Column(offs′, vals[idxs])
+    return Column{OPT,PLU}(offs′, vals[idxs])
 end
 

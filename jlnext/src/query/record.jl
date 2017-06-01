@@ -22,13 +22,8 @@ immutable RecordSig <: AbstractSignature
 end
 
 ev(::RecordSig, args::Vector{Query}, ::Input, oty::Output, iflow::InputFlow) =
-    let len = length(iflow)
-        OutputFlow(
-            oty,
-            Column(
-                OneTo(len+1),
-                DataSet(
-                    len,
-                    OutputFlow[ev(arg, narrow(iflow, input(arg))) for arg in args])))
+    let len = length(iflow),
+        cols = Column[ev(arg, narrow(iflow, input(arg))) for arg in args]
+        OutputFlow(oty, PlainColumn(DataVector(len, cols)))
     end
 

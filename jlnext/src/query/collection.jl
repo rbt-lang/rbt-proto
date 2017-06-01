@@ -19,9 +19,9 @@ immutable CollectionSig <: AbstractPrimitive
 end
 
 ev(sig::CollectionSig, ::Input, oty::Output, iflow::InputFlow) =
-    OutputFlow(oty, ev_collection(sig.set, length(iflow)))
+    OutputFlow(oty, collection_impl(sig.set, length(iflow)))
 
-function ev_collection(set::AbstractVector, len::Int)
+function collection_impl(set::AbstractVector, len::Int)
     card = length(set)
     if len == 1
         return Column(Int[1, card+1], set)

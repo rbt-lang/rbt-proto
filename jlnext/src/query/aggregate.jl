@@ -38,48 +38,47 @@ immutable AggregateSig <: AbstractPrimitive
     haszero::Bool
 end
 
-ev(sig::AggregateSig, ds::DataSet) =
-    sig.haszero || !isoptional(output(flow(ds, 1))) ?
-        ev_plain_aggregate(sig.fn, sig.restype, length(ds), column(ds, 1)) :
-        ev_aggregate(sig.fn, sig.restype, length(ds), column(ds, 1))
-
-function ev_plain_aggregate{T}(fn::Function, otype::Type{T}, len::Int, arg::Column)
-    argoffs = offsets(arg)
-    argvals = values(arg)
-    offs = OneTo(len+1)
-    vals = Vector{T}(len)
-    for k = 1:len
-        l = argoffs[k]
-        r = argoffs[k+1]
-        vals[k] = fn(view(argvals, l:r-1))
+ev(sig::AggregateSig, dv::DataVector) =
+    let col = column(dv, 1)
+        sig.haszero || !isoptional(col) ?
+            plain_aggregate_impl(sig.fn, sig.restype, length(dv), col) :
+            aggregate_impl(sig.fn, sig.restype, length(dv), col)
     end
-    return Column(offs, vals)
+
+function plain_aggregate_impl{T}(fn::Function, otype::Type{T}, len::Int, arg::Column)
+    vals = Vector{T}(len)
+    cr = cursor(arg)
+    while !done(arg, cr)
+        next!(arg, cr)
+        vals[cr.pos] = fn(cr)
+    end
+    return PlainColumn(vals)
 end
 
-function ev_aggregate{T}(fn::Function, otype::Type{T}, len::Int, arg::Column)
+function aggregate_impl{T}(fn::Function, otype::Type{T}, len::Int, arg::Column)
     argoffs = offsets(arg)
     size = 0
-    for k = 1:len
+    @inbounds for k = 1:len
         if argoffs[k] < argoffs[k+1]
             size += 1
         end
     end
     if size == len
-        return ev_plain_aggregate(fn, otype, len, arg)
+        col = plain_aggregate_impl(fn, otype, len, arg)
+        return OptionalColumn(col.offs, col.vals)
     end
-    argvals = values(arg)
     offs = Vector{Int}(len+1)
     offs[1] = 1
     vals = Vector{T}(size)
+    cr = cursor(arg)
     n = 1
-    for k = 1:len
-        l = argoffs[k]
-        r = argoffs[k+1]
-        if l < r
-            vals[n] = fn(view(argvals, l:r-1))
+    while !done(arg, cr)
+        next!(arg, cr)
+        if !isempty(cr)
+            vals[n] = fn(cr)
             n += 1
         end
-        offs[k+1] = n
+        offs[cr.pos+1] = n
     end
     return Column(offs, vals)
 end

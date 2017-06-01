@@ -38,12 +38,12 @@ ev(sig::AroundSig, ::Input, oty::Output, iflow::InputFlow) =
     OutputFlow(
         oty,
         if !sig.haskey
-            ev_around(sig.refl, sig.before, sig.after, frameoffsets(iflow), values(iflow))
+            around_impl(sig.refl, sig.before, sig.after, frameoffsets(iflow), values(iflow))
         else
-            ev_around_by(sig.refl, sig.before, sig.after, frameoffsets(iflow), values(iflow))
+            around_by_impl(sig.refl, sig.before, sig.after, frameoffsets(iflow), values(iflow), fields(domain(iflow)))
         end)
 
-function ev_around(refl::Bool, before::Bool, after::Bool, foffs::AbstractVector{Int}, vals::AbstractVector{Int})
+function around_impl(refl::Bool, before::Bool, after::Bool, foffs::AbstractVector{Int}, vals::AbstractVector{Int})
     size = 0
     for k = 1:endof(foffs)-1
         l = foffs[k]
@@ -86,13 +86,15 @@ function ev_around(refl::Bool, before::Bool, after::Bool, foffs::AbstractVector{
             offs[i+1] = n
         end
     end
-    return Column(offs, vals[idxs])
+    return Column{!refl,before||after}(offs, vals[idxs])
 end
 
-function ev_around_by(refl::Bool, before::Bool, after::Bool, foffs::AbstractVector{Int}, ds::DataSet)
-    perm, offs = ev_group_by_keys(foffs, ds)
-    rng = Vector{Int}(length(ds))
-    pos = Vector{Int}(length(ds))
+function around_by_impl(
+        refl::Bool, before::Bool, after::Bool, foffs::AbstractVector{Int}, dv::DataVector,
+        fs::Vector{Output})
+    perm, offs = group_by_keys_impl(foffs, dv, fs)
+    rng = Vector{Int}(length(dv))
+    pos = Vector{Int}(length(dv))
     size = 0
     for k = 1:endof(offs)-1
         l = offs[k]
@@ -114,10 +116,10 @@ function ev_around_by(refl::Bool, before::Bool, after::Bool, foffs::AbstractVect
         end
     end
     idxs = Vector{Int}(size)
-    offs′ = Vector{Int}(length(ds)+1)
+    offs′ = Vector{Int}(length(dv)+1)
     offs′[1] = 1
     n = 1
-    for k = 1:length(ds)
+    for k = 1:length(dv)
         r = rng[k]
         p = pos[k]
         l = offs[r]
@@ -140,6 +142,6 @@ function ev_around_by(refl::Bool, before::Bool, after::Bool, foffs::AbstractVect
         end
         offs′[k+1] = n
     end
-    return Column(offs′, values(ds, 1)[idxs])
+    return Column{!refl,before||after}(offs′, values(dv, 1)[idxs])
 end
 

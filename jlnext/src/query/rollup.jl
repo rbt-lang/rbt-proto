@@ -17,7 +17,7 @@ function RollUpQuery(qbase::Query, qks::Vector{Query})
             Output([
                 Output([
                     domain(output(qbase)),
-                    (output(qk) |> setoptional() for qk in qks)...]) |> setoptional(isoptional(qbase)) |> setplural()]))
+                    (output(qk) |> setoptional() |> decorate(:nullrev => true) for qk in qks)...]) |> setoptional(isoptional(qbase)) |> setplural()]))
     q >>
     Query(
         GroupSig(),
@@ -34,34 +34,31 @@ RollUpQuery(qbase::Query, qks::Query...) =
 immutable RollUpSig <: AbstractPrimitive
 end
 
-function ev(::RollUpSig, ds::DataSet)
-    ds′ = values(ds, 1)::DataSet
-    width = length(flows(ds′))
-    offs = offsets(ds, 1)
-    groupoffs = ev_rollup_offsets(width, offs)
-    fs = Vector{OutputFlow}(width)
-    fs[1] =
-        OutputFlow(
-            output(flow(ds′, 1)),
-            ev_rollup_values(1, width, offs, values(ds′, 1)))
+ev(sig::RollUpSig, ::Input, oty::Output, iflow::InputFlow) =
+    OutputFlow(oty, ev(sig, values(iflow), fields(domain(iflow))...))
+
+ev(::RollUpSig, dv::DataVector, oty::Output) =
+    rollup_impl(column(dv, 1), fields(oty))
+
+function rollup_impl{OPT,PLU}(dvcol::Column{OPT,PLU}, fs::Vector{Output})
+    offs = offsets(dvcol)
+    dv = values(dvcol)
+    width = length(dv.cols)
+    groupoffs = rollup_offsets_impl(width, offs)
+    fs = Vector{Column}(width)
+    fs[1] = rollup_values_impl(1, width, offs, values(dv, 1))
     for k = 2:width
-        fs[k] =
-            OutputFlow(
-                output(flow(ds′, k)) |> setoptional() |> decorate(:nullrev => true),
-                ev_rollup_values(k, width, offs, values(ds′, k)))
+        fs[k] = rollup_values_impl(k, width, offs, values(dv, k))
     end
-    return Column(
-        OneTo(length(ds)+1),
-        DataSet(
-            length(ds),
-            OutputFlow(
-                Output([output(f) for f in fs])
-                    |> setoptional(isoptional(output(flow(ds, 1))))
-                    |> setplural(),
-                Column(groupoffs, DataSet(width*length(ds′), fs)))))
+    return PlainColumn(
+                DataVector(
+                    length(dvcol),
+                    Column{OPT,true}(
+                        groupoffs,
+                        DataVector(width*length(dv), fs))))
 end
 
-function ev_rollup_offsets(width::Int, offs::AbstractVector{Int})
+function rollup_offsets_impl(width::Int, offs::AbstractVector{Int})
     offs′ = Vector{Int}(length(offs))
     for k = 1:endof(offs)
         offs′[k] = width * (offs[k] - 1) + 1
@@ -69,7 +66,7 @@ function ev_rollup_offsets(width::Int, offs::AbstractVector{Int})
     return offs′
 end
 
-function ev_rollup_values(k::Int, width::Int, offs::AbstractVector{Int}, vals::AbstractVector)
+function rollup_values_impl(k::Int, width::Int, offs::AbstractVector{Int}, vals::AbstractVector)
     len = length(vals)
     offs′ = Vector{Int}(len * width + 1)
     offs′[1] = 1
@@ -94,6 +91,6 @@ function ev_rollup_values(k::Int, width::Int, offs::AbstractVector{Int}, vals::A
             end
         end
     end
-    return Column(offs′, vals[idxs])
+    return Column{k!=1,false}(offs′, vals[idxs])
 end
 

@@ -25,27 +25,28 @@ GroupQuery(qbase::Query, qks::Query...) =
 immutable GroupSig <: AbstractPrimitive
 end
 
-function ev(::GroupSig, ds::DataSet)
-    ds′ = values(ds, 1)::DataSet
-    perm, offs = ev_group_by_keys(ev_group_skip(offsets(ds, 1)), ds′)
-    groupoffs = ev_group_match(offsets(ds, 1), offs)
+ev(sig::GroupSig, ::Input, oty::Output, iflow::InputFlow) =
+    OutputFlow(oty, ev(sig, values(iflow), fields(domain(iflow))...))
+
+ev(sig::GroupSig, dv::DataVector, oty::Output) =
+    group_impl(column(dv, 1), fields(oty))
+
+function group_impl{OPT,PLU}(dvcol::Column{OPT,PLU}, fs::Vector{Output})
+    dvoffs = offsets(dvcol)
+    dv = values(dvcol)
+    perm, offs = group_by_keys_impl(group_skip_impl(dvoffs), dv, fs)
+    groupoffs = group_match_impl(dvoffs, offs)
     keyperm = perm[view(offs, 1:endof(offs)-1)]
-    width = length(flows(ds′)) - 1
-    fs = Vector{OutputFlow}(width+1)
-    fs[1] =
-        OutputFlow(
-            Output(domain(output(flow(ds′, 1))), mode(output(flow(ds, 1)))) |> setoptional(false),
-            Column(offs, values(ds′, 1)[perm]))
+    width = length(columns(dv)) - 1
+    cols = Vector{Column}(width+1)
+    cols[1] = Column{false,PLU}(offs, values(dv, 1)[perm])
     for k = 1:width
-        fs[k+1] =
-            OutputFlow(
-                output(flow(ds′, k+1)),
-                column(ds′, k+1)[keyperm])
+        cols[k+1] = column(dv, k+1)[keyperm]
     end
-    return Column(groupoffs, DataSet(length(offs)-1, fs))
+    return Column{OPT,PLU}(groupoffs, DataVector(length(offs)-1, cols))
 end
 
-function ev_group_skip(offs::AbstractVector{Int})
+function group_skip_impl(offs::AbstractVector{Int})
     empty = 0
     for k = 1:length(offs)-1
         if offs[k] == offs[k+1]
@@ -67,19 +68,19 @@ function ev_group_skip(offs::AbstractVector{Int})
     return offs′
 end
 
-function ev_group_by_keys(offs::AbstractVector{Int}, ds::DataSet)
+function group_by_keys_impl(offs::AbstractVector{Int}, dv::DataVector, fs::Vector{Output})
     len = length(offs) - 1
-    width = length(ds.flows) - 1
-    vals = values(ds, 1)
+    width = length(dv.cols) - 1
+    vals = values(dv, 1)
     perm = collect(1:length(vals))
     for k = 1:width
-        order = SortByOrdering(flow(ds, k+1))
-        offs = ev_group_by_key!(offs, perm, order)
+        order = SortByOrdering(fs[k+1], column(dv, k+1))
+        offs = group_by_key_impl!(offs, perm, order)
     end
     return perm, offs
 end
 
-function ev_group_by_key!(
+function group_by_key_impl!(
         offs::AbstractVector{Int},
         perm::Vector{Int},
         order::SortByOrdering)
@@ -114,7 +115,7 @@ function ev_group_by_key!(
     return offs′
 end
 
-function ev_group_match(offs::AbstractVector{Int}, offs′::AbstractVector{Int})
+function group_match_impl(offs::AbstractVector{Int}, offs′::AbstractVector{Int})
     groupoffs = Vector{Int}(length(offs))
     n = 1
     for k = 1:length(offs)

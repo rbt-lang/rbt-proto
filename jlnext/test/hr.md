@@ -227,7 +227,7 @@ Extracting data
 
     display(execute(q))
     #=>
-    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    32181-element composite vector of {String, String, String, Int64}:
      ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
      ("JEFFERY A","POLICE","POLICE OFFICER",80778)
      ("KARINA A","POLICE","POLICE OFFICER",80778)
@@ -317,7 +317,7 @@ We can also construct the same queries dynamically, using combinator notation.
 
     display(execute(q))
     #=>
-    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    32181-element composite vector of {String, String, String, Int64}:
      ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
      ⋮
     =#
@@ -412,7 +412,7 @@ Pipeline notation
 
     display(execute(q))
     #=>
-    DataSet[10 × {String[tag=:name], String[tag=:position], Int64[tag=:salary]}]:
+    10-element composite vector of {String, String, Int64}:
      ("GARRY M","SUPERINTENDENT OF POLICE",260004)
      ("ALFONZA W","FIRST DEPUTY SUPERINTENDENT",197736)
      ("ROBERT T","CHIEF",194256)
@@ -446,7 +446,7 @@ We can construct the same query using combinator notation.
 
     display(execute(q))
     #=>
-    DataSet[10 × {String[tag=:name], String[tag=:position], Int64[tag=:salary]}]:
+    10-element composite vector of {String, String, Int64}:
      ("GARRY M","SUPERINTENDENT OF POLICE",260004)
      ⋮
     =#
@@ -462,7 +462,7 @@ Filtering data
 
     display(execute(q))
     #=>
-    DataSet[151 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    151-element composite vector of {String, String, String, Int64}:
      ("DANA A","POLICE","DEPUTY CHIEF",170112)
      ("VERDIE A","FIRE","ASST DEPUTY CHIEF PARAMEDIC",156360)
      ("SCOTT A","IPRA","CHIEF ADMINISTRATOR",161856)
@@ -495,7 +495,7 @@ Now, using the combinator notation.
 
     display(execute(q))
     #=>
-    DataSet[151 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    151-element composite vector of {String, String, String, Int64}:
      ("DANA A","POLICE","DEPUTY CHIEF",170112)
      ⋮
     =#
@@ -538,7 +538,7 @@ Sorting and paginating data
 
     display(execute(q))
     #=>
-    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    32181-element composite vector of {String, String, String, Int64}:
      ("STEVEN K","MAYOR'S OFFICE","ADMINISTRATIVE SECRETARY",1)
      ("BETTY A","FAMILY & SUPPORT","FOSTER GRANDPARENT",2756)
      ("VICTOR A","FAMILY & SUPPORT","SENIOR COMPANION",2756)
@@ -554,7 +554,7 @@ Sorting and paginating data
 
     display(execute(q))
     #=>
-    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    32181-element composite vector of {String, String, String, Int64}:
      ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
      ("RAHM E","MAYOR'S OFFICE","MAYOR",216210)
      ("JOSE S","FIRE","FIRE COMMISSIONER",202728)
@@ -573,7 +573,7 @@ Sorting and paginating data
 
     display(execute(q))
     #=>
-    DataSet[321 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    321-element composite vector of {String, String, String, Int64}:
      ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
      ("RAHM E","MAYOR'S OFFICE","MAYOR",216210)
      ("JOSE S","FIRE","FIRE COMMISSIONER",202728)
@@ -606,7 +606,7 @@ Using combinator notation.
 
     display(execute(q))
     #=>
-    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    32181-element composite vector of {String, String, String, Int64}:
      ("STEVEN K","MAYOR'S OFFICE","ADMINISTRATIVE SECRETARY",1)
      ⋮
     =#
@@ -618,7 +618,7 @@ Using combinator notation.
 
     display(execute(q))
     #=>
-    DataSet[32181 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    32181-element composite vector of {String, String, String, Int64}:
      ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
      ⋮
     =#
@@ -633,7 +633,7 @@ Using combinator notation.
 
     display(execute(q))
     #=>
-    DataSet[321 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    321-element composite vector of {String, String, String, Int64}:
      ("GARRY M","POLICE","SUPERINTENDENT OF POLICE",260004)
      ⋮
     =#
@@ -653,7 +653,7 @@ Query output
 
     display(execute(q))
     #=>
-    DataSet[35 × {String[tag=:name], Int64[tag=:size]}]:
+    35-element composite vector of {String, Int64}:
      ("WATER MGMNT",1848)
      ("POLICE",13570)
      ("GENERAL SERVICES",924)
@@ -679,7 +679,7 @@ salaries.*
 
     display(execute(q))
     #=>
-    DataSet[35 × {String[tag=:name], Int64[tag=:top_salary]?, {String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}]:
+    35-element composite vector of {String, Int64?, {String, Int64}*}:
      ("WATER MGMNT",169512,[])
      ("POLICE",260004,[])
      ("GENERAL SERVICES",157092,[])
@@ -704,7 +704,7 @@ Using combinator notation.
 
     display(execute(q))
     #=>
-    DataSet[35 × {String[tag=:name], Int64[tag=:size]}]:
+    35-element composite vector of {String, Int64}:
      ("WATER MGMNT",1848)
      ⋮
     =#
@@ -726,7 +726,7 @@ salaries.*
 
     display(execute(q))
     #=>
-    DataSet[35 × {String[tag=:name], Int64[tag=:top_salary]?, {String[tag=:name], Int64[tag=:salary]}[tag=:manager]*}]:
+    35-element composite vector of {String, Int64?, {String, Int64}*}:
      ("WATER MGMNT",169512,[])
      ⋮
     =#
@@ -747,7 +747,7 @@ Query aliases
 
     display(execute(q))
     #=>
-    DataSet[3 × {String[tag=:name], Int64[tag=:size]}]:
+    3-element composite vector of {String, Int64}:
      ("POLICE",13570)
      ("FIRE",4875)
      ("STREETS & SAN",2090)
@@ -768,7 +768,7 @@ In pure Julia code, we can use regular variables.
 
     display(execute(q))
     #=>
-    DataSet[3 × {String[tag=:name], Int64[tag=:size]}]:
+    3-element composite vector of {String, Int64}:
      ("POLICE",13570)
      ("FIRE",4875)
      ("STREETS & SAN",2090)
@@ -787,7 +787,7 @@ Hierarchical relationships
 
     display(execute(q))
     #=>
-    DataSet[1 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    1-element composite vector of {String, String, String, Int64}:
      ("BRIAN L","TREASURER","AUDITOR IV",114492)
     =#
 
@@ -800,7 +800,7 @@ Hierarchical relationships
 
     display(execute(q))
     #=>
-    DataSet[23 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    23-element composite vector of {String, String, String, Int64}:
      ("SAEED A","TREASURER","ASST CITY TREASURER",85020)
      ("ELIZABETH A","TREASURER","ACCOUNTANT I",72840)
      ("KONSTANTINES A","TREASURER","ASSISTANT DIRECTOR OF FINANCE",73080)
@@ -824,7 +824,7 @@ Using combinators.
 
     display(execute(q))
     #=>
-    DataSet[1 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    1-element composite vector of {String, String, String, Int64}:
      ("BRIAN L","TREASURER","AUDITOR IV",114492)
     =#
 
@@ -837,7 +837,7 @@ Using combinators.
 
     display(execute(q))
     #=>
-    DataSet[23 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    23-element composite vector of {String, String, String, Int64}:
      ("SAEED A","TREASURER","ASST CITY TREASURER",85020)
      ⋮
     =#
@@ -856,7 +856,7 @@ employees.*
 
     display(execute(q))
     #=>
-    DataSet[35 × {String[tag=:name], {String[tag=:name], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*}]:
+    35-element composite vector of {String, {String, String, Int64}*}:
      ("WATER MGMNT",[("ELVIA A","WATER RATE TAKER",88968)  …  ("THOMAS Z","POOL MOTOR TRUCK DRIVER",71781)])
      ("POLICE",[("JEFFERY A","POLICE OFFICER",80778)  …  ("CARLO Z","POLICE OFFICER",86520)])
      ("GENERAL SERVICES",[("KIMBERLEI A","CHIEF CONTRACT EXPEDITER",84780)  …  ("MICHAEL Z","FRM OF MACHINISTS - AUTOMOTIVE",97448)])
@@ -875,7 +875,7 @@ employees.*
 
     display(execute(q))
     #=>
-    DataSet[1094 × {String[tag=:position], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}]:
+    1094-element composite vector of {String, {String, String, String, Int64}+}:
      ("1ST DEPUTY INSPECTOR GENERAL",[("SHARON F","INSPECTOR GEN","1ST DEPUTY INSPECTOR GENERAL",137052)])
      ("A/MGR COM SVC-ELECTIONS",[("LAURA G","BOARD OF ELECTION","A/MGR COM SVC-ELECTIONS",99816)])
      ("A/MGR OF MIS-ELECTIONS",[("TIEN T","BOARD OF ELECTION","A/MGR OF MIS-ELECTIONS",94932)])
@@ -899,7 +899,7 @@ the top salary.*
 
     display(execute(q))
     #=>
-    DataSet[129 × {String[tag=:position], Int64, Int64}]:
+    129-element composite vector of {String, Int64, Int64}:
      ("ACCOUNTANT I",1,72840)
      ("ACCOUNTANT II",2,80424)
      ("ACCOUNTANT III",1,65460)
@@ -922,7 +922,7 @@ the top salary.*
 
     display(execute(q))
     #=>
-    DataSet[1094 × {String[tag=:position], {String[tag=:name], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}+}]:
+    1094-element composite vector of {String, {String, {String, String, String, Int64}+}+}:
      ("1ST DEPUTY INSPECTOR GENERAL",[("INSPECTOR GEN",[("SHARON F","INSPECTOR GEN","1ST DEPUTY INSPECTOR GENERAL",137052)])])
      ("A/MGR COM SVC-ELECTIONS",[("BOARD OF ELECTION",[("LAURA G","BOARD OF ELECTION","A/MGR COM SVC-ELECTIONS",99816)])])
      ("A/MGR OF MIS-ELECTIONS",[("BOARD OF ELECTION",[("TIEN T","BOARD OF ELECTION","A/MGR OF MIS-ELECTIONS",94932)])])
@@ -944,7 +944,7 @@ position, list the respective departments.*
 
     display(execute(q))
     #=>
-    DataSet[261 × {String[tag=:position], String[tag=:name]+}]:
+    261-element composite vector of {String, String+}:
      ("ACCOUNTANT I",String["TREASURER","FINANCE","PUBLIC LIBRARY","POLICE"])
      ("ACCOUNTANT II",String["FINANCE","FAMILY & SUPPORT"  …  "PUBLIC LIBRARY"])
      ("ACCOUNTANT III",String["FAMILY & SUPPORT","PUBLIC LIBRARY"  …  "BUSINESS AFFAIRS"])
@@ -963,7 +963,7 @@ position, list the respective departments.*
 
     display(execute(q))
     #=>
-    DataSet[3 × {Int64[tag=:level], Int64}]:
+    3-element composite vector of {Int64, Int64}:
      (0,32158)
      (1,17)
      (2,6)
@@ -983,7 +983,7 @@ department and the grand total.*
 
     display(execute(q))
     #=>
-    DataSet[2001 × {String[tag=:department]?, String[tag=:position]?, Float64}]:
+    2001-element composite vector of {String?, String?, Float64}:
      ("WATER MGMNT","ACCOUNTANT IV",95880.0)
      ("WATER MGMNT","ACCOUNTING TECHNICIAN I",63708.0)
      ("WATER MGMNT","ACCOUNTING TECHNICIAN III",66684.0)
@@ -1010,7 +1010,7 @@ employees.*
 
     display(execute(q))
     #=>
-    DataSet[35 × {String[tag=:name], {String[tag=:name], String[tag=:position], Int64[tag=:salary]}[tag=:employee]*}]:
+    35-element composite vector of {String, {String, String, Int64}*}:
      ("WATER MGMNT",[("ELVIA A","WATER RATE TAKER",88968)  …  ("THOMAS Z","POOL MOTOR TRUCK DRIVER",71781)])
      ⋮
     =#
@@ -1025,7 +1025,7 @@ employees.*
 
     display(execute(q))
     #=>
-    DataSet[1094 × {String[tag=:position], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}]:
+    1094-element composite vector of {String, {String, String, String, Int64}+}:
      ("1ST DEPUTY INSPECTOR GENERAL",[("SHARON F","INSPECTOR GEN","1ST DEPUTY INSPECTOR GENERAL",137052)])
      ⋮
     =#
@@ -1045,7 +1045,7 @@ the top salary.*
 
     display(execute(q))
     #=>
-    DataSet[129 × {String[tag=:position], Int64, Int64}]:
+    129-element composite vector of {String, Int64, Int64}:
      ("ACCOUNTANT I",1,72840)
      ⋮
     =#
@@ -1064,7 +1064,7 @@ the top salary.*
 
     display(execute(q))
     #=>
-    DataSet[1094 × {String[tag=:position], {String[tag=:name], {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}[tag=:employee]+}+}]:
+    1094-element composite vector of {String, {String, {String, String, String, Int64}+}+}:
      ("1ST DEPUTY INSPECTOR GENERAL",[("INSPECTOR GEN",[("SHARON F","INSPECTOR GEN","1ST DEPUTY INSPECTOR GENERAL",137052)])])
      ⋮
     =#
@@ -1083,7 +1083,7 @@ position, list the respective departments.*
 
     display(execute(q))
     #=>
-    DataSet[261 × {String[tag=:position], String[tag=:name]+}]:
+    261-element composite vector of {String, String+}:
      ("ACCOUNTANT I",String["TREASURER","FINANCE","PUBLIC LIBRARY","POLICE"])
      ⋮
     =#
@@ -1100,7 +1100,7 @@ position, list the respective departments.*
 
     display(execute(q))
     #=>
-    DataSet[3 × {Int64[tag=:level], Int64}]:
+    3-element composite vector of {Int64, Int64}:
      (0,32158)
      (1,17)
      (2,6)
@@ -1120,7 +1120,7 @@ department and the grand total.*
 
     display(execute(q))
     #=>
-    DataSet[2001 × {String[tag=:department]?, String[tag=:position]?, Float64}]:
+    2001-element composite vector of {String?, String?, Float64}:
      ("WATER MGMNT","ACCOUNTANT IV",95880.0)
      ⋮
     =#
@@ -1140,7 +1140,7 @@ where D = "POLICE", S = 150000.*
 
     display(execute(q))
     #=>
-    DataSet[62 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    62-element composite vector of {String, String, String, Int64}:
      ("DANA A","POLICE","DEPUTY CHIEF",170112)
      ("CONSTANTINE A","POLICE","DEPUTY CHIEF",170112)
      ("KENNETH A","POLICE","COMMANDER",162684)
@@ -1160,7 +1160,7 @@ where D = "POLICE", S = 150000.*
 
     display(execute(q, D="POLICE", S=150000))
     #=>
-    DataSet[62 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    62-element composite vector of {String, String, String, Int64}:
      ("DANA A","POLICE","DEPUTY CHIEF",170112)
      ("CONSTANTINE A","POLICE","DEPUTY CHIEF",170112)
      ("KENNETH A","POLICE","COMMANDER",162684)
@@ -1179,7 +1179,7 @@ where D = "POLICE", S = 150000.*
 
     display(execute(q))
     #=>
-    DataSet[19796 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    19796-element composite vector of {String, String, String, Int64}:
      ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
      ("JEFFERY A","POLICE","POLICE OFFICER",80778)
      ("KARINA A","POLICE","POLICE OFFICER",80778)
@@ -1198,7 +1198,7 @@ where D = "POLICE", S = 150000.*
 
     display(execute(q))
     #=>
-    DataSet[65 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    65-element composite vector of {String, String, String, Int64}:
      ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
      ("JEFFERY A","POLICE","POLICE OFFICER",80778)
      ("KARINA A","POLICE","POLICE OFFICER",80778)
@@ -1217,7 +1217,7 @@ average for their position.*
 
     display(execute(q))
     #=>
-    DataSet[29 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    29-element composite vector of {String, String, String, Int64}:
      ("JEFFERY A","POLICE","POLICE OFFICER",80778)
      ("KARINA A","POLICE","POLICE OFFICER",80778)
      ("TERRY A","POLICE","POLICE OFFICER",86520)
@@ -1238,7 +1238,7 @@ average for their position.*
 
     display(execute(q))
     #=>
-    DataSet[100 × {Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}]:
+    100-element composite vector of {Int64, String, Int64, Int64}:
      (1,"ELVIA A",88968,88968)
      (2,"JEFFERY A",80778,169746)
      (3,"KARINA A",80778,250524)
@@ -1260,7 +1260,7 @@ total should be reset at the department boundary.*
 
     display(execute(q))
     #=>
-    DataSet[35 × {String[tag=:name], {String[tag=:name], Int64[tag=:salary], Int64}[tag=:employee]*}]:
+    35-element composite vector of {String, {String, Int64, Int64}*}:
      ("WATER MGMNT",[("ELVIA A",88968,88968),("VICENTE A",104736,193704)  …  ])
      ("POLICE",[("JEFFERY A",80778,80778),("KARINA A",80778,161556)  …  ])
      ("GENERAL SERVICES",[("KIMBERLEI A",84780,84780),("RASHAD A",91520,176300)  …  ])
@@ -1293,7 +1293,7 @@ where D = "POLICE", S = 150000.*
 
     display(execute(q))
     #=>
-    DataSet[62 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    62-element composite vector of {String, String, String, Int64}:
      ("DANA A","POLICE","DEPUTY CHIEF",170112)
      ⋮
     =#
@@ -1308,7 +1308,7 @@ where D = "POLICE", S = 150000.*
 
     display(execute(q, D="POLICE", S=150000))
     #=>
-    DataSet[62 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    62-element composite vector of {String, String, String, Int64}:
      ("DANA A","POLICE","DEPUTY CHIEF",170112)
      ⋮
     =#
@@ -1325,7 +1325,7 @@ where D = "POLICE", S = 150000.*
 
     display(execute(q))
     #=>
-    DataSet[19796 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    19796-element composite vector of {String, String, String, Int64}:
      ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
      ⋮
     =#
@@ -1340,7 +1340,7 @@ where D = "POLICE", S = 150000.*
 
     display(execute(q))
     #=>
-    DataSet[65 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    65-element composite vector of {String, String, String, Int64}:
      ("ELVIA A","WATER MGMNT","WATER RATE TAKER",88968)
      ⋮
     =#
@@ -1357,7 +1357,7 @@ average for their position.*
 
     display(execute(q))
     #=>
-    DataSet[29 × {String[tag=:name], String[tag=:department], String[tag=:position], Int64[tag=:salary]}]:
+    29-element composite vector of {String, String, String, Int64}:
      ("JEFFERY A","POLICE","POLICE OFFICER",80778)
      ⋮
     =#
@@ -1376,7 +1376,7 @@ average for their position.*
 
     display(execute(q))
     #=>
-    DataSet[100 × {Int64[tag=:no], String[tag=:name], Int64[tag=:salary], Int64[tag=:total]}]:
+    100-element composite vector of {Int64, String, Int64, Int64}:
      (1,"ELVIA A",88968,88968)
      ⋮
     =#
@@ -1396,7 +1396,7 @@ total should be reset at the department boundary.*
 
     display(execute(q))
     #=>
-    DataSet[35 × {String[tag=:name], {String[tag=:name], Int64[tag=:salary], Int64}[tag=:employee]*}]:
+    35-element composite vector of {String, {String, Int64, Int64}*}:
      ("WATER MGMNT",[("ELVIA A",88968,88968),("VICENTE A",104736,193704)  …  ])
      ⋮
     =#

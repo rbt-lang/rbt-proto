@@ -18,6 +18,6 @@ immutable FieldSig <: AbstractPrimitive
     pos::Int
 end
 
-ev(sig::FieldSig, ds::DataSet) =
-    column(ds, sig.pos)
+ev(sig::FieldSig, dv::DataVector) =
+    column(dv, sig.pos)
 

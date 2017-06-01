@@ -30,19 +30,21 @@ end
 ev(::GivenSig, args::Vector{Query}, ::Input, oty::Output, iflow::InputFlow) =
     OutputFlow(
         oty,
-        ev_given(args..., iflow.ctx, iflow.frameoffs, iflow.slotflows, values(iflow)))
+        given_impl(args..., iflow.ctx, iflow.frameoffs, iflow.slotflows, values(iflow), fields(domain(iflow))))
 
-function ev_given(arg::Query, ctx::InputContext, frameoffs::InputFrame, slotflows::InputSlotFlows, ds::DataSet)
-    tag = decoration(output(flow(ds, 2)), :tag, Symbol, Symbol(""))
+function given_impl(
+        arg::Query, ctx::InputContext, frameoffs::InputFrame, slotflows::InputSlotFlows, dv::DataVector,
+        fs::Vector{Output})
+    tag = decoration(fs[2], :tag, Symbol, Symbol(""))
     pmap = Dict{Symbol,OutputFlow}(slotflows)
-    pmap[tag] = flow(ds, 2)
+    pmap[tag] = OutputFlow(fs[2], column(dv, 2))
     pkeys = collect(keys(pmap))
     sort!(pkeys)
     pflows = InputSlotFlow[pkey => pmap[pkey] for pkey in pkeys]
     iflow′ = InputFlow(
         ctx,
-        domain(flow(ds, 1)),
-        values(ds, 1),
+        domain(fs[1]),
+        values(dv, 1),
         frameoffs,
         pflows)
     return column(ev(arg, iflow′))
