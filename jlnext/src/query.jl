@@ -271,4 +271,5 @@ include("query/given.jl")
 include("query/parameter.jl")
 include("query/around.jl")
 include("query/frame.jl")
+include("query/sql.jl")
 
