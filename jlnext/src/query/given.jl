@@ -10,8 +10,20 @@ function GivenQuery(base::Query, param::Query)
     q >>
     Query(
         GivenSig(),
-        [base],
+        [FieldQuery(output(q), 1) >> base],
         Input(domain(output(q)), mode(input(base)) |> setslots(remparams)),
+        output(base))
+end
+
+function GivenQuery(base::Query)
+    oty = fields(domain(input(base)))[2]
+    tag = decoration(oty, :tag, Symbol, Symbol(""))
+    @assert tag != Symbol("")
+    remparams = filter(p -> p.first != tag, slots(input(base)))
+    Query(
+        GivenSig(),
+        [base],
+        Input(domain(input(base)), mode(input(base)) |> setslots(remparams)),
         output(base))
 end
 
@@ -30,11 +42,12 @@ end
 ev(::GivenSig, args::Vector{Query}, ::Input, oty::Output, iflow::InputFlow) =
     OutputFlow(
         oty,
-        given_impl(args..., iflow.ctx, iflow.frameoffs, iflow.slotflows, values(iflow), fields(domain(iflow))))
+        given_impl(args..., iflow.ctx, iflow.frameoffs, iflow.slotflows, values(iflow), domain(iflow)))
 
 function given_impl(
         arg::Query, ctx::InputContext, frameoffs::InputFrame, slotflows::InputSlotFlows, dv::DataVector,
-        fs::Vector{Output})
+        dom::Domain)
+    fs = fields(dom)
     tag = decoration(fs[2], :tag, Symbol, Symbol(""))
     pmap = Dict{Symbol,OutputFlow}(slotflows)
     pmap[tag] = OutputFlow(fs[2], column(dv, 2))
@@ -43,8 +56,8 @@ function given_impl(
     pflows = InputSlotFlow[pkey => pmap[pkey] for pkey in pkeys]
     iflow′ = InputFlow(
         ctx,
-        domain(fs[1]),
-        values(dv, 1),
+        dom,
+        dv,
         frameoffs,
         pflows)
     return column(ev(arg, iflow′))

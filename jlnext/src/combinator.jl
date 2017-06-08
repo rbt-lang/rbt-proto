@@ -7,7 +7,7 @@ immutable Combinator
 end
 
 Query(C::Combinator) =
-    format(C.use(ItQuery(Void) |> setnamespace(DB)))
+    cse(format(C.use(ItQuery(Void) |> setnamespace(DB))))
 
 >>(q::Query, C::Combinator) =
     C.use(q)

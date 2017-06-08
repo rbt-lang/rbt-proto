@@ -66,10 +66,11 @@ function attach!(db::Database, uri::String)
         for attrname in tab.attrnames
             push!(tfmt, toattrname(attrname))
         end
+        tab_name = Symbol(tab.name)
         attach!(
             db,
-            Symbol(tab.name),
-            SQLCollectionQuery(uri, tab, [Decoration(:tag, tab.name), Decoration(:fmt, tfmt)]))
+            tab_name,
+            SQLCollectionQuery(uri, tab, [Decoration(:tag, tab_name), Decoration(:fmt, tfmt)]))
         for attr in 1:tab.nattrs
             column_id = table.columns[attr]
             column = set.columns[column_id]

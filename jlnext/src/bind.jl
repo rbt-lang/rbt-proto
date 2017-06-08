@@ -131,7 +131,7 @@ query(db::AbstractDatabase, syntax::Syntax, paramtypes::Vector{Pair}=Pair[]) =
             globs = assoc(globs, (tag, 0), QueryBinding(SlotQuery(tag, oty) |> setnamespace(db)))
         end
         scope = Scope(scope.db, scope.dom, globs, scope.locs)
-        format(compile(scope, syntax))
+        cse(format(compile(scope, syntax)))
     end
 
 query(db::AbstractDatabase, expr, paramtypes=Pair[]) =
