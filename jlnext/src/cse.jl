@@ -82,14 +82,6 @@ function ev2query(gr::EvGraph, refs::Dict{Tuple{Int,Int},Query}, self::Int, tail
     q = ev2query(gr, refs, n, n.q.sig)
     if n.pred != tail
         prq = ev2query(gr, refs, n.pred, tail)
-        if !fits(domain(output(prq)), domain(input(q)))
-            for n in gr.nodes
-                println(n.self, " ## ", typeof(n.q.sig), " ", n.q, " ", n.args, " pred=", n.pred)
-            end
-            println("self = $self, tail = $tail")
-            println("q = $(q.sig) $q")
-            println("prq = $(prq.sig) $prq")
-        end
         q = prq >> q
     end
     q
@@ -114,7 +106,85 @@ function ev2query(gr::EvGraph, refs::Dict{Tuple{Int,Int},Query}, n::EvNode, ::Gi
 end
 
 function ev2query(gr::EvGraph, refs::Dict{Tuple{Int,Int},Query}, n::EvNode, ::RecordSig)
+    dups = finddups(gr, refs, n.args, n.pred)
+    if isempty(dups)
+        args = Query[ev2query(gr, refs, arg, n.pred) for arg in n.args]
+        return RecordQuery(args)
+    end
+    dupqs = Vector{Query}(length(dups))
+    for i = endof(dups):-1:1
+        tag = gensym()
+        dup = dups[i]
+        dupq = ev2query(gr, refs, dup, n.pred) |> decorate(:tag => tag)
+        dupqs[i] = dupq
+        ref = SlotQuery(tag, output(dupq))
+        refs[(dup, n.pred)] = ref
+    end
     args = Query[ev2query(gr, refs, arg, n.pred) for arg in n.args]
-    return RecordQuery(args)
+    q = RecordQuery(args)
+    for i = 1:endof(dups)
+        dup = dups[i]
+        dupq = dupqs[i]
+        delete!(refs, (dup, n.pred))
+        q = GivenQuery(q, dupq)
+    end
+    q
 end
+
+function finddups(gr::EvGraph, refs::Dict{Tuple{Int,Int},Query}, fs::Vector{Int}, pred::Int)
+    if length(fs) <= 1
+        return NO_EV_ARGS
+    end
+    f2k = Dict{Int,Int}()
+    stack = Int[]
+    for (k, f) in enumerate(fs)
+        push!(stack, f)
+        while !isempty(stack)
+            self = pop!(stack)
+            if self == pred || ((self, pred) in keys(refs))
+                continue
+            end
+            if !(self in keys(f2k))
+                n = gr.nodes[self]
+                if !cheap(n.q.sig)
+                    f2k[self] = k
+                end
+                push!(stack, n.pred)
+                if isa(n.q.sig, RecordSig) && n.pred == pred
+                    for arg in n.args
+                        push!(stack, arg)
+                    end
+                end
+            elseif f2k[self] != k
+                f2k[self] = 0
+            end
+        end
+    end
+    dups = Int[]
+    for (self, k) in f2k
+        if k == 0
+            push!(dups, self)
+        end
+    end
+    if length(dups) > 1
+        dups1 = dups
+        dups2 = finddups(gr, refs, dups, pred)
+        dups2set = Set(dups2)
+        dups = Int[]
+        for dup in dups1
+            if !(dup in dups2set)
+                push!(dups, dup)
+            end
+        end
+        for dup in dups2
+            push!(dups, dup)
+        end
+    end
+    dups
+end
+
+cheap(sig::AbstractSignature) =
+    isa(sig, ConstSig) ||
+    isa(sig, NullSig) ||
+    isa(sig, ItSig)
 
