@@ -26,6 +26,7 @@ include("cse.jl")
 include("bind.jl")
 include("combinator.jl")
 include("pgsql.jl")
+include("xml.jl")
 
 end
 
