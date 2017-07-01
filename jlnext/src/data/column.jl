@@ -155,6 +155,13 @@ end
     ColumnCursor(pos, col.offs[pos], col.offs[pos+1], col.vals)
 end
 
+@inline function move!(col::Column, cr::ColumnCursor, pos::Int)
+    @boundscheck checkbounds(col.offs, pos:pos+1)
+    cr.pos = pos
+    @inbounds cr.l = col.offs[pos]
+    @inbounds cr.r = col.offs[pos+1]
+end
+
 @inline done(col::Column, cr::ColumnCursor) = cr.pos >= col.len
 
 @inline function next!(col::Column, cr::ColumnCursor)

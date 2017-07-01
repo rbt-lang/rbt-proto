@@ -17,6 +17,8 @@ immutable ConstSig <: AbstractPrimitive
     val
 end
 
+describe(io::IO, sig::ConstSig) = print(io, sig.val)
+
 ev(sig::ConstSig, ity::Input, oty::Output, iflow::InputFlow) =
     const_impl(sig.val, ity, oty, iflow)
 
@@ -37,6 +39,8 @@ NullQuery() = NullQuery(Any)
 
 immutable NullSig <: AbstractPrimitive
 end
+
+describe(io::IO, ::NullSig) = print(io, "null")
 
 ev(sig::NullSig, ::Input, oty::Output, iflow::InputFlow) =
     let len = length(iflow)

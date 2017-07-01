@@ -31,7 +31,22 @@ end
 const NO_DB = EmptyDatabase()
 
 globals(db::EmptyDatabase) = NO_BINDING_TABLE
-locals(db::EmptyDatabase, dom::Domain) = NO_BINDING_TABLE
+locals(db::EmptyDatabase, dom::Domain) = locals(db, dom.desc)
+
+locals(db::EmptyDatabase, desc) = NO_BINDING_TABLE
+
+function locals(db::EmptyDatabase, desc::Vector{Output})
+    tbl = NO_BINDING_TABLE
+    for pos in eachindex(desc)
+        fld = FieldQuery(Domain(desc), pos)
+        tbl = assoc(tbl, (Symbol(pos), 0), QueryBinding(fld))
+        tag = decoration(desc[pos], :tag, Symbol, Symbol(""))
+        if tag != Symbol("")
+            tbl = assoc(tbl, (tag, 0), QueryBinding(fld))
+        end
+    end
+    return tbl
+end
 
 # Scope is a pair of global and local binding tables.
 
@@ -168,6 +183,7 @@ decorate(q::Query, decor::Decoration) =
         q >> Query(ItSig(), NO_ARGUMENTS, Input(dom), Output(decorate(dom, decor)), ns, nothing)
     end
 
+
 # Executing queries.
 
 ev(q::Query, ctx::InputContext=InputContext(), dom=Domain(Void), vals::AbstractVector=[nothing]) =
@@ -272,4 +288,55 @@ include("query/parameter.jl")
 include("query/around.jl")
 include("query/frame.jl")
 include("query/sql.jl")
+
+describe(obj) = describe(STDOUT, obj)
+
+function describe(io::IO, q::Query)
+    describe_query(io, q.sig, q.args)
+end
+
+function describe_query(io::IO, sig::AbstractSignature, args::Vector{Query})
+    describe(io, sig)
+    print(io, "(")
+    first = true
+    for arg in args
+        if !first
+            print(io, ", ")
+        end
+        first = false
+        describe_query(io, arg.sig, arg.args)
+    end
+end
+
+function describe_query(io::IO, sig::AbstractPrimitive, ::Vector{Query})
+    describe(io, sig)
+end
+
+function describe_query(io::IO, ::ComposeSig, args::Vector{Query})
+    first = true
+    for arg in args
+        if !first
+            print(io, ".")
+        end
+        first = false
+        describe(io, arg)
+    end
+end
+
+function describe_query(io::IO, ::RecordSig, args::Vector{Query})
+    print(io, "{")
+    first = true
+    for arg in args
+        if !first
+            print(io, ", ")
+        end
+        first = false
+        describe(io, arg)
+    end
+    print(io, "}")
+end
+
+function describe(io::IO, sig::AbstractSignature)
+    print(io, typeof(sig))
+end
 

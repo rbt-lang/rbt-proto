@@ -19,6 +19,8 @@ end
 immutable FilterSig <: AbstractPrimitive
 end
 
+describe(io::IO, ::FilterSig) = print(io, "filter′")
+
 ev(sig::FilterSig, dv::DataVector) =
     isplain(column(dv, 2)) ?
         plain_filter_impl(values(dv, 1), values(dv, 2)) :

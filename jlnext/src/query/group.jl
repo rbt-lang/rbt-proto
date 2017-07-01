@@ -25,6 +25,8 @@ GroupQuery(qbase::Query, qks::Query...) =
 immutable GroupSig <: AbstractPrimitive
 end
 
+describe(io::IO, ::GroupSig) = print(io, "group′")
+
 ev(sig::GroupSig, ::Input, oty::Output, iflow::InputFlow) =
     OutputFlow(oty, ev(sig, values(iflow), fields(domain(iflow))...))
 

@@ -8,6 +8,8 @@ CountQuery(q::Query) =
 immutable CountSig <: AbstractPrimitive
 end
 
+describe(io::IO, ::CountSig) = print(io, "count′")
+
 ev(::CountSig, dv::DataVector) =
     count_impl(length(dv), offsets(dv, 1))
 

@@ -50,6 +50,8 @@ immutable LiftSig <: AbstractPrimitive
     restype::Type
 end
 
+describe(io::IO, sig::LiftSig) = print(io, sig.fn, "′")
+
 ev(sig::LiftSig, dv::DataVector) =
     all(isplain, columns(dv)) ?
         plain_lift_impl(sig.fn, sig.restype, length(dv), map(values, columns(dv))...) :
@@ -177,6 +179,26 @@ function ev{T}(::DecodeVectorSig, ivals::AbstractVector{Vector{T}})
     end
     offs = Vector{Int}(len+1)
     vals = Vector{T}(sz)
+    offs[1] = 1
+    n = 1
+    for k = 1:len
+        for val in ivals[k]
+            vals[n] = val
+            n += 1
+        end
+        offs[k+1] = n
+    end
+    return PluralColumn(offs, vals)
+end
+
+function ev{V<:AbstractVector}(::DecodeVectorSig, ivals::AbstractVector{V})
+    len = length(ivals)
+    sz = 0
+    for val in ivals
+        sz += length(val)
+    end
+    offs = Vector{Int}(len+1)
+    vals = Vector{eltype(V)}(sz)
     offs[1] = 1
     n = 1
     for k = 1:len

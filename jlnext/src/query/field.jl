@@ -18,6 +18,8 @@ immutable FieldSig <: AbstractPrimitive
     pos::Int
 end
 
+describe(io::IO, sig::FieldSig) = print(io, "_$(sig.pos)")
+
 ev(sig::FieldSig, dv::DataVector) =
     column(dv, sig.pos)
 

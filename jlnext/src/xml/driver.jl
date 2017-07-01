@@ -68,6 +68,108 @@ immutable XMLDocument
     otext::PlainColumn{Base.OneTo{Int},Vector{String}}
 end
 
+show(io::IO, doc::XMLDocument) =
+    show(io, root(doc))
+
+immutable XMLElement
+    val::Int
+    doc::XMLDocument
+end
+
+show(io::IO, el::XMLElement) =
+    print(io, "<", getname(el), ">")
+
+immutable XMLElementVector{V<:AbstractVector{Int}} <: AbstractVector{XMLElement}
+    vals::V
+    doc::XMLDocument
+end
+
+@inline size(ev::XMLElementVector) = size(ev.vals)
+@inline length(ev::XMLElementVector) = length(ev.vals)
+@inline getindex(ev::XMLElementVector, i::Int) = XMLElement(ev.vals[i], ev.doc)
+@inline getindex(ev::XMLElementVector, idxs::AbstractVector{Int}) =
+    XMLElementVector(ev.vals[idxs], ev.doc)
+Base.array_eltype_show_how(::XMLElementVector) = (true, "")
+
+getroot(doc::XMLDocument) =
+    XMLElement(1, doc)
+
+getname(el::XMLElement) =
+    let cr = el.doc.name[el.val]
+        cr[1]
+    end
+
+function getchildren(el::XMLElement, self::Bool=false)
+    cr = el.doc.child[el.val]
+    vals =
+        if self
+            vals = Int[el.val]
+            append!(vals, cr)
+            vals
+        else
+            collect(Int, cr)
+        end
+    return XMLElementVector(vals, el.doc)
+end
+
+function getdescendants(el::XMLElement, self::Bool=false)
+    vals = Int[]
+    if self
+        push!(vals, el.val)
+    end
+    cr = el.doc.child[el.val]
+    stk = Tuple{Int,Int}[]
+    push!(stk, (el.val, 1))
+    while !isempty(stk)
+        val, pos = pop!(stk)
+        move!(el.doc.child, cr, val)
+        if pos <= length(cr)
+            ch = cr[pos]
+            push!(vals, ch)
+            push!(stk, (val, pos+1))
+            push!(stk, (ch, 1))
+        end
+    end
+    return XMLElementVector(vals, el.doc)
+end
+
+function gettext(el::XMLElement)
+    cr = el.doc.child[el.val]
+    itextcr = el.doc.itext[el.val]
+    if isempty(cr)
+        return itextcr[1]
+    end
+    otextcr = el.doc.otext[el.val]
+    text = String[itextcr[1]]
+    stk = Tuple{Int,Int}[]
+    push!(stk, (el.val, 1))
+    while !isempty(stk)
+        val, pos = pop!(stk)
+        move!(el.doc.child, cr, val)
+        if pos <= length(cr)
+            ch = cr[pos]
+            push!(stk, (val, pos+1))
+            push!(stk, (ch, 1))
+            move!(el.doc.itext, itextcr, ch)
+            push!(text, itextcr[1])
+        elseif !isempty(stk)
+            move!(el.doc.otext, otextcr, val)
+            push!(text, otextcr[1])
+        end
+    end
+    return join(text)
+end
+
+function getattribute(el::XMLElement, attr::String)
+    cr = el.doc.attr[el.val]
+    for (aname, aval) in cr
+        if aname == attr
+            return Nullable{String}(aval)
+        end
+    end
+    return Nullable{String}()
+end
+
 function build(b::XMLBuilder)
     len = b.len
     parent = OptionalColumn(b.parent_offs, b.parent_vals)
@@ -121,7 +223,6 @@ function xmlelementend(data::Ptr{Void}, name::Ptr{UInt8})
     addelementend!(b)
     nothing
 end
-
 
 function parsexml(text::String)
     p = XML_ParserCreateNS(C_NULL, 0x20)

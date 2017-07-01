@@ -61,6 +61,12 @@ immutable SQLLinkSig <: AbstractPrimitive
     oattr::Int
 end
 
+describe(io::IO, sig::SQLEntitySig) = print(io, sig.tab.name)
+
+describe(io::IO, sig::SQLFieldSig) = print(io, sig.tab.attrnames[sig.attr])
+
+describe(io::IO, sig::SQLLinkSig) = print(io, sig.itab.attrnames[sig.iattr])
+
 function ev(sig::SQLEntitySig, ::Input, oty::Output, iflow::InputFlow)
     dv = sqltable(iflow.ctx, sig.uri, sig.tab)
     col = collection_impl(OneTo(length(dv)), length(iflow))
