@@ -320,6 +320,11 @@ Unique(F::Combinator) =
         (q >> UniqueQuery(it >> F)) |> setnamespace(q.ns.db)
     end
 
+const ThenUnique =
+    Combinator() do q::Query
+        UniqueQuery(q)
+    end
+
 # Parameters.
 
 Parameter(tag::Symbol, oty) =
@@ -354,5 +359,22 @@ Around(Fs::Combinator...) =
 const ThenFrame =
     Combinator() do q::Query
         FrameQuery(q) |> setnamespace(q.ns)
+    end
+
+# Cardinality assertions.
+
+const ThenExpectOne =
+    Combinator() do q::Query
+        ExpectOneQuery(q)
+    end
+
+const ThenExpectAtMostOne =
+    Combinator() do q::Query
+        ExpectAtMostOneQuery(q)
+    end
+
+const ThenExpectAtLeastOne =
+    Combinator() do q::Query
+        ExpectAtLeastOneQuery(q)
     end
 

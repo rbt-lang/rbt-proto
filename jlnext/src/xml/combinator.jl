@@ -16,14 +16,28 @@ LiftQuery{V}(fn, argtypes::Tuple{Vararg{Type}}, restype::Type{XMLElementVector{V
 XMLChild() =
     Lift(getchildren, It)
 
-XMLChild(name) =
-    XMLChild() >> ThenFilter(XMLName() .== name)
+XMLChild(name; kw...) =
+    XMLChild() >> ThenFilter(_xmlchildfilter(name; kw...))
 
 XMLDescendant() =
     Lift(getdescendants, It)
 
-XMLDescendant(name) =
-    XMLDescendant() >> ThenFilter(XMLName() .== name)
+XMLDescendant(name; kw...) =
+    XMLDescendant() >> ThenFilter(_xmlchildfilter(name; kw...))
+
+function _xmlchildfilter(name; kw...)
+    C = XMLName() .== name
+    for (k, v) in kw
+        if v == true
+            C = C & Exists(XMLAttribute(string(k)))
+        elseif v == false
+            C = C & ~Exists(XMLAttribute(string(k)))
+        else
+            C = C & (XMLAttribute(string(k)) .== v)
+        end
+    end
+    C
+end
 
 XMLText() =
     Lift(gettext, It)
