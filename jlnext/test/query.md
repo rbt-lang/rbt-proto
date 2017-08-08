@@ -812,3 +812,72 @@ It is possible to frame the input context.
      (10,[10])
     =#
 
+
+Conditionals
+------------
+
+Conditional expressions executes different queries depending on the value of a
+predicate expression.
+
+    using RBT:
+        IfThenElseQuery
+
+    q0 = LiftQuery(iseven, ItQuery(Int))
+    #-> Int64 -> Bool
+
+    q1 = LiftQuery(x -> x÷2, ItQuery(Int))
+    #-> Int64 -> Int64
+
+    q2 = LiftQuery(x -> 3x-1, ItQuery(Int))
+    #-> Int64 -> Int64
+
+    q = IfThenElseQuery(q0, q1, q2)
+    #-> Int64 -> Int64
+
+    ev(q, 1:5)
+    #-> [2,1,8,2,14]
+
+If any of the arguments is optional, the output of a conditional query is also
+optional.
+
+    q1 = LiftQuery(x -> iseven(x÷2) ? Nullable(x÷4) : Nullable{Int}(), ItQuery(Int))
+    #-> Int64 -> Int64?
+
+    q = IfThenElseQuery(q0, q1, q2)
+    #-> Int64 -> Int64?
+
+    ev(q, 1:5)
+    #-> [2,#NULL,8,1,14]
+
+If any of the arguments is plural, the output is also plural.
+
+    q2 = LiftQuery(x -> [x-1,2x-1,3x-1], ItQuery(Int))
+    #-> Int64 -> Int64*
+
+    q = IfThenElseQuery(q0, q1, q2)
+    #-> Int64 -> Int64*
+
+    ev(q, 1:5)
+    #-> [[0,1,2],Int64[],[2,5,8],[1],[4,9,14]]
+
+
+Merging
+-------
+
+We can merge the output of several queries.
+
+    using RBT:
+        MergeQuery
+
+    q1 = LiftQuery(x -> x-1, ItQuery(Int))
+    #-> Int64 -> Int64
+
+    q2 = LiftQuery(x -> x+1, ItQuery(Int))
+    #-> Int64 -> Int64
+
+    q = MergeQuery(q1, q2)
+    #-> Int64 -> Int64+
+
+    ev(q, 1:5)
+    #-> [[0,2],[1,3],[2,4],[3,5],[4,6]]
+

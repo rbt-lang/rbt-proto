@@ -46,6 +46,13 @@ convert(::Type{Combinator}, tag::Symbol) =
         (q >> L) >> R
     end
 
+# Null.
+
+const Null =
+    Combinator() do q::Query
+        q >> NullQuery(domain(output(q)))
+    end
+
 # Identity.
 
 const It =
@@ -284,6 +291,17 @@ ThenSelect(Fs...) = ThenSelect((convert(Combinator, F) for F in Fs)...)
 
 ThenSelect(;Fs...) = ThenSelect(Fs...)
 
+ThenSummarize(Fs::Combinator...) =
+    Combinator() do q::Query
+        it = istub(q)
+        compile(StaticBinding{:select}(), oscope(it), it, Query[q >> F for F in Fs])
+    end
+
+ThenSummarize(Fs...) = ThenSummarize((convert(Combinator, F) for F in Fs)...)
+
+ThenSummarize(;Fs...) = ThenSummarize(Fs...)
+
+
 # Hierarchical queries.
 
 Connect(F::Combinator) =
@@ -363,6 +381,24 @@ const ThenFrame =
 
 # Cardinality assertions.
 
+ExpectOne(F::Combinator) =
+    Combinator() do q::Query
+        it = ostub(q)
+        q >> ExpectOneQuery(it >> F)
+    end
+
+ExpectAtMostOneOne(F::Combinator) =
+    Combinator() do q::Query
+        it = ostub(q)
+        q >> ExpectAtMostOneQuery(it >> F)
+    end
+
+ExpectAtLeastOneOne(F::Combinator) =
+    Combinator() do q::Query
+        it = ostub(q)
+        q >> ExpectAtLeastOneQuery(it >> F)
+    end
+
 const ThenExpectOne =
     Combinator() do q::Query
         ExpectOneQuery(q)
@@ -376,5 +412,21 @@ const ThenExpectAtMostOne =
 const ThenExpectAtLeastOne =
     Combinator() do q::Query
         ExpectAtLeastOneQuery(q)
+    end
+
+# Merging.
+
+Merge(Fs::Combinator...) =
+    Combinator() do q::Query
+        it = ostub(q)
+        q >> MergeQuery(Query[it >> F for F in Fs])
+    end
+
+# Multiplexing.
+
+ThenElse(F::Combinator, G::Combinator) =
+    Combinator() do q::Query
+        it = ostub(q)
+        IfThenElseQuery(q, it >> F, it >> G)
     end
 

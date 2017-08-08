@@ -13,7 +13,7 @@ function FilterQuery(base::Query, pred::Query)
         Query(
             FilterSig(),
             Input([dom, output(pred)]),
-            Output(dom)))
+            Output(dom) |> setoptional()))
 end
 
 immutable FilterSig <: AbstractPrimitive

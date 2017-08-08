@@ -5,6 +5,9 @@ OpenXML(filename) =
 XMLRoot() =
     Lift(getroot, It)
 
+XMLRoot(name; kw...) =
+    XMLRoot() >> ThenFilter(_xmlchildfilter(name; kw...))
+
 XMLName() =
     Lift(getname, It)
 
@@ -12,6 +15,9 @@ LiftQuery{V}(fn, argtypes::Tuple{Vararg{Type}}, restype::Type{XMLElementVector{V
     let q = invoke(LiftQuery, (Any, Tuple{Vararg{Type}}, Type, Vector{Query}), fn, argtypes, restype, qs)
         q >> Query(DecodeVectorSig(), Input(XMLElementVector{V}), Output(XMLElement) |> setoptional() |> setplural())
     end
+
+XMLParent() =
+    Lift(getparent, It)
 
 XMLChild() =
     Lift(getchildren, It)

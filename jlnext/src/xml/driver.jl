@@ -69,7 +69,7 @@ immutable XMLDocument
 end
 
 show(io::IO, doc::XMLDocument) =
-    show(io, root(doc))
+    show(io, getroot(doc))
 
 immutable XMLElement
     val::Int
@@ -98,6 +98,17 @@ getname(el::XMLElement) =
     let cr = el.doc.name[el.val]
         cr[1]
     end
+
+function getparent(el::XMLElement)
+    cr = el.doc.parent[el.val]
+    val =
+        if isempty(cr)
+            Nullable{XMLElement}()
+        else
+            Nullable(XMLElement(cr[1], el.doc))
+        end
+    return val
+end
 
 function getchildren(el::XMLElement, self::Bool=false)
     cr = el.doc.child[el.val]

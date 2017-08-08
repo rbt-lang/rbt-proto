@@ -5,13 +5,28 @@
 function LiftQuery(fn, argtypes::Tuple{Vararg{Type}}, restype::Type, qs::Vector{Query})
     @assert method_exists(fn, argtypes) "$fn($(join(argtypes, ", "))) is not defined"
     @assert length(argtypes) == length(qs)
+    qs′ = Query[]
     for (argtype, q) in zip(argtypes, qs)
-        @assert fits(domain(output(q)), Domain(argtype))
+        if argtype <: Nullable
+            T = eltype(argtype)
+            if fits(output(q), Output(T) |> setoptional())
+                q = RecordQuery(q)
+                q = q >> Query(EncodeNullableSig(), Input(domain(output(q))), Output(Nullable{T}))
+            end
+        elseif argtype <: Vector
+            T = eltype(argtype)
+            if fits(output(q), Output(T) |> setoptional() |> setplural())
+                q = RecordQuery(q)
+                q = q >> Query(EncodeVectorSig(), Input(domain(output(q))), Output(Vector{T}))
+            end
+        end
+        @assert fits(domain(output(q)), Domain(argtype)) "$q does not fit $argtype"
+        push!(qs′, q)
     end
-    argq = RecordQuery(qs)
+    argq = RecordQuery(qs′)
     sig = LiftSig(fn, argtypes, restype)
     ity = Input(domain(output(argq)))
-    oty = Output(restype, obound([mode(output(q)) for q in qs]))
+    oty = Output(restype, obound([mode(output(q)) for q in qs′]))
     return argq >> Query(sig, ity, oty)
 end
 
@@ -209,5 +224,45 @@ function ev{V<:AbstractVector}(::DecodeVectorSig, ivals::AbstractVector{V})
         offs[k+1] = n
     end
     return PluralColumn(offs, vals)
+end
+
+# Optional to Nullable encoder.
+
+immutable EncodeNullableSig <: AbstractPrimitive
+end
+
+function ev(::EncodeNullableSig, dv::DataVector)
+    return encode_nullable_impl(column(dv, 1))
+end
+
+function encode_nullable_impl(col::Column)
+    cr = cursor(col)
+    T = eltype(col.vals)
+    vals = Vector{Nullable{T}}(length(col))
+    while !done(col, cr)
+        next!(col, cr)
+        vals[cr.pos] = length(cr) > 0 ? Nullable{T}(cr[1]) : Nullable{T}()
+    end
+    return PlainColumn(vals)
+end
+
+# Plural to Vector encoder.
+
+immutable EncodeVectorSig <: AbstractPrimitive
+end
+
+function ev(::EncodeVectorSig, dv::DataVector)
+    return encode_vector_impl(column(dv, 1))
+end
+
+function encode_vector_impl(col::Column)
+    cr = cursor(col)
+    T = eltype(col.vals)
+    vals = Vector{Vector{T}}(length(col))
+    while !done(col, cr)
+        next!(col, cr)
+        vals[cr.pos] = cr[1:end]
+    end
+    return PlainColumn(vals)
 end
 
