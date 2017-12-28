@@ -43,7 +43,7 @@ ev(sig::AroundSig, ::Input, oty::Output, iflow::InputFlow) =
             around_by_impl(sig.refl, sig.before, sig.after, frameoffsets(iflow), values(iflow), fields(domain(iflow)))
         end)
 
-function around_impl(refl::Bool, before::Bool, after::Bool, foffs::AbstractVector{Int}, vals::AbstractVector{Int})
+function around_impl(refl::Bool, before::Bool, after::Bool, foffs::AbstractVector{Int}, vals::AbstractVector)
     size = 0
     for k = 1:endof(foffs)-1
         l = foffs[k]

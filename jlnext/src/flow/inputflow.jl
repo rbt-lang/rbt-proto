@@ -91,7 +91,7 @@ function narrow(flow::InputFlow, ity::Input)
     if mode(flow.ity) == mode(ity)
         return flow
     end
-    @assert fits(mode(flow.ity), mode(ity))
+    @assert fits(mode(flow.ity), mode(ity)) "fits($(flow.ity), $(ity))"
     frameoffs = !isrelative(ity) ? InputFrame() : flow.frameoffs
     slotflows =
         if length(flow.slotflows) == length(slots(ity))
