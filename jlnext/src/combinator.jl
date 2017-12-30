@@ -360,6 +360,13 @@ Given(Fs...) = Given((convert(Combinator, F) for F in Fs)...)
 
 Given(;Fs...) = Given(Fs...)
 
+Let(Q::Combinator, Fs::Combinator...) =
+    Combinator() do q::Query
+        it = ostub(q)
+        r = it >> Q
+        q >> GivenQuery(r, (it >> F for F in Fs)...) |> setnamespace(r.ns.db)
+    end
+
 # Before and around.
 
 Before(Fs::Combinator...) =
