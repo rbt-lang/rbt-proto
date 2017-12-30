@@ -389,6 +389,14 @@ const ThenFrame =
         FrameQuery(q) |> setnamespace(q.ns)
     end
 
+Frame(F::Combinator) =
+    Combinator() do q::Query
+        it = ostub(q)
+        r = it >> F
+        q >> FrameQuery(r) |> setnamespace(r.ns)
+    end
+
+
 # Cardinality assertions.
 
 ExpectOne(F::Combinator) =
