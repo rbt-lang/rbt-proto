@@ -23,3 +23,6 @@ describe(io::IO, sig::FieldSig) = print(io, "_$(sig.pos)")
 ev(sig::FieldSig, dv::DataVector) =
     column(dv, sig.pos)
 
+ev(sig::FieldSig, vs::AbstractVector) =
+    [v[sig.pos] for v in vs]
+
