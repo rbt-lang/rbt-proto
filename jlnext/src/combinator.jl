@@ -448,3 +448,12 @@ ThenElse(F::Combinator, G::Combinator) =
         IfThenElseQuery(q, it >> F, it >> G)
     end
 
+Switch(T::Combinator, F::Combinator, G::Combinator) =
+    Combinator() do q::Query
+        it = ostub(q)
+        t = it >> T
+        f = it >> F
+        g = it >> G
+        q >> IfThenElseQuery(t, f, g)
+    end
+
