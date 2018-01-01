@@ -457,3 +457,11 @@ Switch(T::Combinator, F::Combinator, G::Combinator) =
         q >> IfThenElseQuery(t, f, g)
     end
 
+ExpectAnythingQuery(base::Query) = ExpectQuery(base, true, true)
+
+ExpectAnything(F::Combinator) =
+  Combinator() do q::Query
+     it = ostub(q)
+     q >> ExpectAnythingQuery(it >> F)
+  end
+
