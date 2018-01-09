@@ -370,6 +370,8 @@ function Using(args::Combinator...)
     end
 end
 
+Using(Fs...) = Using((convert(Combinator, F) for F in Fs)...)
+
 # Before and around.
 
 Before(Fs::Combinator...) =
@@ -454,6 +456,15 @@ Switch(T::Combinator, F::Combinator, G::Combinator) =
         t = it >> T
         f = it >> F
         g = it >> G
+        q >> IfThenElseQuery(t, f, g)
+    end
+
+Switch(T::Combinator, F::Combinator, G::Combinator, H::Combinator, Ks::Combinator...) =
+    Combinator() do q::Query
+        it = ostub(q)
+        t = it >> T
+        f = it >> F
+        g = it >> Switch(G, H, Ks...)
         q >> IfThenElseQuery(t, f, g)
     end
 
