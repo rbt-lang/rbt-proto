@@ -407,13 +407,13 @@ ExpectOne(F::Combinator) =
         q >> ExpectOneQuery(it >> F)
     end
 
-ExpectAtMostOneOne(F::Combinator) =
+ExpectAtMostOne(F::Combinator) =
     Combinator() do q::Query
         it = ostub(q)
         q >> ExpectAtMostOneQuery(it >> F)
     end
 
-ExpectAtLeastOneOne(F::Combinator) =
+ExpectAtLeastOne(F::Combinator) =
     Combinator() do q::Query
         it = ostub(q)
         q >> ExpectAtLeastOneQuery(it >> F)
