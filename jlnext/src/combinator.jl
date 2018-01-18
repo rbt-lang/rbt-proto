@@ -476,3 +476,14 @@ ExpectAnything(F::Combinator) =
      q >> ExpectAnythingQuery(it >> F)
   end
 
+FieldIfExists(tag::Symbol) =
+    Combinator() do q::Query
+        scope = oscope(q)
+        maybe_binding = lookup(scope, tag, 0)
+        if isnull(maybe_binding)
+            return q
+        end
+        binding = get(maybe_binding)
+        (q >> compile(binding, scope, Syntax[])) |> setnamespace(scope.db)
+    end
+
