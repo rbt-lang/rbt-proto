@@ -421,17 +421,17 @@ ExpectAtLeastOne(F::Combinator) =
 
 const ThenExpectOne =
     Combinator() do q::Query
-        ExpectOneQuery(q)
+        ExpectOneQuery(q) |> setnamespace(q.ns.db)
     end
 
 const ThenExpectAtMostOne =
     Combinator() do q::Query
-        ExpectAtMostOneQuery(q)
+        ExpectAtMostOneQuery(q) |> setnamespace(q.ns.db)
     end
 
 const ThenExpectAtLeastOne =
     Combinator() do q::Query
-        ExpectAtLeastOneQuery(q)
+        ExpectAtLeastOneQuery(q) |> setnamespace(q.ns.db)
     end
 
 # Merging.
