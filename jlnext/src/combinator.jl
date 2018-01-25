@@ -404,19 +404,22 @@ Frame(F::Combinator) =
 ExpectOne(F::Combinator) =
     Combinator() do q::Query
         it = ostub(q)
-        q >> ExpectOneQuery(it >> F)
+        r = it >> F
+        q >> ExpectOneQuery(r) |> setnamespace(r.ns.db)
     end
 
 ExpectAtMostOne(F::Combinator) =
     Combinator() do q::Query
         it = ostub(q)
-        q >> ExpectAtMostOneQuery(it >> F)
+        r = it >> F
+        q >> ExpectAtMostOneQuery(r) |> setnamespace(r.ns.db)
     end
 
 ExpectAtLeastOne(F::Combinator) =
     Combinator() do q::Query
         it = ostub(q)
-        q >> ExpectAtLeastOneQuery(it >> F)
+        r = it >> F
+        q >> ExpectAtLeastOneQuery(r) |> setnamespace(r.ns.db)
     end
 
 const ThenExpectOne =
