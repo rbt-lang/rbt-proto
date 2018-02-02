@@ -442,7 +442,7 @@ const ThenExpectAtLeastOne =
 Merge(Fs::Combinator...) =
     Combinator() do q::Query
         it = ostub(q)
-        q >> MergeQuery(Query[it >> F for F in Fs])
+        q >> MergeQuery(Query[it >> F for F in Fs]) |> setnamespace(q.ns.db)
     end
 
 # Multiplexing.
